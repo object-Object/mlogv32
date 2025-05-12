@@ -1,13 +1,17 @@
     # constants
     
     set ERROR_OUTPUT message1
+    set RESET_SWITCH switch1
     set REGISTERS cell1
     set MEMORY bank1 # TODO: support multiple memory banks
 
     # initialization
 
+reset:
     print ""
     printflush ERROR_OUTPUT
+
+    control enabled RESET_SWITCH false
 
     write 0 REGISTERS 0
 
@@ -229,7 +233,15 @@ decode_type_U:
 illegal_instruction:
     print "Illegal instruction!"
     printflush ERROR_OUTPUT
-    stop
+    jump halt always
+
+# enable the reset switch, wait until it's disabled, then reset the processor
+halt:
+    control enabled RESET_SWITCH true
+halt__loop:
+    sensor enabled RESET_SWITCH @enabled
+    jump halt__loop equal enabled true
+    jump reset always
 
 end_instruction:
     op add pc pc 4

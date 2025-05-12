@@ -310,6 +310,18 @@ swap_endianness:
 
     set @counter ret
 
+# converts a two's complement unsigned value to signed or vice versa
+# value -> result
+swap_signedness:
+    # x - 2(x - mod(x + 2^31, 2^31))
+    op add result value 0x80000000 # 2^31
+    op mod result result 0x80000000
+    op sub result value result
+    op mul result result 2
+    op sub result value result
+
+    set @counter ret
+
 # instruction handlers
 
 LUI:
@@ -372,13 +384,14 @@ jump_to_target:
     op mod remainder target 4
     jump instruction_address_misaligned notEqual remainder 0
 
+    jump jump_to_target__no_write equal rd 0
+
     op add result pc 4
     op mod result result 0x100000000 # trunc 32
-
-    set pc target
-
-    jump end_instruction_preserve_pc equal rd 0
     write result REGISTERS rd
+
+jump_to_target__no_write:
+    set pc target
     jump end_instruction_preserve_pc always
 
 JALR:
@@ -389,33 +402,57 @@ JALR:
     jump jump_to_target always
 
 BEQ:
-    print "BEQ"
-    printflush ERROR_OUTPUT
+    op add target pc imm
+    set rd 0
+    jump jump_to_target equal rs1 rs2
     jump end_instruction always
 
 BNE:
-    print "BNE"
-    printflush ERROR_OUTPUT
+    op add target pc imm
+    set rd 0
+    jump jump_to_target notEqual rs1 rs2
     jump end_instruction always
 
 BLT:
-    print "BLT"
-    printflush ERROR_OUTPUT
+    set value rs1
+    op add ret @counter 1
+    jump swap_signedness always
+    set rs1 result
+
+    set value rs2
+    op add ret @counter 1
+    jump swap_signedness always
+
+    op add target pc imm
+    set rd 0
+    jump jump_to_target lessThan rs1 result
     jump end_instruction always
 
 BGE:
-    print "BGE"
-    printflush ERROR_OUTPUT
+    set value rs1
+    op add ret @counter 1
+    jump swap_signedness always
+    set rs1 result
+
+    set value rs2
+    op add ret @counter 1
+    jump swap_signedness always
+
+    op add target pc imm
+    set rd 0
+    jump jump_to_target greaterThanEq rs1 result
     jump end_instruction always
 
 BLTU:
-    print "BLTU"
-    printflush ERROR_OUTPUT
+    op add target pc imm
+    set rd 0
+    jump jump_to_target lessThan rs1 rs2
     jump end_instruction always
 
 BGEU:
-    print "BGEU"
-    printflush ERROR_OUTPUT
+    op add target pc imm
+    set rd 0
+    jump jump_to_target greaterThanEq rs1 rs2
     jump end_instruction always
 
 LB:

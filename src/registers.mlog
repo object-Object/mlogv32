@@ -1,34 +1,163 @@
     set REGISTERS cell1
+    set OUTPUT message1
 
     read x0_zero REGISTERS 0
+    print "x0_zero = "
+    print x0_zero
+    print "\n"
+
     read x1_ra REGISTERS 1
+    print "x1_ra = "
+    print x1_ra
+    print "\n"
+
     read x2_sp REGISTERS 2
+    print "x2_sp = "
+    print x2_sp
+    print "\n"
+
     read x3_gp REGISTERS 3
+    print "x3_gp = "
+    print x3_gp
+    print "\n"
+
     read x4_tp REGISTERS 4
+    print "x4_tp = "
+    print x4_tp
+    print "\n"
+
     read x5_t0 REGISTERS 5
+    print "x5_t0 = "
+    print x5_t0
+    print "\n"
+
     read x6_t1 REGISTERS 6
+    print "x6_t1 = "
+    print x6_t1
+    print "\n"
+
     read x7_t2 REGISTERS 7
+    print "x7_t2 = "
+    print x7_t2
+    print "\n"
+
     read x8_s0_fp REGISTERS 8
+    print "x8_s0_fp = "
+    print x8_s0_fp
+    print "\n"
+
     read x9_s1 REGISTERS 9
+    print "x9_s1 = "
+    print x9_s1
+    print "\n"
+
     read x10_a0 REGISTERS 10
+    print "x10_a0 = "
+    print x10_a0
+    print "\n"
+
     read x11_a1 REGISTERS 11
+    print "x11_a1 = "
+    print x11_a1
+    print "\n"
+
     read x12_a2 REGISTERS 12
+    print "x12_a2 = "
+    print x12_a2
+    print "\n"
+
     read x13_a3 REGISTERS 13
+    print "x13_a3 = "
+    print x13_a3
+    print "\n"
+
     read x14_a4 REGISTERS 14
+    print "x14_a4 = "
+    print x14_a4
+    print "\n"
+
     read x15_a5 REGISTERS 15
+    print "x15_a5 = "
+    print x15_a5
+    print "\n"
+
     read x16_a6 REGISTERS 16
+    print "x16_a6 = "
+    print x16_a6
+    print "\n"
+
     read x17_a7 REGISTERS 17
+    print "x17_a7 = "
+    print x17_a7
+    print "\n"
+
     read x18_s2 REGISTERS 18
+    print "x18_s2 = "
+    print x18_s2
+    print "\n"
+
     read x19_s3 REGISTERS 19
+    print "x19_s3 = "
+    print x19_s3
+    print "\n"
+
     read x20_s4 REGISTERS 20
+    print "x20_s4 = "
+    print x20_s4
+    print "\n"
+
     read x21_s5 REGISTERS 21
+    print "x21_s5 = "
+    print x21_s5
+    print "\n"
+
     read x22_s6 REGISTERS 22
+    print "x22_s6 = "
+    print x22_s6
+    print "\n"
+
     read x23_s7 REGISTERS 23
+    print "x23_s7 = "
+    print x23_s7
+    print "\n"
+
     read x24_s8 REGISTERS 24
+    print "x24_s8 = "
+    print x24_s8
+    print "\n"
+
     read x25_s9 REGISTERS 25
+    print "x25_s9 = "
+    print x25_s9
+    print "\n"
+
     read x26_s10 REGISTERS 26
+    print "x26_s10 = "
+    print x26_s10
+    print "\n"
+
     read x27_s11 REGISTERS 27
+    print "x27_s11 = "
+    print x27_s11
+    print "\n"
+
     read x28_t3 REGISTERS 28
+    print "x28_t3 = "
+    print x28_t3
+    print "\n"
+
     read x29_t4 REGISTERS 29
+    print "x29_t4 = "
+    print x29_t4
+    print "\n"
+
     read x30_t5 REGISTERS 30
+    print "x30_t5 = "
+    print x30_t5
+    print "\n"
+
     read x31_t6 REGISTERS 31
+    print "x31_t6 = "
+    print x31_t6
+
+    printflush OUTPUT

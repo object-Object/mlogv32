@@ -32,7 +32,7 @@ main:
     jump SYSTEM equal opcode 115
 
     # all below instructions use rs1, so just decode and read it here
-    op idiv rs1 instruction 32768 # 2^15 (rshift 15)
+    op shr rs1 instruction 15
     op mod rs1 rs1 32 # 2^5 (trunc 5)
     read rs1 REGISTERS rs1
 
@@ -41,7 +41,7 @@ main:
 
     # instructions disambiguated by funct3
 
-    op idiv funct3 instruction 4096 # 2^12 (rshift 12)
+    op shr funct3 instruction 12
     op mod funct3 funct3 8 # 2^3 (trunc 3)
     
     jump decode_branch equal opcode 99
@@ -50,7 +50,7 @@ main:
 
     # instructions disambiguated by funct7
 
-    op idiv funct7 instruction 33554432 # 2^25 (rshift 25)
+    op shr funct7 instruction 25
     op mod funct7 funct7 128 # 2^7 (trunc 7)
 
     jump decode_arithmetic_imm equal opcode 19
@@ -62,28 +62,28 @@ main:
 decode_branch:
     # B-type
     # imm
-    op idiv imm_11 instruction 128 # 2^7 (rshift 7)
+    op shr imm_11 instruction 7
     op mod imm_11 imm_11 2 # 2^1 (trunc 1)
-    op mul imm_11 imm_11 2048 # 2^11 (lshift 11)
+    op shl imm_11 imm_11 11
 
-    op idiv imm_4_1 instruction 256 # 2^8 (rshift 8)
+    op shr imm_4_1 instruction 8
     op mod imm_4_1 imm_4_1 16 # 2^4 (trunc 4)
-    op mul imm_4_1 imm_4_1 2 # 2^1 (lshift 1)
+    op shl imm_4_1 imm_4_1 1
 
-    op idiv imm_10_5 instruction 33554432 # 2^25 (rshift 25)
+    op shr imm_10_5 instruction 25
     op mod imm_10_5 imm_10_5 64 # 2^6 (trunc 6)
-    op mul imm_10_5 imm_10_5 32 # 2^5 (lshift 5)
+    op shl imm_10_5 imm_10_5 5
 
-    op idiv imm_12 instruction 2147483648 # 2^31 (rshift 31)
+    op shr imm_12 instruction 31
     op mod imm_12 imm_12 2 # 2^1 (trunc 1)
-    op mul imm_12 imm_12 4096 # 2^12 (lshift 12)
+    op shl imm_12 imm_12 12
 
     op add imm imm_4_1 imm_10_5
     op add imm imm imm_11
     op add imm imm imm_12
 
     # rs2
-    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op shr rs2 instruction 20
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
@@ -110,17 +110,17 @@ decode_load:
 decode_save:
     # S-type
     # imm
-    op idiv imm_4_0 instruction 128 # 2^7 (rshift 7)
+    op shr imm_4_0 instruction 7
     op mod imm_4_0 imm_4_0 32 # 2^5 (trunc 5)
 
-    op idiv imm_11_5 instruction 33554432 # 2^25 (rshift 25)
+    op shr imm_11_5 instruction 25
     op mod imm_11_5 imm_11_5 128 # 2^7 (trunc 7)
-    op mul imm_11_5 imm_11_5 32 # 2^5 (lshift 5)
+    op shl imm_11_5 imm_11_5 5
 
     op add imm imm_4_0 imm_11_5
 
     # rs2
-    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op shr rs2 instruction 20
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
@@ -152,11 +152,11 @@ decode_SRLI_SRAI:
 decode_arithmetic:
     # R-type
     # rd
-    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
 
     # rs2
-    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op shr rs2 instruction 20
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
@@ -183,11 +183,11 @@ decode_SRL_SRA:
 decode_type_I:
     # common decoder for I-type instructions
     # rd
-    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
 
     # imm
-    op idiv imm instruction 1048576 # 2^20 (rshift 20)
+    op shr imm instruction 20
     op mod imm imm 4096 # 2^12 (trunc 12)
     
     set @counter ret
@@ -195,13 +195,13 @@ decode_type_I:
 decode_type_U:
     # common decoder for U-type instructions (only LUI and AUIPC)
     # rd
-    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
 
     # imm
-    op idiv imm instruction 4096 # 2^12 (rshift 12)
+    op shr imm instruction 12
     op mod imm imm 1048576 # 2^20 (trunc 20)
-    op mul imm imm 4096 # 2^12 (lshift 12)
+    op shl imm imm 12
     
     set @counter ret
 
@@ -234,26 +234,26 @@ AUIPC:
 JAL:
     # J-type
     # rd
-    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
 
     # imm
-    op idiv imm_19_12 instruction 4096 # 2^12 (rshift 12)
-    op idiv imm_11 imm_19_12 256 # 2^8 (rshift 8)
-    op idiv imm_10_1 imm_11 2 # 2^1 (rshift 1)
-    op idiv imm_20 imm_10_1 1024 # 2^10 (rshift 10)
+    op shr imm_19_12 instruction 12
+    op shr imm_11 imm_19_12 8
+    op shr imm_10_1 imm_11 1
+    op shr imm_20 imm_10_1 10
 
     op mod imm_19_12 imm_19_12 256 # 2^8 (trunc 8)
-    op mul imm_19_12 imm_19_12 4096 # 2^12 (lshift 12)
+    op shl imm_19_12 imm_19_12 12
 
     op mod imm_11 imm_11 2 # 2^1 (trunc 1)
-    op mul imm_11 imm_11 2048 # 2^11 (lshift 11)
+    op shl imm_11 imm_11 11
 
     op mod imm_10_1 imm_10_1 1024 # 2^10 (trunc 10)
-    op mul imm_10_1 imm_10_1 2 # 2^1 (lshift 1)
+    op shl imm_10_1 imm_10_1 1
 
     op mod imm_20 imm_20 2 # 2^1 (trunc 1)
-    op mul imm_20 imm_20 1048576 # 2^20 (lshift 20)
+    op shl imm_20 imm_20 20
 
     op add imm imm_10_1 imm_11
     op add imm imm imm_19_12

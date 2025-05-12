@@ -247,6 +247,57 @@ end_instruction:
 end_instruction_preserve_pc:
     jump main always
 
+# helper functions
+
+# sign extension function
+# value, length -> result
+extend_sign:
+    op sub _shift length 1
+    op shr _sign value _shift
+    jump extend_sign__zero equal _sign 0
+
+    # sign is 1, return ((2^(32-length) - 1) << length) + value
+    op sub _mask 32 length
+    op pow _mask 2 _mask
+    op sub _mask _mask 1
+    op shl _mask _mask length
+
+    op add result value _mask
+
+    jump extend_sign__finally always
+
+extend_sign__zero:
+    # sign is 0, return value unchanged
+    set result value
+
+extend_sign__finally:
+    set @counter ret
+
+# converts a little endian 32-bit number to big endian, or vice versa
+# https://stackoverflow.com/a/2182184
+# value -> result
+swap_endianness:
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl _tmp value 8
+    op and _tmp _tmp 0xff0000
+    op or result result _tmp
+
+    # byte 2 -> byte 1
+    op shr _tmp value 8
+    op and _tmp _tmp 0xff00
+    op or result result _tmp
+
+    # byte 0 -> byte 3
+    op shl _tmp value 24
+    op and _tmp _tmp 0xff000000
+    op or result result _tmp
+
+    set @counter ret
+
 # instruction handlers
 
 LUI:
@@ -515,54 +566,3 @@ SYSTEM:
     print "SYSTEM"
     printflush ERROR_OUTPUT
     jump end_instruction always
-
-# helper functions
-
-# sign extension function
-# value, length -> result
-extend_sign:
-    op sub _shift length 1
-    op shr _sign value _shift
-    jump extend_sign__zero equal _sign 0
-
-    # sign is 1, return ((2^(32-length) - 1) << length) + value
-    op sub _mask 32 length
-    op pow _mask 2 _mask
-    op sub _mask _mask 1
-    op shl _mask _mask length
-
-    op add result value _mask
-
-    jump extend_sign__finally always
-
-extend_sign__zero:
-    # sign is 0, return value unchanged
-    set result value
-
-extend_sign__finally:
-    set @counter ret
-
-# converts a little endian 32-bit number to big endian, or vice versa
-# https://stackoverflow.com/a/2182184
-# value -> result
-swap_endianness:
-    # byte 3 -> byte 0
-    op shr result value 24
-    op and result result 0xff
-
-    # byte 1 -> byte 2
-    op shl _tmp value 8
-    op and _tmp _tmp 0xff0000
-    op or result result _tmp
-
-    # byte 2 -> byte 1
-    op shr _tmp value 8
-    op and _tmp _tmp 0xff00
-    op or result result _tmp
-
-    # byte 0 -> byte 3
-    op shl _tmp value 24
-    op and _tmp _tmp 0xff000000
-    op or result result _tmp
-
-    set @counter ret

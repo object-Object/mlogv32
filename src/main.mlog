@@ -1,5 +1,5 @@
+reset:
     # constants
-    
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
     set REGISTERS cell1
@@ -7,7 +7,6 @@
 
     # initialization
 
-reset:
     print ""
     printflush ERROR_OUTPUT
 

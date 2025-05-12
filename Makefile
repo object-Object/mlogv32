@@ -1,5 +1,5 @@
 ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
-RUST_PROGRAMS = $(filter-out mlog32,$(patsubst rust/%,%,$(wildcard rust/*)))
+RUST_PROGRAMS = $(filter-out mlogv32,$(patsubst rust/%,%,$(wildcard rust/*)))
 
 .PHONY: all
 all: asm

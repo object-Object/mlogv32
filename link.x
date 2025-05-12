@@ -93,39 +93,39 @@ SECTIONS {
 
 /* Do not exceed this mark in the error messages above                                    | */
 ASSERT(ORIGIN(REGION_TEXT) % 4 == 0, "
-ERROR(mlog32): the start of the REGION_TEXT must be 4-byte aligned");
+ERROR(mlogv32): the start of the REGION_TEXT must be 4-byte aligned");
 
 ASSERT(ORIGIN(REGION_RODATA) % 4 == 0, "
-ERROR(mlog32): the start of the REGION_RODATA must be 4-byte aligned");
+ERROR(mlogv32): the start of the REGION_RODATA must be 4-byte aligned");
 
 ASSERT(ORIGIN(REGION_DATA) % 4 == 0, "
-ERROR(mlog32): the start of the REGION_DATA must be 4-byte aligned");
+ERROR(mlogv32): the start of the REGION_DATA must be 4-byte aligned");
 
 ASSERT(ORIGIN(REGION_HEAP) % 4 == 0, "
-ERROR(mlog32): the start of the REGION_HEAP must be 4-byte aligned");
+ERROR(mlogv32): the start of the REGION_HEAP must be 4-byte aligned");
 
 ASSERT(ORIGIN(REGION_STACK) % 4 == 0, "
-ERROR(mlog32): the start of the REGION_STACK must be 4-byte aligned");
+ERROR(mlogv32): the start of the REGION_STACK must be 4-byte aligned");
 
 ASSERT(__sdata % 4 == 0 && __edata % 4 == 0, "
-BUG(mlog32): .data is not 4-byte aligned");
+BUG(mlogv32): .data is not 4-byte aligned");
 
 ASSERT(__sidata % 4 == 0, "
-BUG(mlog32): the LMA of .data is not 4-byte aligned");
+BUG(mlogv32): the LMA of .data is not 4-byte aligned");
 
 ASSERT(__sbss % 4 == 0 && __ebss % 4 == 0, "
-BUG(mlog32): .bss is not 4-byte aligned");
+BUG(mlogv32): .bss is not 4-byte aligned");
 
 ASSERT(__sheap % 4 == 0, "
-BUG(mlog32): start of .heap is not 4-byte aligned");
+BUG(mlogv32): start of .heap is not 4-byte aligned");
 
 ASSERT(SIZEOF(.stack) > _stack_size, "
-ERROR(mlog32): .stack section is too small for allocating the stack.
+ERROR(mlogv32): .stack section is too small for allocating the stack.
 Consider changing `_stack_size`.");
 
 /* # Other checks */
 ASSERT(SIZEOF(.got) == 0, "
-ERROR(mlog32): .got section detected in the input files. Dynamic relocations are not
+ERROR(mlogv32): .got section detected in the input files. Dynamic relocations are not
 supported. If you are linking to C code compiled using the `cc` crate then modify your
 build script to compile the C code _without_ the -fPIC flag. See the documentation of
 the `cc::Build.pic` method for details.");

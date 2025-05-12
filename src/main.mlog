@@ -377,6 +377,7 @@ ADDI:
     op add result rs1 imm
     op mod result result 0x100000000 # 2^32 (trunc 32)
     write result REGISTERS rd
+
     jump end_instruction always
 
 SLTI:
@@ -423,8 +424,12 @@ SRAI:
     jump end_instruction always
 
 ADD:
-    print "ADD"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op add result rs1 rs2
+    op mod result result 0x100000000 # 2^32 (trunc 32)
+    write result REGISTERS rd
+
     jump end_instruction always
 
 SUB:

@@ -82,6 +82,12 @@ decode_branch:
     op add imm imm imm_11
     op add imm imm imm_12
 
+    set value imm
+    set length 13
+    op add ret @counter 1
+    jump extend_sign always
+    set imm result
+
     # rs2
     op shr rs2 instruction 20
     op mod rs2 rs2 32 # 2^5 (trunc 5)
@@ -118,6 +124,12 @@ decode_save:
     op shl imm_11_5 imm_11_5 5
 
     op add imm imm_4_0 imm_11_5
+
+    set value imm
+    set length 12
+    op add ret @counter 1
+    jump extend_sign always
+    set imm result
 
     # rs2
     op shr rs2 instruction 20
@@ -180,8 +192,8 @@ decode_SRL_SRA:
     jump SRA equal funct7 32
     jump illegal_instruction always
 
+# common decoder for I-type instructions
 decode_type_I:
-    # common decoder for I-type instructions
     # rd
     op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
@@ -189,11 +201,18 @@ decode_type_I:
     # imm
     op shr imm instruction 20
     op mod imm imm 4096 # 2^12 (trunc 12)
-    
-    set @counter ret
 
+    set value imm
+    set length 12
+    set decode_type_I__ret ret
+    op add ret @counter 1
+    jump extend_sign always
+    set imm result
+
+    set @counter decode_type_I__ret
+
+# common decoder for U-type instructions (only LUI and AUIPC)
 decode_type_U:
-    # common decoder for U-type instructions (only LUI and AUIPC)
     # rd
     op shr rd instruction 7
     op mod rd rd 32 # 2^5 (trunc 5)
@@ -258,6 +277,12 @@ JAL:
     op add imm imm_10_1 imm_11
     op add imm imm imm_19_12
     op add imm imm imm_20
+
+    set value imm
+    set length 21
+    op add ret @counter 1
+    jump extend_sign always
+    set imm result
 
     # instruction handler
     print "JAL"
@@ -430,3 +455,29 @@ SYSTEM:
 
     print "SYSTEM"
     jump end_instruction always
+
+# helper functions
+
+# sign extension function
+# value, length -> result
+extend_sign:
+    op sub _shift length 1
+    op shr _sign value _shift
+    jump extend_sign__zero equal _sign 0
+
+    # sign is 1, return ((2^(32-length) - 1) << length) + value
+    op sub _mask 32 length
+    op pow _mask 2 _mask
+    op sub _mask _mask 1
+    op shl _mask _mask length
+
+    op add result value _mask
+
+    jump extend_sign__finally always
+
+extend_sign__zero:
+    # sign is 0, return value unchanged
+    set result value
+
+extend_sign__finally:
+    set @counter ret

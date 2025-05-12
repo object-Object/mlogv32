@@ -351,9 +351,17 @@ JAL:
     set imm result
 
     # instruction handler
-    print "JAL"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+
+    op add pc pc imm
+    op mod pc pc 0x100000000 # trunc 32
+
+    jump end_instruction_preserve_pc equal rd 0
+
+    op add result pc 4
+    op mod result result 0x100000000 # trunc 32
+    write result REGISTERS rd
+
+    jump end_instruction_preserve_pc always
 
 JALR:
     op add ret @counter 1

@@ -12,7 +12,11 @@ reset:
 
     control enabled RESET_SWITCH false
 
-    write 0 REGISTERS 0
+    set i 0
+reset__zero_registers:
+    write 0 REGISTERS i
+    op add i i 1
+    jump reset__zero_registers lessThan i 32
 
     set pc 0
     

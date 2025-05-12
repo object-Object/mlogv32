@@ -234,6 +234,11 @@ illegal_instruction:
     printflush ERROR_OUTPUT
     jump halt always
 
+instruction_address_misaligned:
+    print "Instruction address misaligned!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
     control enabled RESET_SWITCH true
@@ -245,6 +250,9 @@ halt__loop:
 end_instruction:
     op add pc pc 4
 end_instruction_preserve_pc:
+    # halt if the reset switch was manually enabled
+    sensor enabled RESET_SWITCH @enabled
+    jump halt equal enabled true
     jump main always
 
 # helper functions
@@ -352,24 +360,29 @@ JAL:
 
     # instruction handler
 
-    op add pc pc imm
-    op mod pc pc 0x100000000 # trunc 32
+    op add target pc imm
 
-    jump end_instruction_preserve_pc equal rd 0
+jump_to_target:
+    op mod target target 0x100000000 # trunc 32
+
+    op mod remainder target 4
+    jump instruction_address_misaligned notEqual remainder 0
 
     op add result pc 4
     op mod result result 0x100000000 # trunc 32
-    write result REGISTERS rd
 
+    set pc target
+
+    jump end_instruction_preserve_pc equal rd 0
+    write result REGISTERS rd
     jump end_instruction_preserve_pc always
 
 JALR:
     op add ret @counter 1
     jump decode_type_I always
 
-    print "JALR"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    op add target rs1 imm
+    jump jump_to_target always
 
 BEQ:
     print "BEQ"

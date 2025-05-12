@@ -4,5 +4,5 @@ _start:
     li x2, 2
     add x3, x1, x2
 
-loop:
-    j loop
+    li x4, 16
+    jalr x5, x4, 1 // misaligned

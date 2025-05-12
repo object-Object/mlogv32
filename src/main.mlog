@@ -1,20 +1,28 @@
     # constants
     
-    set REGISTERS cell1
     set ERROR_OUTPUT message1
+    set REGISTERS cell1
+    set MEMORY bank1 # TODO: support multiple memory banks
 
     # initialization
 
-    write 0 REGISTERS 0
     print ""
     printflush ERROR_OUTPUT
+
+    write 0 REGISTERS 0
+
+    set pc 0
     
 main:
-    # TODO: actually load instruction
+    # load instruction and convert to big endian
+    op idiv address pc 4
+    read value MEMORY address
+    
+    op add ret @counter 1
+    jump swap_endianness always
+    set instruction result
 
-    set instruction 0x00a00093 # addi x1, x0, 10
-
-    # instruction decoding
+    # decode instruction
 
     op mod opcode instruction 128 # 2^7 (trunc 7)
 
@@ -224,6 +232,8 @@ illegal_instruction:
     stop
 
 end_instruction:
+    op add pc pc 4
+end_instruction_preserve_pc:
     jump main always
 
 # instruction handlers
@@ -514,4 +524,29 @@ extend_sign__zero:
     set result value
 
 extend_sign__finally:
+    set @counter ret
+
+# converts a little endian 32-bit number to big endian, or vice versa
+# https://stackoverflow.com/a/2182184
+# value -> result
+swap_endianness:
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl _tmp value 8
+    op and _tmp _tmp 0xff0000
+    op or result result _tmp
+
+    # byte 2 -> byte 1
+    op shr _tmp value 8
+    op and _tmp _tmp 0xff00
+    op or result result _tmp
+
+    # byte 0 -> byte 3
+    op shl _tmp value 24
+    op and _tmp _tmp 0xff000000
+    op or result result _tmp
+
     set @counter ret

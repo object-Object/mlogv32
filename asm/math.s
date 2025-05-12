@@ -1,3 +1,3 @@
 .global _start
 _start:
-    addi x1, x0, -1
+    addi x1, x0, 10

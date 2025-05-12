@@ -12,13 +12,7 @@
 main:
     # TODO: actually load instruction
 
-    # imm             ------------
-    # rs1                         -----
-    # funct3                           ---
-    # rd                                  -----
-    # opcode                                   -------
-    #                 ------------     ---     -------
-    set instruction 0b00000000000000001010000100010011
+    set instruction 0x00a00093 # addi x1, x0, 10
 
     # instruction decoding
 
@@ -352,7 +346,11 @@ SW:
     jump end_instruction always
 
 ADDI:
-    print "ADDI"
+    jump end_instruction equal rd 0
+
+    op add result rs1 imm
+    op mod result result 0x100000000 # 2^32 (trunc 32)
+    write result REGISTERS rd
     jump end_instruction always
 
 SLTI:

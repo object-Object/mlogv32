@@ -224,8 +224,6 @@ illegal_instruction:
     stop
 
 end_instruction:
-    printflush ERROR_OUTPUT
-    
     jump main always
 
 # instruction handlers
@@ -235,6 +233,7 @@ LUI:
     jump decode_type_U always
 
     print "LUI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 AUIPC:
@@ -242,6 +241,7 @@ AUIPC:
     jump decode_type_U always
     
     print "AUIPC"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 JAL:
@@ -280,6 +280,7 @@ JAL:
 
     # instruction handler
     print "JAL"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 JALR:
@@ -287,62 +288,77 @@ JALR:
     jump decode_type_I always
 
     print "JALR"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BEQ:
     print "BEQ"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BNE:
     print "BNE"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BLT:
     print "BLT"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BGE:
     print "BGE"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BLTU:
     print "BLTU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 BGEU:
     print "BGEU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 LB:
     print "LB"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 LH:
     print "LH"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 LW:
     print "LW"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 LBU:
     print "LBU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 LHU:
     print "LHU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SB:
     print "SB"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SH:
     print "SH"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SW:
     print "SW"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 ADDI:
@@ -355,22 +371,27 @@ ADDI:
 
 SLTI:
     print "SLTI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SLTIU:
     print "SLTIU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 XORI:
     print "XORI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 ORI:
     print "ORI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 ANDI:
     print "ANDI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SLLI:
@@ -378,66 +399,79 @@ SLLI:
     jump illegal_instruction notEqual funct7 0
 
     print "SLLI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SRLI:
     print "SRLI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SRAI:
     print "SRAI"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 ADD:
     print "ADD"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SUB:
     print "SUB"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SLL:
     jump illegal_instruction notEqual funct7 0
 
     print "SLL"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SLT:
     jump illegal_instruction notEqual funct7 0
 
     print "SLT"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SLTU:
     jump illegal_instruction notEqual funct7 0
 
     print "SLTU"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 XOR:
     jump illegal_instruction notEqual funct7 0
 
     print "XOR"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SRL:
     print "SRL"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SRA:
     print "SRA"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 OR:
     jump illegal_instruction notEqual funct7 0
 
     print "OR"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 AND:
     jump illegal_instruction notEqual funct7 0
 
     print "AND"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 FENCE:
@@ -445,6 +479,7 @@ FENCE:
     jump decode_type_I always
 
     print "FENCE"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 SYSTEM:
@@ -452,6 +487,7 @@ SYSTEM:
     jump decode_type_I always
 
     print "SYSTEM"
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 # helper functions

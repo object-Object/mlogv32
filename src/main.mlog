@@ -1,0 +1,432 @@
+    # constants
+    
+    set REGISTERS cell1
+    set ERROR_OUTPUT message1
+
+    # initialization
+
+    write 0 REGISTERS 0
+    print ""
+    printflush ERROR_OUTPUT
+    
+main:
+    # TODO: actually load instruction
+
+    # imm             ------------
+    # rs1                         -----
+    # funct3                           ---
+    # rd                                  -----
+    # opcode                                   -------
+    #                 ------------     ---     -------
+    set instruction 0b00000000000000001010000100010011
+
+    # instruction decoding
+
+    op mod opcode instruction 128 # 2^7 (trunc 7)
+
+    # instructions disambiguated by just the opcode
+
+    jump LUI equal opcode 55
+    jump AUIPC equal opcode 23
+    jump JAL equal opcode 111
+    jump SYSTEM equal opcode 115
+
+    # all below instructions use rs1, so just decode and read it here
+    op idiv rs1 instruction 32768 # 2^15 (rshift 15)
+    op mod rs1 rs1 32 # 2^5 (trunc 5)
+    read rs1 REGISTERS rs1
+
+    jump JALR equal opcode 103
+    jump FENCE equal opcode 15
+
+    # instructions disambiguated by funct3
+
+    op idiv funct3 instruction 4096 # 2^12 (rshift 12)
+    op mod funct3 funct3 8 # 2^3 (trunc 3)
+    
+    jump decode_branch equal opcode 99
+    jump decode_load equal opcode 3
+    jump decode_save equal opcode 35
+
+    # instructions disambiguated by funct7
+
+    op idiv funct7 instruction 33554432 # 2^25 (rshift 25)
+    op mod funct7 funct7 128 # 2^7 (trunc 7)
+
+    jump decode_arithmetic_imm equal opcode 19
+    jump decode_arithmetic equal opcode 51
+
+    # :(
+    jump illegal_instruction always
+
+decode_branch:
+    # B-type
+    # imm
+    op idiv imm_11 instruction 128 # 2^7 (rshift 7)
+    op mod imm_11 imm_11 2 # 2^1 (trunc 1)
+    op mul imm_11 imm_11 2048 # 2^11 (lshift 11)
+
+    op idiv imm_4_1 instruction 256 # 2^8 (rshift 8)
+    op mod imm_4_1 imm_4_1 16 # 2^4 (trunc 4)
+    op mul imm_4_1 imm_4_1 2 # 2^1 (lshift 1)
+
+    op idiv imm_10_5 instruction 33554432 # 2^25 (rshift 25)
+    op mod imm_10_5 imm_10_5 64 # 2^6 (trunc 6)
+    op mul imm_10_5 imm_10_5 32 # 2^5 (lshift 5)
+
+    op idiv imm_12 instruction 2147483648 # 2^31 (rshift 31)
+    op mod imm_12 imm_12 2 # 2^1 (trunc 1)
+    op mul imm_12 imm_12 4096 # 2^12 (lshift 12)
+
+    op add imm imm_4_1 imm_10_5
+    op add imm imm imm_11
+    op add imm imm imm_12
+
+    # rs2
+    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+    read rs2 REGISTERS rs2
+
+    jump BEQ equal funct3 0
+    jump BNE equal funct3 1
+    jump BLT equal funct3 4
+    jump BGE equal funct3 5
+    jump BLTU equal funct3 6
+    jump BGEU equal funct3 7
+    jump illegal_instruction always
+
+decode_load:
+    # I-type
+    op add ret @counter 1
+    jump decode_type_I always
+
+    jump LB equal funct3 0
+    jump LH equal funct3 1
+    jump LW equal funct3 2
+    jump LBU equal funct3 4
+    jump LHU equal funct3 5
+    jump illegal_instruction always
+
+decode_save:
+    # S-type
+    # imm
+    op idiv imm_4_0 instruction 128 # 2^7 (rshift 7)
+    op mod imm_4_0 imm_4_0 32 # 2^5 (trunc 5)
+
+    op idiv imm_11_5 instruction 33554432 # 2^25 (rshift 25)
+    op mod imm_11_5 imm_11_5 128 # 2^7 (trunc 7)
+    op mul imm_11_5 imm_11_5 32 # 2^5 (lshift 5)
+
+    op add imm imm_4_0 imm_11_5
+
+    # rs2
+    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+    read rs2 REGISTERS rs2
+
+    jump SB equal funct3 0
+    jump SH equal funct3 1
+    jump SW equal funct3 2
+    jump illegal_instruction always
+
+decode_arithmetic_imm:
+    # I-type
+    op add ret @counter 1
+    jump decode_type_I always
+
+    jump ADDI equal funct3 0
+    jump SLLI equal funct3 1
+    jump SLTI equal funct3 2
+    jump SLTIU equal funct3 3
+    jump XORI equal funct3 4
+    jump decode_SRLI_SRAI equal funct3 5
+    jump ORI equal funct3 6
+    jump ANDI equal funct3 7
+    jump illegal_instruction always
+
+decode_SRLI_SRAI:
+    jump SRLI equal funct7 0
+    jump SRAI equal funct7 32
+    jump illegal_instruction always
+
+decode_arithmetic:
+    # R-type
+    # rd
+    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # rs2
+    op idiv rs2 instruction 1048576 # 2^20 (rshift 20)
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+    read rs2 REGISTERS rs2
+
+    jump decode_ADD_SUB equal funct3 0
+    jump SLL equal funct3 1
+    jump SLT equal funct3 2
+    jump SLTU equal funct3 3
+    jump XOR equal funct3 4
+    jump decode_SRL_SRA equal funct3 5
+    jump OR equal funct3 6
+    jump AND equal funct3 7
+    jump illegal_instruction always
+
+decode_ADD_SUB:
+    jump ADD equal funct7 0
+    jump SUB equal funct7 32
+    jump illegal_instruction always
+
+decode_SRL_SRA:
+    jump SRL equal funct7 0
+    jump SRA equal funct7 32
+    jump illegal_instruction always
+
+decode_type_I:
+    # common decoder for I-type instructions
+    # rd
+    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op idiv imm instruction 1048576 # 2^20 (rshift 20)
+    op mod imm imm 4096 # 2^12 (trunc 12)
+    
+    set @counter ret
+
+decode_type_U:
+    # common decoder for U-type instructions (only LUI and AUIPC)
+    # rd
+    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op idiv imm instruction 4096 # 2^12 (rshift 12)
+    op mod imm imm 1048576 # 2^20 (trunc 20)
+    op mul imm imm 4096 # 2^12 (lshift 12)
+    
+    set @counter ret
+
+illegal_instruction:
+    print "Illegal instruction!"
+    printflush ERROR_OUTPUT
+    stop
+
+end_instruction:
+    printflush ERROR_OUTPUT
+    
+    jump main always
+
+# instruction handlers
+
+LUI:
+    op add ret @counter 1
+    jump decode_type_U always
+
+    print "LUI"
+    jump end_instruction always
+
+AUIPC:
+    op add ret @counter 1
+    jump decode_type_U always
+    
+    print "AUIPC"
+    jump end_instruction always
+
+JAL:
+    # J-type
+    # rd
+    op idiv rd instruction 128 # 2^7 (rshift 7)
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op idiv imm_19_12 instruction 4096 # 2^12 (rshift 12)
+    op idiv imm_11 imm_19_12 256 # 2^8 (rshift 8)
+    op idiv imm_10_1 imm_11 2 # 2^1 (rshift 1)
+    op idiv imm_20 imm_10_1 1024 # 2^10 (rshift 10)
+
+    op mod imm_19_12 imm_19_12 256 # 2^8 (trunc 8)
+    op mul imm_19_12 imm_19_12 4096 # 2^12 (lshift 12)
+
+    op mod imm_11 imm_11 2 # 2^1 (trunc 1)
+    op mul imm_11 imm_11 2048 # 2^11 (lshift 11)
+
+    op mod imm_10_1 imm_10_1 1024 # 2^10 (trunc 10)
+    op mul imm_10_1 imm_10_1 2 # 2^1 (lshift 1)
+
+    op mod imm_20 imm_20 2 # 2^1 (trunc 1)
+    op mul imm_20 imm_20 1048576 # 2^20 (lshift 20)
+
+    op add imm imm_10_1 imm_11
+    op add imm imm imm_19_12
+    op add imm imm imm_20
+
+    # instruction handler
+    print "JAL"
+    jump end_instruction always
+
+JALR:
+    op add ret @counter 1
+    jump decode_type_I always
+
+    print "JALR"
+    jump end_instruction always
+
+BEQ:
+    print "BEQ"
+    jump end_instruction always
+
+BNE:
+    print "BNE"
+    jump end_instruction always
+
+BLT:
+    print "BLT"
+    jump end_instruction always
+
+BGE:
+    print "BGE"
+    jump end_instruction always
+
+BLTU:
+    print "BLTU"
+    jump end_instruction always
+
+BGEU:
+    print "BGEU"
+    jump end_instruction always
+
+LB:
+    print "LB"
+    jump end_instruction always
+
+LH:
+    print "LH"
+    jump end_instruction always
+
+LW:
+    print "LW"
+    jump end_instruction always
+
+LBU:
+    print "LBU"
+    jump end_instruction always
+
+LHU:
+    print "LHU"
+    jump end_instruction always
+
+SB:
+    print "SB"
+    jump end_instruction always
+
+SH:
+    print "SH"
+    jump end_instruction always
+
+SW:
+    print "SW"
+    jump end_instruction always
+
+ADDI:
+    print "ADDI"
+    jump end_instruction always
+
+SLTI:
+    print "SLTI"
+    jump end_instruction always
+
+SLTIU:
+    print "SLTIU"
+    jump end_instruction always
+
+XORI:
+    print "XORI"
+    jump end_instruction always
+
+ORI:
+    print "ORI"
+    jump end_instruction always
+
+ANDI:
+    print "ANDI"
+    jump end_instruction always
+
+SLLI:
+    # put the check here because there are no other instructions with this opcode and funct3
+    jump illegal_instruction notEqual funct7 0
+
+    print "SLLI"
+    jump end_instruction always
+
+SRLI:
+    print "SRLI"
+    jump end_instruction always
+
+SRAI:
+    print "SRAI"
+    jump end_instruction always
+
+ADD:
+    print "ADD"
+    jump end_instruction always
+
+SUB:
+    print "SUB"
+    jump end_instruction always
+
+SLL:
+    jump illegal_instruction notEqual funct7 0
+
+    print "SLL"
+    jump end_instruction always
+
+SLT:
+    jump illegal_instruction notEqual funct7 0
+
+    print "SLT"
+    jump end_instruction always
+
+SLTU:
+    jump illegal_instruction notEqual funct7 0
+
+    print "SLTU"
+    jump end_instruction always
+
+XOR:
+    jump illegal_instruction notEqual funct7 0
+
+    print "XOR"
+    jump end_instruction always
+
+SRL:
+    print "SRL"
+    jump end_instruction always
+
+SRA:
+    print "SRA"
+    jump end_instruction always
+
+OR:
+    jump illegal_instruction notEqual funct7 0
+
+    print "OR"
+    jump end_instruction always
+
+AND:
+    jump illegal_instruction notEqual funct7 0
+
+    print "AND"
+    jump end_instruction always
+
+FENCE:
+    op add ret @counter 1
+    jump decode_type_I always
+
+    print "FENCE"
+    jump end_instruction always
+
+SYSTEM:
+    op add ret @counter 1
+    jump decode_type_I always
+
+    print "SYSTEM"
+    jump end_instruction always

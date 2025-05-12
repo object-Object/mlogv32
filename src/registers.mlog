@@ -1,0 +1,34 @@
+    set REGISTERS cell1
+
+    read x0 REGISTERS 0
+    read x1 REGISTERS 1
+    read x2 REGISTERS 2
+    read x3 REGISTERS 3
+    read x4 REGISTERS 4
+    read x5 REGISTERS 5
+    read x6 REGISTERS 6
+    read x7 REGISTERS 7
+    read x8 REGISTERS 8
+    read x9 REGISTERS 9
+    read x10 REGISTERS 10
+    read x11 REGISTERS 11
+    read x12 REGISTERS 12
+    read x13 REGISTERS 13
+    read x14 REGISTERS 14
+    read x15 REGISTERS 15
+    read x16 REGISTERS 16
+    read x17 REGISTERS 17
+    read x18 REGISTERS 18
+    read x19 REGISTERS 19
+    read x20 REGISTERS 20
+    read x21 REGISTERS 21
+    read x22 REGISTERS 22
+    read x23 REGISTERS 23
+    read x24 REGISTERS 24
+    read x25 REGISTERS 25
+    read x26 REGISTERS 26
+    read x27 REGISTERS 27
+    read x28 REGISTERS 28
+    read x29 REGISTERS 29
+    read x30 REGISTERS 30
+    read x31 REGISTERS 31

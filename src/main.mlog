@@ -310,15 +310,22 @@ swap_endianness:
 
     set @counter ret
 
-# converts a two's complement unsigned value to signed or vice versa
-# value -> result
+# converts a pair of two's complement unsigned values to signed, or vice versa
+# this converts two values at once because every usage of it needs to convert two values
+# value1, value2 -> result1, result2
 swap_signedness:
     # x - 2(x - mod(x + 2^31, 2^31))
-    op add result value 0x80000000 # 2^31
-    op mod result result 0x80000000
-    op sub result value result
-    op mul result result 2
-    op sub result value result
+    op add result1 value1 0x80000000 # 2^31
+    op mod result1 result1 0x80000000
+    op sub result1 value1 result1
+    op mul result1 result1 2
+    op sub result1 value1 result1
+
+    op add result2 value2 0x80000000 # 2^31
+    op mod result2 result2 0x80000000
+    op sub result2 value2 result2
+    op mul result2 result2 2
+    op sub result2 value2 result2
 
     set @counter ret
 
@@ -418,33 +425,25 @@ BNE:
     jump end_instruction always
 
 BLT:
-    set value rs1
-    op add ret @counter 1
-    jump swap_signedness always
-    set rs1 result
-
-    set value rs2
+    set value1 rs1
+    set value2 rs2
     op add ret @counter 1
     jump swap_signedness always
 
     op add target pc imm
     set rd 0
-    jump jump_to_target lessThan rs1 result
+    jump jump_to_target lessThan result1 result2
     jump end_instruction always
 
 BGE:
-    set value rs1
-    op add ret @counter 1
-    jump swap_signedness always
-    set rs1 result
-
-    set value rs2
+    set value1 rs1
+    set value2 rs2
     op add ret @counter 1
     jump swap_signedness always
 
     op add target pc imm
     set rd 0
-    jump jump_to_target greaterThanEq rs1 result
+    jump jump_to_target greaterThanEq result1 result2
     jump end_instruction always
 
 BLTU:
@@ -509,13 +508,24 @@ ADDI:
     jump end_instruction always
 
 SLTI:
-    print "SLTI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    set value1 rs1
+    set value2 imm
+    op add ret @counter 1
+    jump swap_signedness always
+
+    op lessThan result result1 result2
+    write result REGISTERS rd
+
     jump end_instruction always
 
 SLTIU:
-    print "SLTIU"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op lessThan result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 XORI:
@@ -551,14 +561,12 @@ SRAI:
     printflush ERROR_OUTPUT
     jump end_instruction always
 
+# most of the register-register instructions are identical to their register-immediate counterparts
+# so just set imm to rs2 and reuse the existing logic
+
 ADD:
-    jump end_instruction equal rd 0
-
-    op add result rs1 rs2
-    op mod result result 0x100000000 # 2^32 (trunc 32)
-    write result REGISTERS rd
-
-    jump end_instruction always
+    set imm rs2
+    jump ADDI always
 
 SUB:
     print "SUB"
@@ -575,16 +583,14 @@ SLL:
 SLT:
     jump illegal_instruction notEqual funct7 0
 
-    print "SLT"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump SLTI always
 
 SLTU:
     jump illegal_instruction notEqual funct7 0
 
-    print "SLTU"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump SLTIU always
 
 XOR:
     jump illegal_instruction notEqual funct7 0

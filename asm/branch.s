@@ -7,7 +7,7 @@ _start:
 
 loop1:
     addi x1, x1, 1
-    bltu x1, x2, loop1
+    blt x1, x2, loop1
 
 loop2:
     addi x3, x3, -1

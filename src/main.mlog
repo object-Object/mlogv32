@@ -567,18 +567,43 @@ SLLI:
     # put the check here because there are no other instructions with this opcode and funct3
     jump illegal_instruction notEqual funct7 0
 
-    print "SLLI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    # truncate before shifting to avoid overflowing 52 integer bits in double
+    op sub length 32 imm
+    op pow divisor 2 length
+    op mod rs1 rs1 divisor
+
+    op shl result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 SRLI:
-    print "SRLI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    op shr result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 SRAI:
-    print "SRAI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    op shr value rs1 imm
+
+    op sub length 32 imm
+    op add ret @counter 1
+    jump extend_sign always
+
+    write result REGISTERS rd
+
     jump end_instruction always
 
 # most of the register-register instructions are identical to their register-immediate counterparts
@@ -598,9 +623,8 @@ SUB:
 SLL:
     jump illegal_instruction notEqual funct7 0
 
-    print "SLL"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump SLLI always
 
 SLT:
     jump illegal_instruction notEqual funct7 0
@@ -621,14 +645,12 @@ XOR:
     jump XORI always
 
 SRL:
-    print "SRL"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump SRLI always
 
 SRA:
-    print "SRA"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump SRAI always
 
 OR:
     jump illegal_instruction notEqual funct7 0

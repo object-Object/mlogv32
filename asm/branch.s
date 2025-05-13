@@ -1,15 +1,16 @@
 .global _start
 _start:
-    li x1, 2
-    li x2, -1
-    bge x1, x2, true
-
-false:
+    li x1, 0
+    li x2, 10
     li x3, 0
-    j finally
+    li x4, -10
 
-true:
-    li x3, 1
+loop1:
+    addi x1, x1, 1
+    bltu x1, x2, loop1
 
-finally:
-    j finally
+loop2:
+    addi x3, x3, -1
+    bge x3, x4, loop2
+
+    j 0

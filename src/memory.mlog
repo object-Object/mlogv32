@@ -1,0 +1,14 @@
+    set MEMORY bank1
+    set ADDRESS 100
+    set OUTPUT message1
+
+    op idiv index ADDRESS 4
+    read value MEMORY index
+
+    print "Value at "
+    print ADDRESS
+    print " (index "
+    print index
+    print "):\n"
+    print value
+    printflush OUTPUT

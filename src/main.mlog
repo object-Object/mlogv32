@@ -2,6 +2,7 @@ reset:
     # constants
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
+    set PAUSE_SWITCH switch2
     set REGISTERS cell1
     set MEMORY bank1 # TODO: support multiple memory banks
 
@@ -10,6 +11,7 @@ reset:
     printflush ERROR_OUTPUT
 
     control enabled RESET_SWITCH false
+    control enabled PAUSE_SWITCH false
 
     set i 0
 reset__zero_registers:
@@ -257,6 +259,11 @@ misaligned_load:
     printflush ERROR_OUTPUT
     jump halt always
 
+misaligned_store:
+    print "Attempted misaligned store!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
     control enabled RESET_SWITCH true
@@ -353,7 +360,7 @@ load_word:
     jump swap_endianness always
 
 # loads a value with a specified length in bits (8, 16, or 32) from memory
-# raises an address-misaligned exception if the address is misaligned for the specified length
+# raises a misaligned-load exception if the address is misaligned for the specified length
 # address, length, is_signed -> result
 load_value:
     set load_value__ret ret
@@ -361,10 +368,12 @@ load_value:
     # truncate address, because every caller needs to do it anyway
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
+    # check alignment
     op idiv _bytes length 8
     op mod _alignment address _bytes
     jump misaligned_load notEqual _alignment 0
 
+    # load the word containing the address
     op add ret @counter 1
     jump load_word always
 
@@ -383,6 +392,60 @@ load_value:
     jump extend_sign equal is_signed true # tail call
 
     set @counter load_value__ret
+
+# stores a word to memory at the specified address
+# NOTE: does not perform an alignment check
+# address, value ->
+store_word:
+    set store_word__ret ret
+    
+    op add ret @counter 1
+    jump swap_endianness always
+
+    op idiv _index address 4
+    write result MEMORY _index
+
+    set @counter store_word__ret
+
+# stores a value with a specified length in bits (8, 16, or 32) to memory
+# raises a misaligned-store exception if the address is misaligned for the specified length
+# address, value, length ->
+store_value:
+    set store_value__ret ret
+
+    # truncate address, because every caller needs to do it anyway
+    op mod address address 0x100000000 # 2^32 (trunc 32)
+
+    # check alignment
+    op idiv _bytes length 8
+    op mod _alignment address _bytes
+    jump misaligned_store notEqual _alignment 0
+
+    # create a bitmask with 0 in the section we want to replace and 1 everywhere else
+    op mod _shift address 4
+    op mul _shift _shift 8
+
+    op pow _bitmask 2 length
+    op sub _bitmask _bitmask 1
+    op shl _bitmask _bitmask _shift
+    op sub _bitmask 0xffffffff _bitmask
+
+    # take the low n bits of the value to store, and shift it to line up with the zeros in the mask
+    op pow _divisor 2 length
+    op mod _value value _divisor
+    op shl _value _value _shift
+
+    # load the word containing the address
+    op add ret @counter 1
+    jump load_word always
+
+    # insert the value into the word
+    op and result result _bitmask
+    op add value _value result
+
+    # store the final word (tail call)
+    set ret store_value__ret
+    jump store_word always
 
 # instruction handlers
 
@@ -569,18 +632,27 @@ LHU:
     jump end_instruction always
 
 SB:
-    print "SB"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set value rs2
+    set length 8
+    op add ret @counter 1
+    jump store_value always
     jump end_instruction always
 
 SH:
-    print "SH"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set value rs2
+    set length 16
+    op add ret @counter 1
+    jump store_value always
     jump end_instruction always
 
 SW:
-    print "SW"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set value rs2
+    set length 32
+    op add ret @counter 1
+    jump store_value always
     jump end_instruction always
 
 ADDI:
@@ -767,14 +839,15 @@ ECALL:
     jump end_instruction always
 
 EBREAK:
-    # (ab)use the reset switch to instead just pause the processor
-    control enabled RESET_SWITCH true
-    print "Paused on EBREAK, disable reset switch to continue"
+    control enabled PAUSE_SWITCH true
+    print "Paused on EBREAK, disable pause switch to continue"
     printflush ERROR_OUTPUT
 
 EBREAK__loop:
-    sensor enabled RESET_SWITCH @enabled
-    jump EBREAK__loop equal enabled true
+    sensor reset_enabled RESET_SWITCH @enabled
+    jump halt equal reset_enabled true
+    sensor pause_enabled PAUSE_SWITCH @enabled
+    jump EBREAK__loop equal pause_enabled true
 
     printflush ERROR_OUTPUT
     jump end_instruction always

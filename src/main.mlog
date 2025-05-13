@@ -7,7 +7,6 @@ reset:
 
     # initialization
 
-    print ""
     printflush ERROR_OUTPUT
 
     control enabled RESET_SWITCH false
@@ -38,15 +37,14 @@ main:
     jump LUI equal opcode 55
     jump AUIPC equal opcode 23
     jump JAL equal opcode 111
-    jump SYSTEM equal opcode 115
 
     # all below instructions use rs1, so just decode and read it here
-    op shr rs1 instruction 15
-    op mod rs1 rs1 32 # 2^5 (trunc 5)
-    read rs1 REGISTERS rs1
+    # note: rs1_id is stored as a separate variable because FENCE needs it
+    op shr rs1_id instruction 15
+    op mod rs1_id rs1_id 32 # 2^5 (trunc 5)
+    read rs1 REGISTERS rs1_id
 
     jump JALR equal opcode 103
-    jump FENCE equal opcode 15
 
     # instructions disambiguated by funct3
 
@@ -56,6 +54,8 @@ main:
     jump decode_branch equal opcode 99
     jump decode_load equal opcode 3
     jump decode_save equal opcode 35
+    jump decode_system equal opcode 115
+    jump FENCE equal opcode 15
 
     # instructions disambiguated by funct7
 
@@ -148,6 +148,17 @@ decode_save:
     jump SB equal funct3 0
     jump SH equal funct3 1
     jump SW equal funct3 2
+    jump illegal_instruction always
+
+decode_system:
+    jump illegal_instruction notEqual funct3 0
+
+    # funct12
+    op shr funct12 instruction 20
+    op mod funct12 funct12 4096 # 2^12 (trunc 12)
+
+    jump ECALL equal funct12 0
+    jump EBREAK equal funct12 1
     jump illegal_instruction always
 
 decode_arithmetic_imm:
@@ -632,17 +643,42 @@ AND:
     jump ANDI always
 
 FENCE:
-    op add ret @counter 1
-    jump decode_type_I always
+    jump illegal_instruction notEqual funct3 0
 
-    print "FENCE"
-    printflush ERROR_OUTPUT
+    # I-type, but without sign extension
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op shr imm instruction 20
+    op mod imm imm 4096 # 2^12 (trunc 12)
+
+    # PAUSE
+    # TODO: there's probably a better way to do this
+    jump FENCE__not_pause notEqual rd 0
+    jump FENCE__not_pause notEqual rs1_id 0
+    jump FENCE__not_pause notEqual imm 0b000000010000
+
+    wait 0.00001
+
+FENCE__not_pause:
+    # no-op
     jump end_instruction always
 
-SYSTEM:
-    op add ret @counter 1
-    jump decode_type_I always
+ECALL:
+    # TODO: implement syscalls
+    jump end_instruction always
 
-    print "SYSTEM"
+EBREAK:
+    # (ab)use the reset switch to instead just pause the processor
+    control enabled RESET_SWITCH true
+    print "Paused on EBREAK, disable reset switch to continue"
+    printflush ERROR_OUTPUT
+
+EBREAK__loop:
+    sensor enabled RESET_SWITCH @enabled
+    jump EBREAK__loop equal enabled true
+
     printflush ERROR_OUTPUT
     jump end_instruction always

@@ -835,7 +835,30 @@ FENCE__not_pause:
     jump end_instruction always
 
 ECALL:
-    # TODO: implement syscalls
+    read a7 REGISTERS 17
+    
+    jump ECALL_halt equal a7 0
+    jump ECALL_printchar equal a7 1
+    jump ECALL_printflush equal a7 2
+    
+    print "Illegal syscall!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+ECALL_halt:
+    read a0 REGISTERS 10
+    print "Exit code: "
+    print a0
+    printflush ERROR_OUTPUT
+    jump halt always
+
+ECALL_printchar:
+    read a0 REGISTERS 10
+    printchar a0
+    jump end_instruction always
+
+ECALL_printflush:
+    printflush ERROR_OUTPUT
     jump end_instruction always
 
 EBREAK:

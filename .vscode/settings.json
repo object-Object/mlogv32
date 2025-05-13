@@ -1,5 +1,9 @@
 {
     "files.associations": {
-        "*.s": "riscv",
+        "*.s": "riscv"
     },
+    "[markdown]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
 }

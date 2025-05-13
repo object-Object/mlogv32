@@ -529,18 +529,27 @@ SLTIU:
     jump end_instruction always
 
 XORI:
-    print "XORI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op xor result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 ORI:
-    print "ORI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op or result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 ANDI:
-    print "ANDI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op and result rs1 imm
+    write result REGISTERS rd
+
     jump end_instruction always
 
 SLLI:
@@ -597,9 +606,8 @@ SLTU:
 XOR:
     jump illegal_instruction notEqual funct7 0
 
-    print "XOR"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump XORI always
 
 SRL:
     print "SRL"
@@ -614,16 +622,14 @@ SRA:
 OR:
     jump illegal_instruction notEqual funct7 0
 
-    print "OR"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump ORI always
 
 AND:
     jump illegal_instruction notEqual funct7 0
 
-    print "AND"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    set imm rs2
+    jump ANDI always
 
 FENCE:
     op add ret @counter 1

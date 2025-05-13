@@ -12,4 +12,12 @@ _start:
     li x8, 1
     slt x9, x7, x8
 
+    li x10, 10
+    li x11, -2
+    sub x12, x10, x11
+
+    li x13, 10
+    li x14, 12
+    sub x15, x13, x14
+
     j 0

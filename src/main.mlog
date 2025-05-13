@@ -569,9 +569,11 @@ ADD:
     jump ADDI always
 
 SUB:
-    print "SUB"
-    printflush ERROR_OUTPUT
-    jump end_instruction always
+    # apply two's complement to negate the value in rs2 and put it into imm
+    op sub imm 0x100000000 rs2
+    op mod imm imm 0x100000000
+
+    jump ADDI always
 
 SLL:
     jump illegal_instruction notEqual funct7 0

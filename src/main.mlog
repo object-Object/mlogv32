@@ -20,12 +20,10 @@ reset__zero_registers:
     set pc 0
     
 main:
-    # load instruction and convert to big endian
-    op idiv address pc 4
-    read value MEMORY address
-    
+    # load instruction
+    set address pc
     op add ret @counter 1
-    jump swap_endianness always
+    jump load_word always
     set instruction result
 
     # decode instruction
@@ -254,6 +252,11 @@ instruction_address_misaligned:
     printflush ERROR_OUTPUT
     jump halt always
 
+misaligned_load:
+    print "Attempted misaligned load!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
     control enabled RESET_SWITCH true
@@ -339,6 +342,47 @@ swap_signedness:
     op sub result2 value2 result2
 
     set @counter ret
+
+# loads the word from memory that contains the specified address
+# address -> result
+load_word:
+    op idiv _index address 4
+    read value MEMORY _index
+
+    # tail call, swap_endianness will jump to the ret value of load_word's caller
+    jump swap_endianness always
+
+# loads a value with a specified length in bits (8, 16, or 32) from memory
+# raises an address-misaligned exception if the address is misaligned for the specified length
+# address, length, is_signed -> result
+load_value:
+    set load_value__ret ret
+
+    # truncate address, because every caller needs to do it anyway
+    op mod address address 0x100000000 # 2^32 (trunc 32)
+
+    op idiv _bytes length 8
+    op mod _alignment address _bytes
+    jump misaligned_load notEqual _alignment 0
+
+    op add ret @counter 1
+    jump load_word always
+
+    # right shift by (address % 4) bits
+    op mod _shift address 4
+    op mul _shift _shift 8
+    op shr result result _shift
+
+    # truncate to the specified number of bits
+    op pow _divisor 2 length
+    op mod result result _divisor
+
+    # extend the sign of the value if it's signed
+    set value result
+    set ret load_value__ret
+    jump extend_sign equal is_signed true # tail call
+
+    set @counter load_value__ret
 
 # instruction handlers
 
@@ -470,28 +514,58 @@ BGEU:
     jump end_instruction always
 
 LB:
-    print "LB"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set length 8
+    set is_signed true
+    op add ret @counter 1
+    jump load_value always
+
+    jump end_instruction equal rd 0
+    write result REGISTERS rd
     jump end_instruction always
 
 LH:
-    print "LH"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set length 16
+    set is_signed true
+    op add ret @counter 1
+    jump load_value always
+
+    jump end_instruction equal rd 0
+    write result REGISTERS rd
     jump end_instruction always
 
 LW:
-    print "LW"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set length 32
+    set is_signed false
+    op add ret @counter 1
+    jump load_value always
+
+    jump end_instruction equal rd 0
+    write result REGISTERS rd
     jump end_instruction always
 
 LBU:
-    print "LBU"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set length 8
+    set is_signed false
+    op add ret @counter 1
+    jump load_value always
+
+    jump end_instruction equal rd 0
+    write result REGISTERS rd
     jump end_instruction always
 
 LHU:
-    print "LHU"
-    printflush ERROR_OUTPUT
+    op add address rs1 imm
+    set length 16
+    set is_signed false
+    op add ret @counter 1
+    jump load_value always
+
+    jump end_instruction equal rd 0
+    write result REGISTERS rd
     jump end_instruction always
 
 SB:

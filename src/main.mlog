@@ -328,16 +328,20 @@ LUI:
     op add ret @counter 1
     jump decode_type_U always
 
-    print "LUI"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+    write imm REGISTERS rd
     jump end_instruction always
 
 AUIPC:
     op add ret @counter 1
     jump decode_type_U always
     
-    print "AUIPC"
-    printflush ERROR_OUTPUT
+    jump end_instruction equal rd 0
+
+    op add result imm pc
+    op mod result result 0x100000000 # trunc 32
+    write result REGISTERS rd
+
     jump end_instruction always
 
 JAL:

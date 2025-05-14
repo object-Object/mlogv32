@@ -914,7 +914,6 @@ ECALL:
     jump illegal_syscall lessThan a7 0 # this SHOULD never happen, but just in case
     jump illegal_syscall greaterThanEq a7 3 # number of syscalls
 
-    op add a7 a7 1
     op add @counter @counter a7
     
     jump ECALL_halt always

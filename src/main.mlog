@@ -286,6 +286,11 @@ illegal_instruction:
     printflush ERROR_OUTPUT
     jump halt always
 
+illegal_syscall:
+    print "Illegal syscall!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
 instruction_address_misaligned:
     print "Instruction address misaligned!"
     printflush ERROR_OUTPUT
@@ -906,14 +911,15 @@ FENCE__not_pause:
 
 ECALL:
     read a7 REGISTERS 17
+    jump illegal_syscall lessThan a7 0 # this SHOULD never happen, but just in case
+    jump illegal_syscall greaterThanEq a7 3 # number of syscalls
+
+    op add a7 a7 1
+    op add @counter @counter a7
     
-    jump ECALL_halt equal a7 0
-    jump ECALL_printchar equal a7 1
-    jump ECALL_printflush equal a7 2
-    
-    print "Illegal syscall!"
-    printflush ERROR_OUTPUT
-    jump halt always
+    jump ECALL_halt always
+    jump ECALL_printchar always
+    jump ECALL_printflush always
 
 ECALL_halt:
     read exit_code REGISTERS 10

@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![allow(dead_code)]
 
 use mlogv32::prelude::*;
 

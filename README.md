@@ -4,8 +4,58 @@ RISC-V processor in Mindustry logic. Requires the bleeding edge version of Mindu
 
 ## System calls
 
-| Index (a7) | Description  | a0        | a1  | a2  | a3  | a4  | a5  | a6  | Return (a0) |
-| ---------- | ------------ | --------- | --- | --- | --- | --- | --- | --- | ----------- |
-| 0          | Halt         | Exit code |     |     |     |     |     |     |             |
-| 1          | `printchar`  | Char      |     |     |     |     |     |     |             |
-| 2          | `printflush` |           |     |     |     |     |     |     |             |
+| Index (a7) | Description      | a0        | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |
+| ---------- | ---------------- | --------- | ----- | --------- | ------ | -------- | -------- | --- | ----------------------- |
+| 0          | Halt             | exit code |       |           |        |          |          |     |                         |
+| 1          | `printchar`      | value     |       |           |        |          |          |     |                         |
+| 2          | `printflush`     |           |       |           |        |          |          |     |                         |
+| 3          | `draw clear`     | red       | green | blue      |        |          |          |     |                         |
+| 4          | `draw color`     | red       | green | blue      | alpha  |          |          |     |                         |
+| 5          | `draw col`       | color     |       |           |        |          |          |     |                         |
+| 6          | `draw stroke`    | width     |       |           |        |          |          |     |                         |
+| 7          | `draw line`      | x1        | y1    | x2        | y2     |          |          |     |                         |
+| 8          | `draw rect`      | x         | y     | width     | height |          |          |     |                         |
+| 9          | `draw lineRect`  | x         | y     | width     | height |          |          |     |                         |
+| 10         | `draw poly`      | x         | y     | sides     | radius | rotation |          |     |                         |
+| 11         | `draw linePoly`  | x         | y     | sides     | radius | rotation |          |     |                         |
+| 12         | `draw triangle`  | x1        | y1    | x2        | y2     | x3       | y3       |     |                         |
+| 13         | `draw image`     | x         | y     | type      | id     | size     | rotation |     | lookup success (1 or 0) |
+| 14         | `draw print`     | x         | y     | alignment |        |          |          |     |                         |
+| 15         | `draw translate` | x         | y     |           |        |          |          |     |                         |
+| 16         | `draw scale`     | x         | y     |           |        |          |          |     |                         |
+| 17         | `draw rotate`    | degrees   |       |           |        |          |          |     |                         |
+| 18         | `draw reset`     |           |       |           |        |          |          |     |                         |
+| 19         | `drawflush`      |           |       |           |        |          |          |     |                         |
+
+### `draw col`
+
+`color` should be in integer format, eg. `0xff0000ff`.
+
+### `draw image`
+
+`type`: `lookup` type
+
+| Type   | Value |
+| ------ | ----- |
+| block  | 0     |
+| unit   | 1     |
+| item   | 2     |
+| liquid | 3     |
+
+`id`: `lookup` id (see https://yrueii.github.io/MlogDocs/)
+
+Returns 1 if the id was successfully looked up, or 0 if the lookup returned null.
+
+### `draw print`
+
+| Alignment   | Value |
+| ----------- | ----- |
+| bottom      | 0     |
+| bottomLeft  | 1     |
+| bottomRight | 2     |
+| center      | 3     |
+| left        | 4     |
+| right       | 5     |
+| top         | 6     |
+| topLeft     | 7     |
+| topRight    | 8     |

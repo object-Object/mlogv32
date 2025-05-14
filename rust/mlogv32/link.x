@@ -5,7 +5,8 @@ source: https://github.com/rust-embedded/riscv/blob/fdc3bb65a258/riscv-rt/link.x
 ENTRY(_start);
 
 MEMORY {
-    ram (rwx) : ORIGIN = 0, LENGTH = 1 * 512*4 /* TODO: increase when implemented */
+    /* LENGTH = num_memory_banks * 512*4 */
+    ram (rwx) : ORIGIN = 0, LENGTH = 64 * 512*4
 }
 
 REGION_ALIAS("REGION_TEXT",   ram);
@@ -16,7 +17,7 @@ REGION_ALIAS("REGION_HEAP",   ram);
 REGION_ALIAS("REGION_STACK",  ram);
 
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
-PROVIDE(_stack_size = 512); /* TODO: change back to 2K */
+PROVIDE(_stack_size = 2K);
 PROVIDE(_heap_size = 0);
 
 SECTIONS {

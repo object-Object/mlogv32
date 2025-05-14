@@ -1,5 +1,11 @@
     set REGISTERS cell1
     set OUTPUT message1
+    set CPU processor1
+
+    read pc CPU "pc"
+    print "pc = "
+    print pc
+    print "\n"
 
     read x0_zero REGISTERS 0
     print "x0_zero = "

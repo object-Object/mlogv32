@@ -4,7 +4,6 @@ reset:
     set RESET_SWITCH switch1
     set PAUSE_SWITCH switch2
     set REGISTERS cell1
-    set MEMORY bank1 # TODO: support multiple memory banks
 
     # initialization
 
@@ -13,12 +12,35 @@ reset:
     control enabled RESET_SWITCH false
     control enabled PAUSE_SWITCH false
 
+    # find the index of the first linked memory bank and the number of memory banks
+    # NOTE: the memory banks must be linked AFTER all other linked buildings
+    # eg. if you want to link a new switch, you need to first unlink all of the memory banks
+    set i -1
+reset__find_memory_start_link:
+    op add i i 1
+    getlink block i
+    sensor type block @type
+    jump reset__find_memory_start_link notEqual type @memory-bank
+
+    set MEMORY_START_LINK i
+    op sub MEMORY_SIZE @links i
+
+    # ensure all links after MEMORY_START_LINK are actually memory banks
+reset__validate_memory_links:
+    getlink block i
+    sensor type block @type
+    jump invalid_memory_link_order notEqual type @memory-bank
+    op add i i 1
+    jump reset__validate_memory_links lessThan i @links
+
+    # zero all of the registers
     set i 0
 reset__zero_registers:
     write 0 REGISTERS i
     op add i i 1
     jump reset__zero_registers lessThan i 32
 
+    # start executing code at address 0
     set pc 0
     
 main:
@@ -244,6 +266,11 @@ decode_type_U:
     
     set @counter ret
 
+invalid_memory_link_order:
+    print "Invalid link order! Memory banks must be linked to the processor after all other buildings."
+    printflush ERROR_OUTPUT
+    jump halt always
+
 illegal_instruction:
     print "Illegal instruction!"
     printflush ERROR_OUTPUT
@@ -261,6 +288,16 @@ misaligned_load:
 
 misaligned_store:
     print "Attempted misaligned store!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+inaccessible_load:
+    print "Attempted to load from an inaccessible address!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+inaccessible_store:
+    print "Attempted to store to an inaccessible address!"
     printflush ERROR_OUTPUT
     jump halt always
 
@@ -353,8 +390,20 @@ swap_signedness:
 # loads the word from memory that contains the specified address
 # address -> result
 load_word:
+    # we store 4 bytes in each value
     op idiv _index address 4
-    read value MEMORY _index
+
+    # get the memory bank
+    op idiv _link _index 512
+    jump inaccessible_load greaterThanEq _link MEMORY_SIZE
+    op add _link _link MEMORY_START_LINK
+    getlink _bank _link
+
+    # get the index in the memory bank
+    op mod _index _index 512
+
+    # load the value
+    read value _bank _index
 
     # tail call, swap_endianness will jump to the ret value of load_word's caller
     jump swap_endianness always
@@ -402,8 +451,19 @@ store_word:
     op add ret @counter 1
     jump swap_endianness always
 
+    # we store 4 bytes in each value
     op idiv _index address 4
-    write result MEMORY _index
+
+    # get the memory bank
+    op idiv _link _index 512
+    jump inaccessible_store greaterThanEq _link MEMORY_SIZE
+    op add _link _link MEMORY_START_LINK
+    getlink _bank _link
+
+    # get the index in the memory bank
+    op mod _index _index 512
+
+    write result _bank _index
 
     set @counter store_word__ret
 

@@ -12,9 +12,9 @@ reset:
     control enabled RESET_SWITCH false
     control enabled PAUSE_SWITCH false
 
-    # find the index of the first linked memory bank and the number of memory banks
-    # NOTE: the memory banks must be linked AFTER all other linked buildings
-    # eg. if you want to link a new switch, you need to first unlink all of the memory banks
+    # find the index of the first linked memory bank
+    # NOTE: the memory banks must be linked in a contiguous group
+    # eg. if you link memory banks, then a switch, then want to add more memory banks, you need to unlink the switch first
     set i -1
 reset__find_memory_start_link:
     op add i i 1
@@ -23,14 +23,21 @@ reset__find_memory_start_link:
     jump reset__find_memory_start_link notEqual type @memory-bank
 
     set MEMORY_START_LINK i
-    op sub MEMORY_SIZE @links i
 
-    # ensure all links after MEMORY_START_LINK are actually memory banks
-reset__validate_memory_links:
+reset__find_memory_size:
+    op add i i 1
     getlink block i
     sensor type block @type
-    jump invalid_memory_link_order notEqual type @memory-bank
+    jump reset__find_memory_size equal type @memory-bank
+
+    op sub MEMORY_SIZE i MEMORY_START_LINK
+
+    # ensure all linked memory banks are contiguous (ie. there are no more memory banks linked)
+reset__validate_memory_links:
     op add i i 1
+    getlink block i
+    sensor type block @type
+    jump invalid_memory_link_order equal type @memory-bank
     jump reset__validate_memory_links lessThan i @links
 
     # zero all of the registers
@@ -267,7 +274,10 @@ decode_type_U:
     set @counter ret
 
 invalid_memory_link_order:
-    print "Invalid link order! Memory banks must be linked to the processor after all other buildings."
+    print "Invalid link order! Memory banks must be linked to the processor in one contiguous chunk.\nTry removing this building: "
+    op sub i i 1
+    getlink block i
+    print block
     printflush ERROR_OUTPUT
     jump halt always
 

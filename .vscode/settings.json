@@ -5,5 +5,11 @@
     "[markdown]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode"
-    }
+    },
+    "rust-analyzer.linkedProjects": [
+        "rust/mlogv32/Cargo.toml",
+        "rust/demo_no_alloc/Cargo.toml"
+    ],
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.cargo.features": "all"
 }

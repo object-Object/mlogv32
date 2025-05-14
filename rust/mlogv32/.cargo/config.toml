@@ -1,0 +1,12 @@
+[build]
+target = "riscv32i-unknown-none-elf"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]
+
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+
+[alias]
+rbuild = "build --release"
+rb = "rbuild"

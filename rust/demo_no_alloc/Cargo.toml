@@ -1,0 +1,18 @@
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitfield-struct = "0.10.0"
+mlogv32 = { path = "../mlogv32" }
+itoa = "1.0.11"
+
+[profile.dev]
+
+[profile.release]
+panic = "abort"
+# values: 2, 3, s, z
+opt-level = 3
+overflow-checks = false
+lto = true

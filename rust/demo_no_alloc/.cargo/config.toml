@@ -1,0 +1,30 @@
+[build]
+target = "riscv32i-unknown-none-elf"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+]
+
+[unstable]
+build-std = ["core", "compiler_builtins"]
+
+[alias]
+rbuild = "build --release"
+rb = "rbuild"
+
+rsize = "size --release"
+
+robjdump = [
+    "objdump",
+    "--release",
+    "--",
+    "--disassemble",
+    "--no-show-raw-insn",
+]
+rod = "robjdump"
+
+robjcopy = [
+    "objcopy",
+    "--release",
+    "--",
+    "--output-target", "binary",
+]

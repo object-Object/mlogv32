@@ -846,10 +846,7 @@ ECALL:
     jump halt always
 
 ECALL_halt:
-    read a0 REGISTERS 10
-    print "Exit code: "
-    print a0
-    printflush ERROR_OUTPUT
+    read exit_code REGISTERS 10
     jump halt always
 
 ECALL_printchar:

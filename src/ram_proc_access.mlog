@@ -1,0 +1,45 @@
+    set LOOKUP_START 0
+    set RAM processor18
+    set RAM_SIZE 4350
+
+    setrate 250
+
+    set address 0
+loop:
+    op add ret @counter 1
+    jump access always
+    write address RAM variable
+    op add address address 1
+    jump loop lessThan address RAM_SIZE
+
+    set address 1000
+    op add ret @counter 1
+    jump access always
+    write 1000000 RAM variable
+
+    set address 1000
+    op add ret @counter 1
+    jump access always
+    read value1 RAM variable
+
+    set address 1001
+    op add ret @counter 1
+    jump access always
+    write 2000000 RAM variable
+
+    set address 1001
+    op add ret @counter 1
+    jump access always
+    read value2 RAM variable
+
+    stop
+
+access:
+    op idiv link address @blockCount
+    op add link link LOOKUP_START
+    op mod index address @blockCount
+    lookup block content index
+    sensor name content @name
+    getlink lookup link
+    read variable lookup name
+    set @counter ret

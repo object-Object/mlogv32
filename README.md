@@ -59,3 +59,26 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 | top         | 6     |
 | topLeft     | 7     |
 | topRight    | 8     |
+
+## Building
+
+### Assembly
+
+Assumes Ubuntu WSL on Windows.
+
+- Install `uv` and `binutils-riscv64-unknown-elf`.
+- Set up the Python environment:
+  - `uv venv .venv-wsl`
+  - `source .venv-wsl/bin/activate`
+  - `uv sync --active`
+- Build all source files in `asm/`: `make asm`
+
+### Rust
+
+Assumes Powershell on Windows.
+
+- Install `uv`, Rust, and `cargo-binutils`.
+- Set up the Python environment:
+  - `uv sync`
+  - `.venv\Scripts\activate.ps1`
+- Build all Rust projects in `rust/`: `make rust`

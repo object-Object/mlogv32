@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 RESET_SWITCH = "switch1"
 OUTPUT = "message1"
@@ -31,9 +31,13 @@ def main():
         # see NUM_TAIL_LINES
         if is_done:
             n = output_index + 1
-            output.append(f'print "Done! Loaded {n} file{"" if n == 1 else "s"} containing {len(data)} bytes."')
+            output.append(
+                f'print "Done! Loaded {n} file{"" if n == 1 else "s"} containing {len(data)} bytes."'
+            )
         else:
-            output.append(f'print "Done file {output_name}-{output_index}.mlog. Load file {output_name}-{output_index + 1}.mlog to continue."')
+            output.append(
+                f'print "Done file {output_name}-{output_index}.mlog. Load file {output_name}-{output_index + 1}.mlog to continue."'
+            )
         output += [
             f"printflush {OUTPUT}",
             "stop",
@@ -47,18 +51,18 @@ def main():
         output_index += 1
         output.clear()
         output.append(f"printflush {OUTPUT}")
-    
+
     for i in range(0, len(data), 4):
         word = data[i : i + 4]
         number = int.from_bytes(word, byteorder="big")
         output.append(f"write {number} bank{bank_index} {address}")
-        
+
         if len(output) + NUM_TAIL_LINES >= MAX_FILE_SIZE:
             is_done = i + 4 >= len(data)
             flush_output(is_done=is_done)
             if is_done:
                 break
-        
+
         address += 1
         if address >= BANK_SIZE:
             address = 0
@@ -69,8 +73,9 @@ def main():
     else:
         # we didn't break the loop, so flush the rest of the output
         flush_output(is_done=True)
-    
+
     print(f"Generated {output_index} mlog file{'' if output_index == 1 else 's'}.")
+
 
 if __name__ == "__main__":
     main()

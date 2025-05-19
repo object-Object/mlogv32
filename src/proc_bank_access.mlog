@@ -1,0 +1,77 @@
+    set BANK processor1
+
+    set address 100
+    set value "a"
+    op add ret @counter 1
+    jump write always
+
+    set address 100
+    op add ret @counter 1
+    jump read always
+    set value1 result
+
+    set address 100
+    set value "b"
+    op add ret @counter 1
+    jump write always
+
+    set address 100
+    op add ret @counter 1
+    jump read always
+    set value2 result
+
+    set i 0
+loop:
+    set address i
+    set value i
+    op add ret @counter 1
+    jump write always
+    op add i i 1
+    jump loop lessThan i @blockCount
+
+    stop
+
+read:
+    lookup block content address
+    sensor variable content @name
+    read result BANK variable
+    set @counter ret
+
+write:
+    lookup block content address
+    sensor variable content @name
+    write value BANK variable
+    set @counter ret
+
+# read:
+#     set write false
+#     jump access always
+
+# write:
+#     set write true
+
+# access:
+#     lookup block content address
+#     jump access__valid notEqual content null
+
+#     op sub address address @blockCount
+#     lookup unit content address
+#     jump access__valid notEqual content null
+
+#     op sub address address @unitCount
+#     lookup item content address
+#     jump access__valid notEqual content null
+
+#     op sub address address @itemCount
+#     lookup liquid content address
+
+# access__valid:
+#     sensor variable content @name
+#     jump access__write equal write true
+
+#     read result BANK variable
+#     set @counter ret
+
+# access__write:
+#     write value BANK variable
+#     set @counter ret

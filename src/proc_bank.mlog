@@ -1,0 +1,352 @@
+set graphite-press null
+set multi-press null
+set silicon-smelter null
+set silicon-crucible null
+set kiln null
+set plastanium-compressor null
+set phase-weaver null
+set cryofluid-mixer null
+set pyratite-mixer null
+set blast-mixer null
+set melter null
+set separator null
+set disassembler null
+set spore-press null
+set pulverizer null
+set coal-centrifuge null
+set incinerator null
+set copper-wall null
+set copper-wall-large null
+set titanium-wall null
+set titanium-wall-large null
+set plastanium-wall null
+set plastanium-wall-large null
+set thorium-wall null
+set thorium-wall-large null
+set phase-wall null
+set phase-wall-large null
+set surge-wall null
+set surge-wall-large null
+set door null
+set door-large null
+set scrap-wall null
+set scrap-wall-large null
+set scrap-wall-huge null
+set scrap-wall-gigantic null
+set mender null
+set mend-projector null
+set overdrive-projector null
+set overdrive-dome null
+set force-projector null
+set shock-mine null
+set conveyor null
+set titanium-conveyor null
+set plastanium-conveyor null
+set armored-conveyor null
+set junction null
+set bridge-conveyor null
+set phase-conveyor null
+set sorter null
+set inverted-sorter null
+set router null
+set distributor null
+set overflow-gate null
+set underflow-gate null
+set mass-driver null
+set duct null
+set duct-router null
+set duct-bridge null
+set mechanical-pump null
+set rotary-pump null
+set conduit null
+set pulse-conduit null
+set plated-conduit null
+set liquid-router null
+set liquid-tank null
+set liquid-junction null
+set bridge-conduit null
+set phase-conduit null
+set power-node null
+set power-node-large null
+set surge-tower null
+set diode null
+set battery null
+set battery-large null
+set combustion-generator null
+set thermal-generator null
+set steam-generator null
+set differential-generator null
+set rtg-generator null
+set solar-panel null
+set solar-panel-large null
+set thorium-reactor null
+set impact-reactor null
+set mechanical-drill null
+set pneumatic-drill null
+set laser-drill null
+set blast-drill null
+set water-extractor null
+set cultivator null
+set oil-extractor null
+set core-shard null
+set core-foundation null
+set core-nucleus null
+set vault null
+set container null
+set unloader null
+set duo null
+set scatter null
+set scorch null
+set hail null
+set wave null
+set lancer null
+set arc null
+set parallax null
+set swarmer null
+set salvo null
+set segment null
+set tsunami null
+set fuse null
+set ripple null
+set cyclone null
+set foreshadow null
+set spectre null
+set meltdown null
+set command-center null
+set ground-factory null
+set air-factory null
+set naval-factory null
+set additive-reconstructor null
+set multiplicative-reconstructor null
+set exponential-reconstructor null
+set tetrative-reconstructor null
+set repair-point null
+set repair-turret null
+set payload-conveyor null
+set payload-router null
+set power-source null
+set power-void null
+set item-source null
+set item-void null
+set liquid-source null
+set liquid-void null
+set payload-void null
+set payload-source null
+set illuminator null
+set launch-pad null
+set interplanetary-accelerator null
+set message null
+set switch null
+set micro-processor null
+set logic-processor null
+set hyper-processor null
+set memory-cell null
+set memory-bank null
+set logic-display null
+set large-logic-display null
+set liquid-container null
+set deconstructor null
+set constructor null
+set thruster null
+set large-constructor null
+set payload-loader null
+set payload-unloader null
+set silicon-arc-furnace null
+set cliff-crusher null
+set plasma-bore null
+set reinforced-liquid-junction null
+set breach null
+set core-bastion null
+set turbine-condenser null
+set beam-node null
+set beam-tower null
+set build-tower null
+set impact-drill null
+set carbide-crucible null
+set surge-conveyor null
+set duct-unloader null
+set surge-router null
+set reinforced-conduit null
+set reinforced-liquid-router null
+set reinforced-liquid-container null
+set reinforced-liquid-tank null
+set reinforced-bridge-conduit null
+set core-citadel null
+set core-acropolis null
+set heat-reactor null
+set impulse-pump null
+set reinforced-pump null
+set electrolyzer null
+set oxidation-chamber null
+set surge-smelter null
+set surge-crucible null
+set overflow-duct null
+set large-plasma-bore null
+set cyanogen-synthesizer null
+set slag-centrifuge null
+set electric-heater null
+set slag-incinerator null
+set phase-synthesizer null
+set sublimate null
+set reinforced-container null
+set reinforced-vault null
+set atmospheric-concentrator null
+set unit-cargo-loader null
+set unit-cargo-unload-point null
+set chemical-combustion-chamber null
+set pyrolysis-generator null
+set regen-projector null
+set titan null
+set small-deconstructor null
+set vent-condenser null
+set phase-heater null
+set heat-redirector null
+set tungsten-wall null
+set tungsten-wall-large null
+set tank-assembler null
+set beryllium-wall null
+set beryllium-wall-large null
+set eruption-drill null
+set ship-assembler null
+set mech-assembler null
+set shield-projector null
+set beam-link null
+set world-processor null
+set reinforced-payload-conveyor null
+set reinforced-payload-router null
+set disperse null
+set large-shield-projector null
+set payload-mass-driver null
+set world-cell null
+set carbide-wall null
+set carbide-wall-large null
+set tank-fabricator null
+set mech-fabricator null
+set ship-fabricator null
+set reinforced-surge-wall null
+set radar null
+set blast-door null
+set canvas null
+set armored-duct null
+set unit-repair-tower null
+set diffuse null
+set prime-refabricator null
+set basic-assembler-module null
+set reinforced-surge-wall-large null
+set tank-refabricator null
+set mech-refabricator null
+set ship-refabricator null
+set slag-heater null
+set afflict null
+set shielded-wall null
+set lustre null
+set scathe null
+set smite null
+set underflow-duct null
+set malign null
+set shockwave-tower null
+set heat-source null
+set flux-reactor null
+set neoplasia-reactor null
+set heat-router null
+set large-payload-mass-driver null
+set reinforced-message null
+set world-message null
+set world-switch null
+set small-heat-redirector null
+set large-cliff-crusher null
+set advanced-launch-pad null
+set landing-pad null
+set tile-logic-display null
+
+# set dagger null
+# set mace null
+# set fortress null
+# set scepter null
+# set reign null
+# set nova null
+# set pulsar null
+# set quasar null
+# set vela null
+# set corvus null
+# set crawler null
+# set atrax null
+# set spiroct null
+# set arkyid null
+# set toxopid null
+# set flare null
+# set horizon null
+# set zenith null
+# set antumbra null
+# set eclipse null
+# set mono null
+# set poly null
+# set mega null
+# set quad null
+# set oct null
+# set risso null
+# set minke null
+# set bryde null
+# set sei null
+# set omura null
+# set retusa null
+# set oxynoe null
+# set cyerce null
+# set aegires null
+# set navanax null
+# set alpha null
+# set beta null
+# set gamma null
+# set stell null
+# set locus null
+# set precept null
+# set vanquish null
+# set conquer null
+# set merui null
+# set cleroi null
+# set anthicus null
+# set tecta null
+# set collaris null
+# set elude null
+# set avert null
+# set obviate null
+# set quell null
+# set disrupt null
+# set evoke null
+# set incite null
+# set emanate null
+
+# set copper null
+# set lead null
+# set metaglass null
+# set graphite null
+# set sand null
+# set coal null
+# set titanium null
+# set thorium null
+# set scrap null
+# set silicon null
+# set plastanium null
+# set phase-fabric null
+# set surge-alloy null
+# set spore-pod null
+# set blast-compound null
+# set pyratite null
+# set beryllium null
+# set tungsten null
+# set oxide null
+# set carbide null
+
+# set water null
+# set slag null
+# set oil null
+# set cryofluid null
+# set neoplasm null
+# set hydrogen null
+# set ozone null
+# set cyanogen null
+# set gallium null
+# set nitrogen null
+# set arkycite null
+
+stop

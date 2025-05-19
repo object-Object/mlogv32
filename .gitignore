@@ -5,6 +5,9 @@
 *.hex
 /build/
 
+logicids.dat
+logicids.json
+
 .ruff_cache/
 .theia/
 

@@ -12,16 +12,15 @@ rust: $(RUST_PROGRAMS)
 
 $(ASM_PROGRAMS): %: build/%-0.mlog build/%.bin build/%.dump
 
-$(RUST_PROGRAMS): %: | build/rust
-	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
-	-rm -f build/rust/$*-[0-9].mlog build/rust/$*-[0-9][0-9].mlog
-	python scripts/dump.py build/rust/$*.bin
+$(RUST_PROGRAMS): %: build/rust/%-0.mlog build/rust/%.bin
 
-# using python3 here because that works in wsl lmao
-# also see https://stackoverflow.com/a/61960833
-build/%-0.mlog: build/%.bin
+# see https://stackoverflow.com/a/61960833
+build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
 	-rm -f build/$*-[0-9].mlog build/$*-[0-9][0-9].mlog
-	python3 scripts/dump.py build/$*.bin
+	python scripts/bin_to_mlog.py build/$*.bin
+
+build/rust/%.bin: | build/rust
+	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
 
 build/%.bin: build/%.out
 	riscv64-unknown-elf-objcopy --output-target binary build/$*.out build/$*.bin

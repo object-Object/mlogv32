@@ -11,5 +11,17 @@
         "rust/demo_no_alloc/Cargo.toml"
     ],
     "rust-analyzer.check.allTargets": false,
-    "rust-analyzer.cargo.features": "all"
+    "rust-analyzer.cargo.features": "all",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.ruff": "explicit"
+        },
+        "editor.rulers": [88]
+    },
+    "ruff.organizeImports": true,
+    "ruff.lint.ignore": ["I"],
+    "python.languageServer": "Pylance",
+    "python.analysis.diagnosticMode": "workspace"
 }

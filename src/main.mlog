@@ -26,6 +26,8 @@ reset__wait_for_reset_switch:
 
     printflush ERROR_OUTPUT
 
+    set exit_code null
+
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
     # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to unlink the switch first

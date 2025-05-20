@@ -2,6 +2,11 @@
     set OUTPUT message1
     set CPU processor1
 
+    read exit_code CPU "exit_code"
+    print "exit_code = "
+    print exit_code
+    print "\n"
+
     read pc CPU "pc"
     print "pc = "
     print pc

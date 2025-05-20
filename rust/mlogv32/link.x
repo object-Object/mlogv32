@@ -5,8 +5,11 @@ source: https://github.com/rust-embedded/riscv/blob/fdc3bb65a258/riscv-rt/link.x
 ENTRY(_start);
 
 MEMORY {
-    /* LENGTH = num_memory_banks * 512*4 */
-    ram (rwx) : ORIGIN = 0, LENGTH = 64 * 512*4
+    /*
+    LENGTH = num_ram_procs * 4096*4
+    0x10000000 = 128*128 * 4096*4
+    */
+    ram (rwx) : ORIGIN = 0, LENGTH = 0x10000000
 }
 
 REGION_ALIAS("REGION_TEXT",   ram);
@@ -17,7 +20,9 @@ REGION_ALIAS("REGION_HEAP",   ram);
 REGION_ALIAS("REGION_STACK",  ram);
 
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
-PROVIDE(_stack_size = 2K);
+PROVIDE(_stack_size = 8M);
+
+/* users can optionally enable the heap by adding another linker script to override this value */
 PROVIDE(_heap_size = 0);
 
 SECTIONS {

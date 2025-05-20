@@ -1,4 +1,5 @@
-reset:
+    setrate 1000
+
     # constants
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
@@ -6,40 +7,61 @@ reset:
     set REGISTERS cell1
     set DISPLAY display1
 
+    set RAM_X 1  # bottom left ram proc x
+    set RAM_Y 1  # bottom left ram proc y
+    set RAM_WIDTH 128  # physical width of the ram procs
+    set RAM_SIZE 0x10000000  # total ram size in bytes
+    set RAM_PROC_SIZE 4096  # variables (not bytes) per ram proc
+    set LOOKUP_LINKS 16  # expected number of ram variable lookup processors
+    set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
+
     # initialization
+reset:
+
+reset__wait_for_reset_switch:
+    sensor enabled RESET_SWITCH @enabled
+    jump reset__wait_for_reset_switch equal enabled true
+
+    control enabled PAUSE_SWITCH false
 
     printflush ERROR_OUTPUT
 
-    control enabled RESET_SWITCH false
-    control enabled PAUSE_SWITCH false
-
-    # find the index of the first linked memory bank
-    # NOTE: the memory banks must be linked in a contiguous group
-    # eg. if you link memory banks, then a switch, then want to add more memory banks, you need to unlink the switch first
+    # find the index of the first linked lookup proc
+    # NOTE: the lookup procs must be linked in a contiguous group
+    # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to unlink the switch first
+    # also, this may fail if the lookups haven't been given enough time to initialize, so do that first
     set i -1
-reset__find_memory_start_link:
+reset__find_lookup_start:
     op add i i 1
     getlink block i
     sensor type block @type
-    jump reset__find_memory_start_link notEqual type @memory-bank
+    jump reset__find_lookup_start notEqual type @micro-processor
+    read type_var block "_type"
+    jump reset__find_lookup_start notEqual type_var "lookup"
 
-    set MEMORY_START_LINK i
+    set LOOKUP_START i
 
-reset__find_memory_size:
+    # hack
+    read prev_lookup_index block "_index"
+    op sub prev_lookup_index prev_lookup_index 1
+
+    # validate the number of linked lookup procs
+reset__find_lookup_size:
+    read lookup_index block "_index"
+    op sub delta lookup_index prev_lookup_index
+    jump invalid_lookup_link_order notEqual delta 1
+    set prev_lookup_index lookup_index
+
     op add i i 1
     getlink block i
     sensor type block @type
-    jump reset__find_memory_size equal type @memory-bank
+    jump reset__done_find_lookup_size notEqual type @micro-processor
+    read type_var block "_type"
+    jump reset__find_lookup_size equal type_var "lookup"
 
-    op sub MEMORY_SIZE i MEMORY_START_LINK
-
-    # ensure all linked memory banks are contiguous (ie. there are no more memory banks linked)
-reset__validate_memory_links:
-    op add i i 1
-    getlink block i
-    sensor type block @type
-    jump invalid_memory_link_order equal type @memory-bank
-    jump reset__validate_memory_links lessThan i @links
+reset__done_find_lookup_size:
+    op sub lookup_links i LOOKUP_START
+    jump invalid_lookup_link_order notEqual lookup_links LOOKUP_LINKS
 
     # zero all of the registers
     set i 0
@@ -274,11 +296,8 @@ decode_type_U:
     
     set @counter ret
 
-invalid_memory_link_order:
-    print "Invalid link order! Memory banks must be linked to the processor in one contiguous chunk.\nTry removing this building: "
-    op sub i i 1
-    getlink block i
-    print block
+invalid_lookup_link_order:
+    print "Invalid ROM proc lookup link order! Lookups must be linked to the processor in one contiguous chunk in the order specified by the _index variable."
     printflush ERROR_OUTPUT
     jump halt always
 
@@ -320,13 +339,11 @@ inaccessible_store:
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
     control enabled RESET_SWITCH true
-halt__loop:
-    sensor enabled RESET_SWITCH @enabled
-    jump halt__loop equal enabled true
     jump reset always
 
 end_instruction:
     op add pc pc 4
+    op mod pc pc 0x100000000 # trunc 32
 end_instruction_preserve_pc:
     # halt if the reset switch was manually enabled
     sensor enabled RESET_SWITCH @enabled
@@ -403,23 +420,49 @@ swap_signedness:
 
     set @counter ret
 
+# helper function to find the ram proc and variable for a given address
+# address -> ram, variable
+access_ram:
+    # we store 4 bytes in each value
+    op idiv _address address 4
+
+    # get the ram proc containing this address
+    op idiv _ram_index _address RAM_PROC_SIZE
+
+    op mod _ram_x _ram_index RAM_WIDTH
+    op add _ram_x _ram_x RAM_X
+
+    op idiv _ram_y _ram_index RAM_WIDTH
+    op add _ram_y _ram_y RAM_Y
+
+    getblock building ram _ram_x _ram_y
+
+    # get the variable within the ram proc containing this address
+    op mod _address _address RAM_PROC_SIZE
+    
+    op idiv _lookup _address LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable _address LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter access_ram__ret
+
 # loads the word from memory that contains the specified address
 # address -> result
 load_word:
-    # we store 4 bytes in each value
-    op idiv _index address 4
+    jump inaccessible_load greaterThanEq address RAM_SIZE
 
-    # get the memory bank
-    op idiv _link _index 512
-    jump inaccessible_load greaterThanEq _link MEMORY_SIZE
-    op add _link _link MEMORY_START_LINK
-    getlink _bank _link
+    # locate and read value from ram
+    op add access_ram__ret @counter 1
+    jump access_ram always
+    read value ram variable
 
-    # get the index in the memory bank
-    op mod _index _index 512
-
-    # load the value
-    read value _bank _index
+    # coerce null values to 0
+    op add value value 0
 
     # tail call, swap_endianness will jump to the ret value of load_word's caller
     jump swap_endianness always
@@ -462,24 +505,16 @@ load_value:
 # NOTE: does not perform an alignment check
 # address, value ->
 store_word:
+    jump inaccessible_store greaterThanEq address RAM_SIZE
+
     set store_word__ret ret
     
     op add ret @counter 1
     jump swap_endianness always
 
-    # we store 4 bytes in each value
-    op idiv _index address 4
-
-    # get the memory bank
-    op idiv _link _index 512
-    jump inaccessible_store greaterThanEq _link MEMORY_SIZE
-    op add _link _link MEMORY_START_LINK
-    getlink _bank _link
-
-    # get the index in the memory bank
-    op mod _index _index 512
-
-    write result _bank _index
+    op add access_ram__ret @counter 1
+    jump access_ram always
+    write result ram variable
 
     set @counter store_word__ret
 
@@ -520,6 +555,7 @@ store_value:
     op add value _value result
 
     # store the final word (tail call)
+    # TODO: we shouldn't really need to run access_ram again here
     set ret store_value__ret
     jump store_word always
 

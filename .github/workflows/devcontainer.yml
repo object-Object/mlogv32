@@ -1,9 +1,7 @@
-name: "Prebuild Dev Container"
+name: Prebuild Dev Container
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build:

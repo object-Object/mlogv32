@@ -62,11 +62,17 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 
 ## Building
 
+### Dev containers
+
+- Open this folder with Dev Containers in VSCode.
+- Set up the Python environment: `uv sync`
+- Build everything: `make`
+
 ### Assembly
 
 Assumes Ubuntu WSL on Windows.
 
-- Install `uv` and `binutils-riscv64-unknown-elf`.
+- Install `uv`, `gcc-riscv64-unknown-elf`, and `binutils-riscv64-unknown-elf`.
 - Set up the Python environment:
   - `uv venv .venv-wsl`
   - `source .venv-wsl/bin/activate`

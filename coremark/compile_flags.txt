@@ -1,0 +1,2 @@
+-I./coremark
+-I./mlogv32

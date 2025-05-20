@@ -1,5 +1,7 @@
 ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
-RUST_PROGRAMS = $(filter-out mlogv32,$(patsubst rust/%,%,$(wildcard rust/*)))
+
+RUST_PROJECTS = $(patsubst rust/%,%,$(wildcard rust/*))
+RUST_PROGRAMS = $(filter-out mlogv32,$(RUST_PROJECTS))
 
 .PHONY: all
 all: asm rust
@@ -32,7 +34,7 @@ build/%.out: build/%.o
 	riscv64-unknown-elf-ld -melf32lriscv --script=rust/mlogv32/link.x -o build/$*.out build/$*.o
 
 build/%.o: asm/%.s | build
-	clang --target=riscv32 -march=rv32i --compile -o build/$*.o asm/$*.s
+	riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32 --compile -o build/$*.o asm/$*.s
 
 build:
 	mkdir -p build
@@ -43,6 +45,12 @@ build/rust:
 .PHONY: clean
 clean:
 	rm -rf build
+
+.PHONY: clean-rust
+clean-rust: $(addprefix clean-rust/,$(RUST_PROJECTS))
+
+clean-rust/%:
+	cd rust/$* && cargo clean
 
 .PHONY: FORCE
 FORCE:

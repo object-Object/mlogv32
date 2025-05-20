@@ -1,0 +1,3 @@
+[submodule "coremark/coremark"]
+	path = coremark/coremark
+	url = https://github.com/eembc/coremark

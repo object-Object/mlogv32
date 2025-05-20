@@ -2,5 +2,10 @@
     "recommendations": [
         "jeanjpnm.mlogls-vscode",
         "sunshaoce.RISC-V",
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "esbenp.prettier-vscode"
     ]
 }

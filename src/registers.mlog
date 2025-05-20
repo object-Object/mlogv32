@@ -1,16 +1,7 @@
     set REGISTERS cell1
-    set OUTPUT message1
+    set OUTPUT1 message1
+    set OUTPUT2 message2
     set CPU processor1
-
-    read exit_code CPU "exit_code"
-    print "exit_code = "
-    print exit_code
-    print "\n"
-
-    read pc CPU "pc"
-    print "pc = "
-    print pc
-    print "\n"
 
     read x0_zero REGISTERS 0
     print "x0_zero = "
@@ -90,12 +81,13 @@
     read x15_a5 REGISTERS 15
     print "x15_a5 = "
     print x15_a5
-    print "\n"
+
+    printflush OUTPUT1
 
     read x16_a6 REGISTERS 16
     print "x16_a6 = "
     print x16_a6
-    print "\n"
+    print "\n"    
 
     read x17_a7 REGISTERS 17
     print "x17_a7 = "
@@ -170,5 +162,15 @@
     read x31_t6 REGISTERS 31
     print "x31_t6 = "
     print x31_t6
+    print "\n"
 
-    printflush OUTPUT
+    read exit_code CPU "exit_code"
+    print "exit_code = "
+    print exit_code
+    print "\n"
+
+    read pc CPU "pc"
+    print "pc = "
+    print pc
+
+    printflush OUTPUT2

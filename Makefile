@@ -10,16 +10,16 @@ asm: $(ASM_PROGRAMS)
 .PHONY: rust
 rust: $(RUST_PROGRAMS)
 
-$(ASM_PROGRAMS): %: build/%-0.mlog build/%.bin build/%.dump
+$(ASM_PROGRAMS): %: build/%.bin build/%.dump
 
-$(RUST_PROGRAMS): %: build/rust/%-0.mlog build/rust/%.bin
+$(RUST_PROGRAMS): %: build/rust/%.bin
 
 # see https://stackoverflow.com/a/61960833
 build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
 	-rm -f build/$*-[0-9].mlog build/$*-[0-9][0-9].mlog
 	python scripts/bin_to_mlog.py build/$*.bin
 
-build/rust/%.bin: | build/rust
+build/rust/%.bin: FORCE | build/rust
 	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
 
 build/%.bin: build/%.out
@@ -43,3 +43,6 @@ build/rust:
 .PHONY: clean
 clean:
 	rm -rf build
+
+.PHONY: FORCE
+FORCE:

@@ -5,6 +5,7 @@
     set RESET_SWITCH switch1
     set PAUSE_SWITCH switch2
     set REGISTERS cell1
+    set CSRS processor17
     set DISPLAY display1
 
     set RAM_X 1  # bottom left ram proc x
@@ -65,6 +66,37 @@ reset__done_find_lookup_size:
     op sub lookup_links i LOOKUP_START
     jump invalid_lookup_link_order notEqual lookup_links LOOKUP_LINKS
 
+    # look up commonly used CSRs
+    set csr 0xc00
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_CYCLE variable
+    
+    set csr 0xc01
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_TIME variable
+
+    set csr 0xc02
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_INSTRET variable
+
+    set csr 0xc80
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_CYCLEH variable
+    
+    set csr 0xc81
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_TIMEH variable
+
+    set csr 0xc82
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_INSTRETH variable
+
     # zero all of the registers
     set i 0
 reset__zero_registers:
@@ -74,8 +106,37 @@ reset__zero_registers:
 
     # start executing code at address 0
     set pc 0
+
+    # reset instret
+    write 0 CSRS CSR_INSTRET
+    write 0 CSRS CSR_INSTRETH
+
+    # start cycle timer
+    set RESET_TICK @tick
     
 main:
+    # update cycle
+    # we define the number of cycles as "@ipt * ticks since reset"
+    # this should be a decent estimation of the number of mlog instructions executed since reset
+    op sub cycle @tick RESET_TICK
+    op mul cycle cycle @ipt
+    op floor cycle cycle
+
+    op mod low cycle 0x100000000
+    op shr high cycle 32
+
+    write low CSRS CSR_CYCLE
+    write high CSRS CSR_CYCLEH
+
+    # update time
+    op floor time @time
+
+    op mod low time 0x100000000
+    op shr high time 32
+
+    write low CSRS CSR_TIME
+    write high CSRS CSR_TIMEH
+
     # load instruction
     set address pc
     op add ret @counter 1
@@ -205,12 +266,44 @@ decode_save:
     jump illegal_instruction always
 
 decode_system:
-    jump illegal_instruction notEqual funct3 0
+    jump illegal_instruction greaterThan funct3 7
 
     # funct12
     op shr funct12 instruction 20
     op mod funct12 funct12 4096 # 2^12 (trunc 12)
 
+    jump decode_ECALL_EBREAK equal funct3 0
+
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # uimm and csr (aliases for readability)
+    set uimm rs1_id
+    set csr funct12
+
+    # from privileged architecture csr chapter:
+    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
+    op and csr_readonly csr 0b110000000000
+    op equal csr_readonly csr_readonly 0b110000000000
+
+    # look up csr variable name
+    op add ret @counter 1
+    jump access_csr always
+
+    # TODO: use counter arrays for everything else too
+    op add @counter @counter funct3
+
+    jump decode_ECALL_EBREAK always # this jump should never actually be taken
+    jump CSRRW always
+    jump CSRRS always
+    jump CSRRC always
+    jump illegal_instruction always
+    jump CSRRWI always
+    jump CSRRSI always
+    jump CSRRCI always
+
+decode_ECALL_EBREAK:
     jump ECALL equal funct12 0
     jump EBREAK equal funct12 1
     jump illegal_instruction always
@@ -343,7 +436,13 @@ halt:
     control enabled RESET_SWITCH true
     jump reset always
 
+# all instructions jump here after completing successfully
 end_instruction:
+    set variable_low CSR_INSTRET
+    set variable_high CSR_INSTRETH
+    op add ret @counter 1
+    jump increment_64_bit_csr always
+end_instruction_preserve_instret:
     op add pc pc 4
     op mod pc pc 0x100000000 # trunc 32
 end_instruction_preserve_pc:
@@ -452,6 +551,37 @@ access_ram:
     read variable _lookup variable
 
     set @counter access_ram__ret
+
+# get the variable name in CSRS for the specified CSR
+# csr -> variable
+access_csr:
+    op idiv _lookup csr LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable csr LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter ret
+
+# increment a 64-bit value stored in two 32-bit CSRs
+# NOTE: takes the variable names (ie. output of access_csr) as input, not the addresses
+# variable_low, variable_high ->
+increment_64_bit_csr:
+    read _low CSRS variable_low
+    read _high CSRS variable_high
+
+    op add _low _low 1
+    op shr _overflow _low 32
+    op mod _low _low 0x100000000 # trunc 32
+    op add _high _high _overflow
+
+    write _low CSRS variable_low
+    write _high CSRS variable_high
+
+    set @counter ret
 
 # loads the word from memory that contains the specified address
 # address -> result
@@ -989,52 +1119,52 @@ ECALL_halt:
 
 ECALL_printchar:
     printchar a0
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_printflush:
     printflush ERROR_OUTPUT
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_clear:
     draw clear a0 a1 a2
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_color:
     draw color a0 a1 a2 a3
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_col:
     op mul a0 a0 %00000001
     draw col a0
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_stroke:
     draw stroke a0
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_line:
     draw line a0 a1 a2 a3
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_rect:
     draw rect a0 a1 a2 a3
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_lineRect:
     draw lineRect a0 a1 a2 a3
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_poly:
     draw poly a0 a1 a2 a3 a4
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_linePoly:
     draw linePoly a0 a1 a2 a3 a4
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_triangle:
     draw triangle a0 a1 a2 a3 a4 a5
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_image:
     op mod a2 a2 4 # number of indices
@@ -1051,51 +1181,53 @@ ECALL_draw_image__end:
 
     write 1 REGISTERS 10
     draw image a0 a1 image a4 a5
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_image__lookup_fail:
     write 0 REGISTERS 10
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_print:
     op mod a2 a2 9 # number of indices
     op mul a2 a2 2 # instructions per index
     op add @counter @counter a2
 
-    draw print a0 a1 bottom; jump end_instruction always
-    draw print a0 a1 bottomLeft; jump end_instruction always
-    draw print a0 a1 bottomRight; jump end_instruction always
-    draw print a0 a1 center; jump end_instruction always
-    draw print a0 a1 left; jump end_instruction always
-    draw print a0 a1 right; jump end_instruction always
-    draw print a0 a1 top; jump end_instruction always
-    draw print a0 a1 topLeft; jump end_instruction always
-    draw print a0 a1 topRight; jump end_instruction always
+    draw print a0 a1 bottom; jump end_instruction_preserve_instret always
+    draw print a0 a1 bottomLeft; jump end_instruction_preserve_instret always
+    draw print a0 a1 bottomRight; jump end_instruction_preserve_instret always
+    draw print a0 a1 center; jump end_instruction_preserve_instret always
+    draw print a0 a1 left; jump end_instruction_preserve_instret always
+    draw print a0 a1 right; jump end_instruction_preserve_instret always
+    draw print a0 a1 top; jump end_instruction_preserve_instret always
+    draw print a0 a1 topLeft; jump end_instruction_preserve_instret always
+    draw print a0 a1 topRight; jump end_instruction_preserve_instret always
 
 ECALL_draw_translate:
     draw translate a0 a1
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_scale:
     draw scale a0 a1
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_rotate:
     draw rotate a0
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_draw_reset:
     draw reset
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 ECALL_drawflush:
     drawflush DISPLAY
-    jump end_instruction always
+    jump end_instruction_preserve_instret always
 
 EBREAK:
     control enabled PAUSE_SWITCH true
     print "Paused on EBREAK, disable pause switch to continue"
     printflush ERROR_OUTPUT
+
+    set pause_tick @tick
 
 EBREAK__loop:
     sensor reset_enabled RESET_SWITCH @enabled
@@ -1103,5 +1235,68 @@ EBREAK__loop:
     sensor pause_enabled PAUSE_SWITCH @enabled
     jump EBREAK__loop equal pause_enabled true
 
+    # move RESET_TICK forward by the amount of time we were paused for
+    # this should have the effect of pausing cycle while paused here
+    op sub delta @tick pause_tick
+    op add RESET_TICK RESET_TICK delta
+
     printflush ERROR_OUTPUT
+    jump end_instruction_preserve_instret always
+
+CSRRW:
+    # technically we're not supposed to perform this read, but it doesn't really make a difference
+    read value CSRS variable
+
+    jump illegal_instruction equal csr_readonly true
+    write rs1 CSRS variable
+
+    jump end_instruction equal rd 0
+    write value REGISTERS rd
+
     jump end_instruction always
+
+CSRRS:
+    read value CSRS variable
+
+    jump CSRRS__skip_write equal rs1_id 0
+    jump illegal_instruction equal csr_readonly true
+
+    op or result rs1 value
+
+    write result CSRS variable
+
+CSRRS__skip_write:
+    jump end_instruction equal rd 0
+    write value REGISTERS rd
+
+    jump end_instruction always
+
+CSRRC:
+    read value CSRS variable
+
+    jump CSRRC__skip_write equal rs1_id 0
+    jump illegal_instruction equal csr_readonly true
+
+    op not result rs1
+    op and result result value
+
+    write result CSRS variable
+
+CSRRC__skip_write:
+    jump end_instruction equal rd 0
+    write value REGISTERS rd
+
+    jump end_instruction always
+
+CSRRWI:
+    set rs1 uimm
+    jump CSRRW always
+
+CSRRSI:
+    # rs1_id is already equal to uimm, that's where we got uimm from
+    set rs1 uimm
+    jump CSRRS always
+
+CSRRCI:
+    set rs1 uimm
+    jump CSRRC always

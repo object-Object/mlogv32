@@ -1,0 +1,8 @@
+{
+    "name": "mlogv32",
+
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+    }
+}

@@ -1,21 +1,14 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
 {
-    "name": "Ubuntu",
-    // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+    "name": "mlogv32",
+
     "image": "ghcr.io/object-object/mlogv32-devcontainer",
 
     "mounts": ["type=volume,target=/workspaces/mlogv32/.venv"],
 
-    // Use 'forwardPorts' to make a list of ports inside the container available locally.
-    // "forwardPorts": [],
-
-    // Use 'postCreateCommand' to run commands after the container is created.
-    // "postCreateCommand": "uname -a",
-
     "postAttachCommand": "sudo chown -R vscode /workspaces",
 
-    // Configure tool-specific properties.
     "customizations": {
         "vscode": {
             "extensions": [

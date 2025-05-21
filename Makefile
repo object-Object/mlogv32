@@ -12,6 +12,10 @@ asm: $(ASM_PROGRAMS)
 .PHONY: rust
 rust: $(RUST_PROGRAMS)
 
+.PHONY: coremark
+coremark:
+	cd coremark/coremark && $(MAKE) PORT_DIR=../mlogv32 ITERATIONS=10 load
+
 $(ASM_PROGRAMS): %: build/%.bin build/%.dump
 
 $(RUST_PROGRAMS): %: build/rust/%.bin
@@ -25,16 +29,16 @@ build/rust/%.bin: FORCE | build/rust
 	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
 
 build/%.bin: build/%.out
-	riscv64-unknown-elf-objcopy --output-target binary build/$*.out build/$*.bin
+	riscv32-unknown-elf-objcopy --output-target binary build/$*.out build/$*.bin
 
 build/%.dump: build/%.out
-	riscv64-unknown-elf-objdump --disassemble build/$*.out > build/$*.dump
+	riscv32-unknown-elf-objdump --disassemble build/$*.out > build/$*.dump
 
 build/%.out: build/%.o
-	riscv64-unknown-elf-ld -melf32lriscv --script=rust/mlogv32/link.x -o build/$*.out build/$*.o
+	riscv32-unknown-elf-ld --script=rust/mlogv32/link.x -o build/$*.out build/$*.o
 
 build/%.o: asm/%.s | build
-	riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32 --compile -o build/$*.o asm/$*.s
+	riscv32-unknown-elf-gcc --compile -o build/$*.o asm/$*.s
 
 build:
 	mkdir -p build
@@ -51,6 +55,10 @@ clean-rust: $(addprefix clean-rust/,$(RUST_PROJECTS))
 
 clean-rust/%:
 	cd rust/$* && cargo clean
+
+.PHONY: clean-coremark
+clean-coremark:
+	cd coremark/coremark && $(MAKE) PORT_DIR=../mlogv32 clean
 
 .PHONY: FORCE
 FORCE:

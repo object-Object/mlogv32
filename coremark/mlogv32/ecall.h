@@ -1,4 +1,4 @@
-enum Syscall {
+typedef enum {
     Halt,
     PrintChar,
     PrintFlush,
@@ -19,15 +19,15 @@ enum Syscall {
     DrawRotate,
     DrawReset,
     DrawFlush,
-};
+} Syscall;
 
 unsigned int ecall(
-    unsigned int which,
     unsigned int arg0,
     unsigned int arg1,
     unsigned int arg2,
     unsigned int arg3,
     unsigned int arg4,
     unsigned int arg5,
-    unsigned int arg6
+    unsigned int arg6,
+    Syscall which
 );

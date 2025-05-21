@@ -1,9 +1,11 @@
     setrate 1000
+    set IPT @ipt  # for debug output
 
     # constants
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
     set PAUSE_SWITCH switch2
+    set SINGLE_STEP_SWITCH switch3
     set REGISTERS cell1
     set CSRS processor17
     set DISPLAY display1
@@ -11,7 +13,7 @@
     set RAM_X 1  # bottom left ram proc x
     set RAM_Y 1  # bottom left ram proc y
     set RAM_WIDTH 128  # physical width of the ram procs
-    set RAM_SIZE 0x10000000  # total ram size in bytes
+    set RAM_SIZE 0x8000000  # total ram size in bytes
     set RAM_PROC_SIZE 4096  # variables (not bytes) per ram proc
     set LOOKUP_LINKS 16  # expected number of ram variable lookup processors
     set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
@@ -112,6 +114,7 @@ reset__zero_registers:
     write 0 CSRS CSR_INSTRETH
 
     # start cycle timer
+    set RESET_TIME @time
     set RESET_TICK @tick
     
 main:
@@ -129,7 +132,8 @@ main:
     write high CSRS CSR_CYCLEH
 
     # update time
-    op floor time @time
+    op sub time @time RESET_TIME
+    op floor time time
 
     op mod low time 0x100000000
     op shr high time 32
@@ -142,6 +146,10 @@ main:
     op add ret @counter 1
     jump load_word always
     set instruction result
+    
+    sensor enabled SINGLE_STEP_SWITCH @enabled
+    jump pause_step equal enabled true
+unpause_step:
 
     # decode instruction
 
@@ -435,6 +443,23 @@ inaccessible_store:
 halt:
     control enabled RESET_SWITCH true
     jump reset always
+
+pause_step:
+    control enabled PAUSE_SWITCH true
+    set pause_step_tick @tick
+
+pause_step__loop:
+    sensor enabled RESET_SWITCH @enabled
+    jump halt equal reset_enabled true
+    sensor enabled PAUSE_SWITCH @enabled
+    jump pause_step__loop equal enabled true
+
+    # move RESET_TICK forward by the amount of time we were paused for
+    # this should have the effect of pausing cycle while paused here
+    op sub delta @tick pause_step_tick
+    op add RESET_TICK RESET_TICK delta
+
+    jump unpause_step always
 
 # all instructions jump here after completing successfully
 end_instruction:

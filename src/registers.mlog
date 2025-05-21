@@ -1,176 +1,379 @@
+    setrate 1000
+    
     set REGISTERS cell1
-    set OUTPUT1 message1
-    set OUTPUT2 message2
+    set CSRS processor18
+    set DISPLAY display1
     set CPU processor1
 
+    set LOOKUP_PROC_SIZE 260
+
+    draw reset
+    draw color 255 255 255 255
+
+    set i -1
+reset__find_lookup_start:
+    op add i i 1
+    getlink block i
+    sensor type block @type
+    jump reset__find_lookup_start notEqual type @micro-processor
+    read type_var block "_type"
+    jump reset__find_lookup_start notEqual type_var "lookup"
+
+    set LOOKUP_START i
+
+    set csr 0xc00
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_CYCLE variable
+    
+    set csr 0xc01
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_TIME variable
+
+    set csr 0xc02
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_INSTRET variable
+
+    set csr 0xc80
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_CYCLEH variable
+    
+    set csr 0xc81
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_TIMEH variable
+
+    set csr 0xc82
+    op add ret @counter 1
+    jump access_csr always
+    set CSR_INSTRETH variable
+
+loop:
+    draw clear 0 0 0
+
     read x0_zero REGISTERS 0
-    print "x0_zero = "
-    print x0_zero
-    print "\n"
-
     read x1_ra REGISTERS 1
-    print "x1_ra = "
-    print x1_ra
-    print "\n"
-
     read x2_sp REGISTERS 2
-    print "x2_sp = "
-    print x2_sp
-    print "\n"
-
     read x3_gp REGISTERS 3
-    print "x3_gp = "
-    print x3_gp
-    print "\n"
-
     read x4_tp REGISTERS 4
-    print "x4_tp = "
-    print x4_tp
-    print "\n"
-
     read x5_t0 REGISTERS 5
-    print "x5_t0 = "
-    print x5_t0
-    print "\n"
-
     read x6_t1 REGISTERS 6
-    print "x6_t1 = "
-    print x6_t1
-    print "\n"
-
     read x7_t2 REGISTERS 7
-    print "x7_t2 = "
-    print x7_t2
-    print "\n"
-
     read x8_s0_fp REGISTERS 8
-    print "x8_s0_fp = "
-    print x8_s0_fp
-    print "\n"
-
     read x9_s1 REGISTERS 9
-    print "x9_s1 = "
-    print x9_s1
-    print "\n"
-
     read x10_a0 REGISTERS 10
-    print "x10_a0 = "
-    print x10_a0
-    print "\n"
-
     read x11_a1 REGISTERS 11
-    print "x11_a1 = "
-    print x11_a1
-    print "\n"
-
     read x12_a2 REGISTERS 12
-    print "x12_a2 = "
-    print x12_a2
-    print "\n"
-
     read x13_a3 REGISTERS 13
-    print "x13_a3 = "
-    print x13_a3
-    print "\n"
-
     read x14_a4 REGISTERS 14
-    print "x14_a4 = "
-    print x14_a4
-    print "\n"
-
     read x15_a5 REGISTERS 15
-    print "x15_a5 = "
-    print x15_a5
-
-    printflush OUTPUT1
-
     read x16_a6 REGISTERS 16
-    print "x16_a6 = "
-    print x16_a6
-    print "\n"    
-
     read x17_a7 REGISTERS 17
-    print "x17_a7 = "
-    print x17_a7
-    print "\n"
-
     read x18_s2 REGISTERS 18
-    print "x18_s2 = "
-    print x18_s2
-    print "\n"
-
     read x19_s3 REGISTERS 19
-    print "x19_s3 = "
-    print x19_s3
-    print "\n"
-
     read x20_s4 REGISTERS 20
-    print "x20_s4 = "
-    print x20_s4
-    print "\n"
-
     read x21_s5 REGISTERS 21
-    print "x21_s5 = "
-    print x21_s5
-    print "\n"
-
     read x22_s6 REGISTERS 22
-    print "x22_s6 = "
-    print x22_s6
-    print "\n"
-
     read x23_s7 REGISTERS 23
-    print "x23_s7 = "
-    print x23_s7
-    print "\n"
-
     read x24_s8 REGISTERS 24
-    print "x24_s8 = "
-    print x24_s8
-    print "\n"
-
     read x25_s9 REGISTERS 25
-    print "x25_s9 = "
-    print x25_s9
-    print "\n"
-
     read x26_s10 REGISTERS 26
-    print "x26_s10 = "
-    print x26_s10
-    print "\n"
-
     read x27_s11 REGISTERS 27
-    print "x27_s11 = "
-    print x27_s11
-    print "\n"
-
     read x28_t3 REGISTERS 28
-    print "x28_t3 = "
-    print x28_t3
-    print "\n"
-
     read x29_t4 REGISTERS 29
-    print "x29_t4 = "
-    print x29_t4
-    print "\n"
-
     read x30_t5 REGISTERS 30
-    print "x30_t5 = "
-    print x30_t5
-    print "\n"
-
     read x31_t6 REGISTERS 31
-    print "x31_t6 = "
-    print x31_t6
-    print "\n"
-
-    read exit_code CPU "exit_code"
-    print "exit_code = "
-    print exit_code
-    print "\n"
+    
+    read cycle CSRS CSR_CYCLE
+    read cycleh CSRS CSR_CYCLEH
+    op shl cycleh cycleh 32
+    op add cycle cycle cycleh
+    
+    read time CSRS CSR_TIME
+    read timeh CSRS CSR_TIMEH
+    op shl timeh timeh 32
+    op add time time timeh
+    
+    read instret CSRS CSR_INSTRET
+    read instreth CSRS CSR_INSTRETH
+    op shl instreth instreth 32
+    op add instret instret instreth
 
     read pc CPU "pc"
-    print "pc = "
-    print pc
+    read instruction CPU "instruction"
+    read exit_code CPU "exit_code"
+    read ipt CPU "IPT"
 
-    printflush OUTPUT2
+    print "x0_zero  = {0}\n"
+    set n x0_zero
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x1_ra    = {0}\n"
+    set n x1_ra
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x2_sp    = {0}\n"
+    set n x2_sp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x3_gp    = {0}\n"
+    set n x3_gp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x4_tp    = {0}\n"
+    set n x4_tp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x5_t0    = {0}\n"
+    set n x5_t0
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x6_t1    = {0}\n"
+    set n x6_t1
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x7_t2    = {0}\n"
+    set n x7_t2
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x8_s0_fp = {0}\n"
+    set n x8_s0_fp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x9_s1    = {0}\n"
+    set n x9_s1
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x10_a0   = {0}\n"
+    set n x10_a0
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x11_a1   = {0}\n"
+    set n x11_a1
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x12_a2   = {0}\n"
+    set n x12_a2
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x13_a3   = {0}\n"
+    set n x13_a3
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x14_a4   = {0}\n"
+    set n x14_a4
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x15_a5   = {0}\n"
+    set n x15_a5
+    op add ret @counter 1
+    jump format_hex always
+
+    draw print 7 508 topLeft
+    drawflush DISPLAY
+
+    print "x16_a6   = {0}\n"
+    set n x16_a6    
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x17_a7   = {0}\n"
+    set n x17_a7
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x18_s2   = {0}\n"
+    set n x18_s2
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x19_s3   = {0}\n"
+    set n x19_s3
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x20_s4   = {0}\n"
+    set n x20_s4
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x21_s5   = {0}\n"
+    set n x21_s5
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x22_s6   = {0}\n"
+    set n x22_s6
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x23_s7   = {0}\n"
+    set n x23_s7
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x24_s8   = {0}\n"
+    set n x24_s8
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x25_s9   = {0}\n"
+    set n x25_s9
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x26_s10  = {0}\n"
+    set n x26_s10
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x27_s11  = {0}\n"
+    set n x27_s11
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x28_t3   = {0}\n"
+    set n x28_t3
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x29_t4   = {0}\n"
+    set n x29_t4
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x30_t5   = {0}\n"
+    set n x30_t5
+    op add ret @counter 1
+    jump format_hex always
+
+    print "x31_t6   = {0}\n\n"
+    set n x31_t6
+    op add ret @counter 1
+    jump format_hex always
+
+    print "pc          = {0}\n"
+    set n pc
+    op add ret @counter 1
+    jump format_hex always
+
+    print "instruction = {0}\n"
+    set n instruction
+    op add ret @counter 1
+    jump format_bin always
+
+    print "exit_code   = {0}\n"
+    format exit_code
+
+    draw print 7 300 topLeft
+    drawflush DISPLAY
+
+    print "@ipt    = {0}\n"
+    format ipt
+
+    print "cycle   = {0}\n"
+    format cycle
+
+    print "time    = {0}\n"
+    format time
+
+    print "instret = {0}\n"
+    format instret
+
+    draw print 256 508 topLeft
+    drawflush DISPLAY
+
+    wait 0.02
+    jump loop always
+
+format_hex:
+    op floor n n
+format_hex__loop:
+    op mod digit n 16
+    op mul skip digit 2
+    op add @counter @counter skip
+    format "{0}0"
+    jump format_hex__next always
+    format "{0}1"
+    jump format_hex__next always
+    format "{0}2"
+    jump format_hex__next always
+    format "{0}3"
+    jump format_hex__next always
+    format "{0}4"
+    jump format_hex__next always
+    format "{0}5"
+    jump format_hex__next always
+    format "{0}6"
+    jump format_hex__next always
+    format "{0}7"
+    jump format_hex__next always
+    format "{0}8"
+    jump format_hex__next always
+    format "{0}9"
+    jump format_hex__next always
+    format "{0}A"
+    jump format_hex__next always
+    format "{0}B"
+    jump format_hex__next always
+    format "{0}C"
+    jump format_hex__next always
+    format "{0}D"
+    jump format_hex__next always
+    format "{0}E"
+    jump format_hex__next always
+    format "{0}F"
+format_hex__next:
+    op shr n n 4
+    jump format_hex__loop greaterThan n 0
+    format "0x"
+    set @counter ret
+
+format_bin:
+    set i 0
+    op floor n n
+format_bin__loop:
+    op mod digit n 2
+    op mul skip digit 2
+    op add @counter @counter skip
+    format "{0}0"
+    jump format_bin__next always
+    format "{0}1"
+format_bin__next:
+    op shr n n 1
+    op add i i 1
+    jump format_bin__loop lessThan i 32
+    format "0b"
+    set @counter ret
+
+# get the variable name in CSRS for the specified CSR
+# csr -> variable
+access_csr:
+    op idiv _lookup csr LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable csr LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter ret

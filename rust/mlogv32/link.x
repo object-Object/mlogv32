@@ -8,8 +8,9 @@ MEMORY {
     /*
     LENGTH = num_ram_procs * 4096*4
     0x10000000 = 128*128 * 4096*4
+    0x8000000 = 128*64 * 4096*4
     */
-    ram (rwx) : ORIGIN = 0, LENGTH = 0x10000000
+    ram (rwx) : ORIGIN = 0, LENGTH = 0x8000000
 }
 
 REGION_ALIAS("REGION_TEXT",   ram);

@@ -17,23 +17,22 @@
 #File : core_portme.mak
 
 RISCV_ARCH = rv32i_zicsr
-RISCV_ABI = ilp32
 
 # Flag : OUTFLAG
 #	Use this flag to define how to to get an executable (e.g -o)
 OUTFLAG= -o
 # Flag : CC
 #	Use this flag to define compiler to use
-CC 		= riscv64-unknown-elf-gcc
+CC 		= riscv32-unknown-elf-gcc
 # Flag : LD
 #	Use this flag to define compiler to use
-LD		= riscv64-unknown-elf-gcc
+LD		= riscv32-unknown-elf-gcc
 # Flag : AS
 #	Use this flag to define compiler to use
-AS		= riscv64-unknown-elf-gcc
+AS		= riscv32-unknown-elf-gcc
 # Flag : CFLAGS
 #	Use this flag to define compiler options. Note, you can add compiler options from the command line using XCFLAGS="other flags"
-PORT_CFLAGS = -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -nostdlib -nostartfiles -static -lgcc --compile -O0 -g
+PORT_CFLAGS = -march=$(RISCV_ARCH) --compile -O0 -g -nostdlib -nostartfiles
 FLAGS_STR = "$(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
 CFLAGS = $(PORT_CFLAGS) -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
 #Flag : LFLAGS_END
@@ -43,8 +42,8 @@ SEPARATE_COMPILE=1
 # Flag : SEPARATE_COMPILE
 # You must also define below how to create an object file, and how to link.
 OBJOUT 	= -o
-LFLAGS 	= -march=$(RISCV_ARCH) -nostdlib -nostartfiles -static -lgcc -T$(PORT_DIR)/../../rust/mlogv32/link.x
-ASFLAGS = -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) --compile
+LFLAGS 	= -T$(PORT_DIR)/../../rust/mlogv32/link.x -nostartfiles
+ASFLAGS = --compile
 OFLAG 	= -o
 COUT 	= -c
 
@@ -52,11 +51,11 @@ LFLAGS_END =
 # Flag : PORT_SRCS
 # 	Port specific source files can be added here
 #	You may also need cvt.c if the fcvt functions are not provided as intrinsics by your compiler!
-PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/ecall.c
+PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/ecall.c $(PORT_DIR)/entry.s
 vpath %.c $(PORT_DIR)
 vpath %.s $(PORT_DIR)
 
-PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/ecall.o
+PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/ecall.o $(PORT_DIR)/entry.o
 
 # Flag : LOAD
 #	For a simple port, we assume self hosted compile and run, no load needed.
@@ -68,7 +67,7 @@ LOAD = echo "Please set LOAD to the process of loading the executable to the fla
 RUN = echo "Please set LOAD to the process of running the executable (e.g. via jtag, or board reset)"
 
 OEXT = .o
-EXE = .bin
+EXE = .out
 
 $(OPATH)$(PORT_DIR)/%$(OEXT) : %.c
 	$(CC) $(CFLAGS) $(XCFLAGS) $(COUT) $< $(OBJOUT) $@
@@ -79,11 +78,42 @@ $(OPATH)%$(OEXT) : %.c
 $(OPATH)$(PORT_DIR)/%$(OEXT) : %.s
 	$(AS) $(ASFLAGS) $< $(OBJOUT) $@
 
-# Target : port_pre% and port_post%
-# For the purpose of this simple port, no pre or post steps needed.
+PORT_CLEAN = $(OPATH)coremark.bin $(OPATH)coremark.dump
 
-.PHONY : port_prebuild port_postbuild port_prerun port_postrun port_preload port_postload
-port_pre% port_post% : 
+.PHONY: port_prebuild
+port_prebuild:
+
+# Target: port_postbuild
+# Generate any files that are needed after actual build end.
+# E.g. change format to srec, bin, zip in order to be able to load into flash
+.PHONY: port_postbuild
+port_postbuild:
+	riscv32-unknown-elf-objcopy --output-target binary $(OUTFILE) $(OPATH)coremark.bin
+	riscv32-unknown-elf-objdump --disassemble $(OUTFILE) > $(OPATH)coremark.dump
+
+# Target: port_prerun
+# 	Do platform specific before run stuff. 
+#	E.g. reset the board, backup the logfiles etc.
+.PHONY: port_prerun
+port_prerun:
+
+# Target: port_postrun
+# 	Do platform specific after run stuff. 
+#	E.g. reset the board, backup the logfiles etc.
+.PHONY: port_postrun
+port_postrun:
+
+# Target: port_preload
+# 	Do platform specific before load stuff. 
+#	E.g. reset the reset power to the flash eraser
+.PHONY: port_preload
+port_preload:
+
+# Target: port_postload
+# 	Do platform specific after load stuff. 
+#	E.g. reset the reset power to the flash eraser
+.PHONY: port_postload
+port_postload:
 
 # FLAG : OPATH
 # Path to the output folder. Default - current folder.

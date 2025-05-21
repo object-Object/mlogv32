@@ -274,7 +274,29 @@ app = Typer()
 
 
 @app.command()
-def main(
+def lookup(
+    address_str: str,
+    ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
+    ram_width: int = 128,
+):
+    address = int(address_str, base=0)
+
+    word_address = address // 4
+
+    ram_index = word_address // ram_size
+    ram_x = ram_index % ram_width + 1
+    ram_y = ram_index // ram_width + 1
+
+    variable_index = word_address % ram_size
+    variable = get_variable(variable_index)
+
+    print(
+        f"Address {hex(address)} is at processor {ram_index} ({ram_x}, {ram_y}) in variable {variable}."
+    )
+
+
+@app.command()
+def build(
     ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
     lookup_width: Annotated[int, Option(min=1)] = 4,
     out: Path = Path("schematics"),
@@ -314,6 +336,16 @@ def main(
     print(
         f"Generated {len(lookup_procs)} lookup tables ({w}x{h}) for {ram_size} variables using {min(len(BLOCK_IDS), ram_size)} block ids."
     )
+
+
+def get_variable(index: int):
+    i = 0
+    for c1 in VARIABLE_NAME_CHARS:
+        for c2 in VARIABLE_NAME_CHARS:
+            if i == index:
+                return c1 + c2
+            i += 1
+    raise AssertionError
 
 
 def generate_code(ram_size: int):

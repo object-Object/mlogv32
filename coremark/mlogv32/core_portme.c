@@ -135,6 +135,8 @@ portable_init(core_portable *p, int *argc, char *argv[])
     (void)argc; // prevent unused warning
     (void)argv; // prevent unused warning
 
+    init_printf();
+
     if (sizeof(ee_ptr_int) != sizeof(ee_u8 *))
     {
         ee_printf(
@@ -155,9 +157,5 @@ portable_fini(core_portable *p)
 {
     p->portable_id = 0;
 
-    ecall(DrawReset, 0, 0, 0, 0, 0, 0, 0);
-    ecall(DrawClear, 0, 0, 0, 0, 0, 0, 0);
-    ecall(DrawColor, 255, 255, 255, 255, 0, 0, 0);
-    ecall(DrawPrint, 6, 508, 7, 0, 0, 0, 0);
-    ecall(DrawFlush, 0, 0, 0, 0, 0, 0, 0);
+    ecall(0, 0, 0, 0, 0, 0, 0, Halt);
 }

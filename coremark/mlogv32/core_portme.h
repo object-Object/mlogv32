@@ -22,12 +22,6 @@ Original Author: Shay Gal-on
 #ifndef CORE_PORTME_H
 #define CORE_PORTME_H
 
-// TODO: tune this value
-// #define ITERATIONS 10
-
-// #define PERFORMANCE_RUN 1
-// #define VALIDATION_RUN 0
-
 /************************/
 /* Data types and settings */
 /************************/
@@ -214,5 +208,7 @@ void portable_fini(core_portable *p);
 #endif
 
 int ee_printf(const char *fmt, ...);
+
+void init_printf();
 
 #endif /* CORE_PORTME_H */

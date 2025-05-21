@@ -4,14 +4,14 @@
 
 // https://github.com/torvalds/linux/blob/a5806cd506af5a7c19bcd596e4708b5c464bfd21/arch/riscv/kernel/sbi_ecall.c#L20
 unsigned int ecall(
-    unsigned int which,
     unsigned int arg0,
     unsigned int arg1,
     unsigned int arg2,
     unsigned int arg3,
     unsigned int arg4,
     unsigned int arg5,
-    unsigned int arg6
+    unsigned int arg6,
+    Syscall which
 ) {
     register ee_ptr_int a0 asm ("a0") = (ee_ptr_int)(arg0);
     register ee_ptr_int a1 asm ("a1") = (ee_ptr_int)(arg1);
@@ -24,6 +24,6 @@ unsigned int ecall(
     asm volatile ("ecall"
                 : "+r" (a0)
                 : "r" (a1), "r" (a2), "r" (a3), "r" (a4), "r" (a5), "r" (a6), "r" (a7)
-                : "memory");
+                :);
     return a0;
 }

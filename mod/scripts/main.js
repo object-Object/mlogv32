@@ -85,7 +85,7 @@ function flashMlogv32Processor(processor, file) {
     let ram = getRam();
 
     for (let i = 0; i < data.length; i += 4) {
-        if (varIndex >= RAM_PROC_SIZE) {
+        if (varIndex > RAM_PROC_SIZE) {
             ramIndex++;
             varIndex = 1;
             ram = getRam();

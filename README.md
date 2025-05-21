@@ -2,6 +2,8 @@
 
 RISC-V processor in Mindustry logic. Requires the bleeding edge version of Mindustry (for `printchar`).
 
+![image](https://github.com/user-attachments/assets/f6f22261-f88f-4a97-ba0a-747aaecf7aaf)
+
 ## System calls
 
 | Index (a7) | Description      | a0        | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |

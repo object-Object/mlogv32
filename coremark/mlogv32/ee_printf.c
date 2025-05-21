@@ -660,7 +660,7 @@ ee_vsprintf(char *buf, const char *fmt, va_list args)
     return str - buf;
 }
 
-static unsigned int print_width = 0;
+static unsigned int print_x = 7;
 static unsigned int print_y = 508;
 
 void
@@ -670,7 +670,7 @@ uart_send_char(char c)
 }
 
 void init_printf() {
-    print_width = 0;
+    print_x = 7;
     print_y = 508;
     ecall(0, 0, 0, 0, 0, 0, 0, DrawReset);
     ecall(0, 0, 0, 0, 0, 0, 0, DrawClear);
@@ -685,7 +685,8 @@ ee_printf(const char *fmt, ...)
     va_list args;
     int     n = 0;
 
-    int new_print_y = print_y;
+    int old_print_x = print_x;
+    int old_print_y = print_y;
 
     va_start(args, fmt);
     ee_vsprintf(buf, fmt, args);
@@ -693,23 +694,24 @@ ee_printf(const char *fmt, ...)
     p = buf;
     while (*p)
     {
+        if (*p == '\n') {
+            print_x = 7;
+            print_y -= 13;
+        } else {
+            print_x += 7;
+            if (print_x > 504) {
+                uart_send_char('\n');
+                print_x = 7;
+                print_y -= 13;
+            }
+        }
         uart_send_char(*p);
         n++;
         p++;
-        print_width += 1;
-        if (*p == '\n' || print_width > 70) {
-            if (print_width > 70) {
-                uart_send_char('\n');
-            }
-            new_print_y -= 13;
-            print_width = 0;
-        }
     }
 
-    ecall(7, print_y, 7, 0, 0, 0, 0, DrawPrint);
+    ecall(old_print_x, old_print_y, 7, 0, 0, 0, 0, DrawPrint);
     ecall(0, 0, 0, 0, 0, 0, 0, DrawFlush);
-    print_width = 0;
-    print_y = new_print_y;
 
     return n;
 }

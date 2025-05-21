@@ -14,7 +14,7 @@ rust: $(RUST_PROGRAMS)
 
 .PHONY: coremark
 coremark:
-	cd coremark/coremark && $(MAKE) PORT_DIR=../mlogv32 ITERATIONS=10 load
+	cd coremark/coremark && $(MAKE) PORT_DIR=../mlogv32 ITERATIONS=10 clean load
 
 $(ASM_PROGRAMS): %: build/%.bin build/%.dump
 

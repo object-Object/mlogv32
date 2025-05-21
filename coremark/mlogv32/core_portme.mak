@@ -32,9 +32,9 @@ LD		= riscv32-unknown-elf-gcc
 AS		= riscv32-unknown-elf-gcc
 # Flag : CFLAGS
 #	Use this flag to define compiler options. Note, you can add compiler options from the command line using XCFLAGS="other flags"
-PORT_CFLAGS = -march=$(RISCV_ARCH) --compile -O0 -g -nostdlib -nostartfiles
-FLAGS_STR = "$(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)"
-CFLAGS = $(PORT_CFLAGS) -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
+PORT_CFLAGS = -march=$(RISCV_ARCH) -O0 -g -ffreestanding
+FLAGS_STR = "$(strip $(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)) "
+CFLAGS = $(PORT_CFLAGS) --compile -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
 #Flag : LFLAGS_END
 #	Define any libraries needed for linking or other flags that should come at the end of the link line (e.g. linker scripts). 
 #	Note : On certain platforms, the default clock_gettime implementation is supported but requires linking of librt.
@@ -42,20 +42,20 @@ SEPARATE_COMPILE=1
 # Flag : SEPARATE_COMPILE
 # You must also define below how to create an object file, and how to link.
 OBJOUT 	= -o
-LFLAGS 	= -T$(PORT_DIR)/../../rust/mlogv32/link.x -nostartfiles
+LFLAGS 	= -T$(PORT_DIR)/../../rust/mlogv32/link.x
 ASFLAGS = --compile
 OFLAG 	= -o
 COUT 	= -c
 
-LFLAGS_END = 
+LFLAGS_END = -nostartfiles -nolibc
 # Flag : PORT_SRCS
 # 	Port specific source files can be added here
 #	You may also need cvt.c if the fcvt functions are not provided as intrinsics by your compiler!
-PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/ecall.c $(PORT_DIR)/entry.s
+PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/ecall.c $(PORT_DIR)/entry.s $(PORT_DIR)/cvt.c
 vpath %.c $(PORT_DIR)
 vpath %.s $(PORT_DIR)
 
-PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/ecall.o $(PORT_DIR)/entry.o
+PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/ecall.o $(PORT_DIR)/entry.o $(PORT_DIR)/cvt.o
 
 # Flag : LOAD
 #	For a simple port, we assume self hosted compile and run, no load needed.

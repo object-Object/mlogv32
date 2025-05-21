@@ -29,7 +29,7 @@ Original Author: Shay Gal-on
         Define to 1 if the platform supports floating point.
 */
 #ifndef HAS_FLOAT
-#define HAS_FLOAT 0
+#define HAS_FLOAT 1
 #endif
 /* Configuration : HAS_TIME_H
         Define to 1 if platform has the time.h header file,
@@ -70,8 +70,7 @@ Original Author: Shay Gal-on
 #endif
 #endif
 #ifndef COMPILER_FLAGS
-#define COMPILER_FLAGS \
-    FLAGS_STR /* "Please put compiler flags here (e.g. -o3)" */
+#define COMPILER_FLAGS FLAGS_STR
 #endif
 #ifndef MEM_LOCATION
 #define MEM_LOCATION "STACK"

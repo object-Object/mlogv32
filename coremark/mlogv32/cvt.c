@@ -13,9 +13,41 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-#include <math.h>
 #define CVTBUFSIZE 80
 static char CVTBUF[CVTBUFSIZE];
+
+double modf(double x, double *iptr)
+{
+	union {double f; unsigned long long i;} u = {x};
+	unsigned long long mask;
+	int e = (int)(u.i>>52 & 0x7ff) - 0x3ff;
+
+	/* no fractional part */
+	if (e >= 52) {
+		*iptr = x;
+		if (e == 0x400 && u.i<<12 != 0) /* nan */
+			return x;
+		u.i &= 1ULL<<63;
+		return u.f;
+	}
+
+	/* no integral part*/
+	if (e < 0) {
+		u.i &= 1ULL<<63;
+		*iptr = u.f;
+		return x;
+	}
+
+	mask = -1ULL>>12>>e;
+	if ((u.i & mask) == 0) {
+		*iptr = x;
+		u.i &= 1ULL<<63;
+		return u.f;
+	}
+	u.i &= ~mask;
+	*iptr = u.f;
+	return x - u.f;
+}
 
 static char *
 cvt(double arg, int ndigits, int *decpt, int *sign, char *buf, int eflag)

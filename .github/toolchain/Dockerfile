@@ -14,12 +14,10 @@ ARG ABI
 RUN test -n "${ARCH}"
 RUN test -n "${ABI}"
 
-# RUN git clone https://github.com/riscv/riscv-gnu-toolchain \
-#     && cd riscv-gnu-toolchain \
-#     && ./configure --prefix=/opt/riscv --with-arch=${ARCH} --with-abi=${ABI} \
-#     && make
-
-RUN mkdir -p /opt/riscv/bin && touch /opt/riscv/bin/.test
+RUN git clone https://github.com/riscv/riscv-gnu-toolchain \
+    && cd riscv-gnu-toolchain \
+    && ./configure --prefix=/opt/riscv --with-arch=${ARCH} --with-abi=${ABI} \
+    && make
 
 # main image
 

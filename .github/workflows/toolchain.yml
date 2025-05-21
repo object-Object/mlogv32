@@ -2,12 +2,19 @@ name: Build riscv-gnu-toolchain
 
 on:
   workflow_dispatch:
+    inputs:
+      arch:
+        type: string
+        description: Target architecture (./configure --with-arch=...)
+        default: rv32i
+      abi:
+        type: string
+        description: Target ABI (./configure --with-abi=...)
+        default: ilp32
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/object-object/mlogv32-riscv-gnu-toolchain
-  ARCH: rv32i
-  ABI: ilp32
 
 jobs:
   build:
@@ -36,8 +43,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ env.ARCH }}-${{ env.ABI }}
-            type=raw,value=${{ env.ARCH }}
+            type=raw,value=${{ inputs.arch }}-${{ inputs.abi }}
+            type=raw,value=${{ inputs.arch }}
 
       - name: Build and push image
         id: push
@@ -46,8 +53,8 @@ jobs:
           file: .github/toolchain/Dockerfile
           context: .github/toolchain
           build-args: |
-            ARCH=${{ env.ARCH }}
-            ABI=${{ env.ABI }}
+            ARCH=${{ inputs.arch }}
+            ABI=${{ inputs.abi }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

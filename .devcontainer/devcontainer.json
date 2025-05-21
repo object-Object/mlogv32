@@ -3,7 +3,7 @@
 {
     "name": "mlogv32",
 
-    "image": "ghcr.io/object-object/mlogv32-devcontainer",
+    "image": "ghcr.io/object-object/mlogv32-devcontainer:latest",
 
     "mounts": ["type=volume,target=/workspaces/mlogv32/.venv"],
 

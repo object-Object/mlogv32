@@ -4,9 +4,9 @@ from typing import Annotated
 from pymsch import Block, Content, ProcessorConfig, Schematic
 from typer import Option, Typer
 
-VARIABLE_NAME_CHARS = (
-    r"!$&()*+,-./:<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
-)
+VARIABLE_NAME_CHARS = [
+    chr(i) for i in range(33, 127) if chr(i) not in "\"#'0123456789;@\\"
+]
 BLOCK_IDS = [
     "graphite-press",
     "multi-press",

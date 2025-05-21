@@ -1,0 +1,9 @@
+name: mlogv32-utils
+displayName: mlogv32-utils
+author: object-Object
+description: Companion mod for mlogv32.
+version: 0.1.0
+minGameVersion: 149
+dependencies: ["override-lib"]
+hidden: false
+hideBrowser: true

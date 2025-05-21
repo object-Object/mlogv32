@@ -5,6 +5,8 @@
 *.hex
 /build/
 
+node_modules/
+
 logicids.dat
 logicids.json
 

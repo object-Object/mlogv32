@@ -507,18 +507,22 @@ extend_sign__zero:
 # this converts two values at once because every usage of it needs to convert two values
 # value1, value2 -> result1, result2
 swap_signedness:
-    # x - 2(x - mod(x + 2^31, 2^31))
-    op add result1 value1 0x80000000 # 2^31
-    op mod result1 result1 0x80000000
-    op sub result1 value1 result1
-    op mul result1 result1 2
-    op sub result1 value1 result1
+    # value1 < 2^31 ? (value1 + 2^32) % 2^32 : value1 - 2^32
+    jump swap_signedness__s2u_1 lessThan value1 0x80000000 # 2^31
+    op sub result1 value1 0x100000000 # 2^32
+    jump swap_signedness__done_1 always
+swap_signedness__s2u_1:
+    op add result1 value1 0x100000000
+    op mod result1 result1 0x100000000
+swap_signedness__done_1:
 
-    op add result2 value2 0x80000000 # 2^31
-    op mod result2 result2 0x80000000
-    op sub result2 value2 result2
-    op mul result2 result2 2
-    op sub result2 value2 result2
+    jump swap_signedness__s2u_2 lessThan value2 0x80000000
+    op sub result2 value2 0x100000000
+    jump swap_signedness__done_2 always
+swap_signedness__s2u_2:
+    op add result2 value2 0x100000000
+    op mod result2 result2 0x100000000
+swap_signedness__done_2:
 
     set @counter ret
 

@@ -20,7 +20,7 @@ reset:
     sensor enabled RESET_SWITCH @enabled
     jump reset equal enabled true
 
-    setrate 1000
+    setrate 500000
     set IPT @ipt  # for debug output
 
     control enabled PAUSE_SWITCH false

@@ -1,5 +1,4 @@
     setrate 1000
-    set IPT @ipt  # for debug output
 
     # constants
     set ERROR_OUTPUT message1
@@ -15,8 +14,9 @@
     set RAM_WIDTH 128  # physical width of the ram procs
     set RAM_SIZE 0x8000000  # total ram size in bytes
     set RAM_PROC_SIZE 4096  # variables (not bytes) per ram proc
-    set LOOKUP_LINKS 16  # expected number of ram variable lookup processors
+    set LOOKUP_LINKS 16  # number of ram variable lookup processors
     set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
+    set IPT @ipt  # for debug output
 
     # initialization
 reset:
@@ -33,8 +33,8 @@ reset__wait_for_reset_switch:
 
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
-    # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to unlink the switch first
-    # also, this may fail if the lookups haven't been given enough time to initialize, so do that first
+    # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to replace the proc and re-link everything
+    # also, things may fail if the lookups haven't been given enough time to initialize, so do that first
     set i -1
 reset__find_lookup_start:
     op add i i 1
@@ -121,6 +121,7 @@ main:
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
     # this should be a decent estimation of the number of mlog instructions executed since reset
+    # TODO: we could lazily update these to save instructions
     op sub cycle @tick RESET_TICK
     op mul cycle cycle @ipt
     op floor cycle cycle
@@ -399,6 +400,23 @@ decode_type_U:
     
     set @counter ret
 
+# all instructions jump here after completing successfully
+end_instruction:
+    set variable_low CSR_INSTRET
+    set variable_high CSR_INSTRETH
+    op add ret @counter 1
+    jump increment_64_bit_csr always
+end_instruction_preserve_instret:
+    op add pc pc 4
+    op mod pc pc 0x100000000 # trunc 32
+end_instruction_preserve_pc:
+    # halt if the reset switch was manually enabled
+    sensor enabled RESET_SWITCH @enabled
+    jump halt equal enabled true
+    jump main always
+
+# exceptions
+
 invalid_lookup_link_order:
     print "Invalid ROM proc lookup link order! Lookups must be linked to the processor in one contiguous chunk in the order specified by the _index variable."
     printflush ERROR_OUTPUT
@@ -444,6 +462,7 @@ halt:
     control enabled RESET_SWITCH true
     jump reset always
 
+# we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
     control enabled PAUSE_SWITCH true
     set pause_step_tick @tick
@@ -461,21 +480,6 @@ pause_step__loop:
 
     jump unpause_step always
 
-# all instructions jump here after completing successfully
-end_instruction:
-    set variable_low CSR_INSTRET
-    set variable_high CSR_INSTRETH
-    op add ret @counter 1
-    jump increment_64_bit_csr always
-end_instruction_preserve_instret:
-    op add pc pc 4
-    op mod pc pc 0x100000000 # trunc 32
-end_instruction_preserve_pc:
-    # halt if the reset switch was manually enabled
-    sensor enabled RESET_SWITCH @enabled
-    jump halt equal enabled true
-    jump main always
-
 # helper functions
 
 # sign extension function
@@ -492,39 +496,11 @@ extend_sign:
     op shl _mask _mask length
 
     op add result value _mask
-
-    jump extend_sign__finally always
+    set @counter ret
 
 extend_sign__zero:
     # sign is 0, return value unchanged
     set result value
-
-extend_sign__finally:
-    set @counter ret
-
-# converts a little endian 32-bit number to big endian, or vice versa
-# https://stackoverflow.com/a/2182184
-# value -> result
-swap_endianness:
-    # byte 3 -> byte 0
-    op shr result value 24
-    op and result result 0xff
-
-    # byte 1 -> byte 2
-    op shl _tmp value 8
-    op and _tmp _tmp 0xff0000
-    op or result result _tmp
-
-    # byte 2 -> byte 1
-    op shr _tmp value 8
-    op and _tmp _tmp 0xff00
-    op or result result _tmp
-
-    # byte 0 -> byte 3
-    op shl _tmp value 24
-    op and _tmp _tmp 0xff000000
-    op or result result _tmp
-
     set @counter ret
 
 # converts a pair of two's complement unsigned values to signed, or vice versa
@@ -617,12 +593,35 @@ load_word:
     op add access_ram__ret @counter 1
     jump access_ram always
     read value ram variable
-
-    # coerce null values to 0
-    op add value value 0
+    # null is coerced to 0 by swap_endianness
 
     # tail call, swap_endianness will jump to the ret value of load_word's caller
-    jump swap_endianness always
+
+# converts a little endian 32-bit number to big endian, or vice versa
+# https://stackoverflow.com/a/2182184
+# this MUST stay directly after load_word
+# value -> result
+swap_endianness:
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl _tmp value 8
+    op and _tmp _tmp 0xff0000
+    op or result result _tmp
+
+    # byte 2 -> byte 1
+    op shr _tmp value 8
+    op and _tmp _tmp 0xff00
+    op or result result _tmp
+
+    # byte 0 -> byte 3
+    op shl _tmp value 24
+    op and _tmp _tmp 0xff000000
+    op or result result _tmp
+
+    set @counter ret
 
 # loads a value with a specified length in bits (8, 16, or 32) from memory
 # raises a misaligned-load exception if the address is misaligned for the specified length

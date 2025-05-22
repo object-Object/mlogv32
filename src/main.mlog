@@ -435,13 +435,25 @@ decode_type_U:
 
 # all instructions jump here after completing successfully
 end_instruction:
-    set variable_low CSR_INSTRET
-    set variable_high CSR_INSTRETH
-    op add ret @counter 1
-    jump increment_64_bit_csr always
+    # increment instret
+    read low CSRS CSR_INSTRET
+    op add low low 1
+    jump end_instruction__no_overflow lessThan low 0x100000000
+
+    op shr overflow low 32
+    op mod low low 0x100000000 # trunc 32
+
+    read high CSRS CSR_INSTRETH
+    op add high high overflow
+    write high CSRS CSR_INSTRETH
+
+end_instruction__no_overflow:
+    write low CSRS CSR_INSTRET
+
 end_instruction_preserve_instret:
     op add pc pc 4
     op mod pc pc 0x100000000 # trunc 32
+
 end_instruction_preserve_pc:
     # halt if the reset switch was manually enabled
     sensor enabled RESET_SWITCH @enabled
@@ -595,23 +607,6 @@ access_csr:
     lookup block variable variable
     sensor variable variable @name
     read variable _lookup variable
-
-    set @counter ret
-
-# increment a 64-bit value stored in two 32-bit CSRs
-# NOTE: takes the variable names (ie. output of access_csr) as input, not the addresses
-# variable_low, variable_high ->
-increment_64_bit_csr:
-    read _low CSRS variable_low
-    read _high CSRS variable_high
-
-    op add _low _low 1
-    op shr _overflow _low 32
-    op mod _low _low 0x100000000 # trunc 32
-    op add _high _high _overflow
-
-    write _low CSRS variable_low
-    write _high CSRS variable_high
 
     set @counter ret
 

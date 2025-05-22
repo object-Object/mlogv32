@@ -684,38 +684,47 @@ store_value:
 
     # truncate address, because every caller needs to do it anyway
     op mod address address 0x100000000 # 2^32 (trunc 32)
+    jump inaccessible_store greaterThanEq address RAM_SIZE
 
     # check alignment
     op idiv _bytes length 8
     op mod _alignment address _bytes
     jump misaligned_store notEqual _alignment 0
 
-    # create a bitmask with 0 in the section we want to replace and 1 everywhere else
+    # take the low n bits of the value to store, and shift it to line up with the zeros in the mask (big endian)
     op mod _shift address 4
     op mul _shift _shift 8
 
-    op pow _bitmask 2 length
-    op sub _bitmask _bitmask 1
+    op pow _length_squared 2 length
+    op mod value value _length_squared
+    op shl value value _shift
+
+    # convert the value to little endian
+    op add ret @counter 1
+    jump swap_endianness always
+
+    # create a bitmask with 0 in the section we want to replace and 1 everywhere else (little endian)
+    op sub _shift 24 _shift
+    op idiv _shift _shift length
+    op mul _shift _shift length
+
+    op sub _bitmask _length_squared 1
     op shl _bitmask _bitmask _shift
     op sub _bitmask 0xffffffff _bitmask
 
-    # take the low n bits of the value to store, and shift it to line up with the zeros in the mask
-    op pow _divisor 2 length
-    op mod _value value _divisor
-    op shl _value _value _shift
-
     # load the word containing the address
-    op add ret @counter 1
-    jump load_word always
+    op add access_ram__ret @counter 1
+    jump access_ram always
+    read _word ram variable
 
     # insert the value into the word
-    op and result result _bitmask
-    op add value _value result
+    op and _word _word _bitmask
+    op add result result _word
 
-    # store the final word (tail call)
-    # TODO: we shouldn't really need to run access_ram again here
-    set ret store_value__ret
-    jump store_word always
+    # store the new value
+    write result ram variable
+
+    set @counter store_value__ret
 
 # instruction handlers
 

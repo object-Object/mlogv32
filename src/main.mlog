@@ -455,6 +455,8 @@ inaccessible_store:
     printflush ERROR_OUTPUT
     jump halt always
 
+# pause/halt
+
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
     control enabled RESET_SWITCH true
@@ -483,22 +485,14 @@ pause_step__loop:
 # sign extension function
 # value, length -> result
 extend_sign:
-    op sub _shift length 1
-    op shr _sign value _shift
-    jump extend_sign__zero equal _sign 0
+    # https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
+    op sub _mask length 1
+    op shl _mask 1 _mask
 
-    # sign is 1, return ((2^(32-length) - 1) << length) + value
-    op sub _mask 32 length
-    op pow _mask 2 _mask
-    op sub _mask _mask 1
-    op shl _mask _mask length
+    op xor result value _mask
+    op sub result result _mask
+    op and result result 0xffffffff # convert signed to unsigned
 
-    op add result value _mask
-    set @counter ret
-
-extend_sign__zero:
-    # sign is 0, return value unchanged
-    set result value
     set @counter ret
 
 # converts a pair of two's complement unsigned values to signed, or vice versa

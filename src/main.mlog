@@ -112,14 +112,18 @@ reset__zero_registers:
     write 0 CSRS CSR_INSTRETH
 
     # start cycle timer
+    set next_time_update @time
     set RESET_TIME @time
     set RESET_TICK @tick
-    
+
 main:
+    jump main__skip_time_update lessThan @time next_time_update
+    op add next_time_update @time 1
+
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
     # this should be a decent estimation of the number of mlog instructions executed since reset
-    # TODO: we could lazily update these to save instructions
+    # TODO: we could theoretically only update these when they're actually being read, but that would look weird on a debugger
     op sub cycle @tick RESET_TICK
     op mul cycle cycle @ipt
     op floor cycle cycle
@@ -139,6 +143,8 @@ main:
 
     write low CSRS CSR_TIME
     write high CSRS CSR_TIMEH
+
+main__skip_time_update:
 
     # load instruction
     set address pc

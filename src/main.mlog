@@ -206,31 +206,24 @@ unpause_step:
 decode_branch:
     # B-type
     # imm
-    op shr imm_11 instruction 7
-    op mod imm_11 imm_11 2 # 2^1 (trunc 1)
-    op shl imm_11 imm_11 11
+    op shr imm_12 instruction 19 # instruction[31] -> imm[12]
+    op shl imm_11 instruction 4 # instruction[7] -> imm[11]
+    op shr imm_10_5 instruction 20 # instruction[30:25] -> imm[10:5]
+    op shr imm_4_1 instruction 7 # instruction[11:8] -> imm[4:1]
 
-    op shr imm_4_1 instruction 8
-    op mod imm_4_1 imm_4_1 16 # 2^4 (trunc 4)
-    op shl imm_4_1 imm_4_1 1
+    op and imm_12 imm_12     0b1000000000000
+    op and imm_11 imm_11     0b0100000000000
+    op and imm_10_5 imm_10_5 0b0011111100000
+    op and imm_4_1 imm_4_1   0b0000000011110
 
-    op shr imm_10_5 instruction 25
-    op mod imm_10_5 imm_10_5 64 # 2^6 (trunc 6)
-    op shl imm_10_5 imm_10_5 5
+    op add imm imm_12 imm_11
+    op add imm imm imm_10_5
+    op add imm imm imm_4_1
 
-    op shr imm_12 instruction 31
-    op mod imm_12 imm_12 2 # 2^1 (trunc 1)
-    op shl imm_12 imm_12 12
-
-    op add imm imm_4_1 imm_10_5
-    op add imm imm imm_11
-    op add imm imm imm_12
-
-    set value imm
-    set length 13
-    op add ret @counter 1
-    jump extend_sign always
-    set imm result
+    # extend sign
+    op xor imm imm 0b1000000000000
+    op sub imm imm 0b1000000000000
+    op and imm imm 0xffffffff
 
     # rs2
     op shr rs2 instruction 20
@@ -267,20 +260,18 @@ decode_load:
 decode_store:
     # S-type
     # imm
-    op shr imm_4_0 instruction 7
-    op mod imm_4_0 imm_4_0 32 # 2^5 (trunc 5)
+    op shr imm_11_5 instruction 20 # instruction[31:25] -> imm[11:5]
+    op shr imm_4_0 instruction 7 # instruction[11:7] -> imm[4:0]
+    
+    op and imm_11_5 imm_11_5 0b111111100000
+    op and imm_4_0 imm_4_0   0b000000011111
 
-    op shr imm_11_5 instruction 25
-    op mod imm_11_5 imm_11_5 128 # 2^7 (trunc 7)
-    op shl imm_11_5 imm_11_5 5
+    op add imm imm_11_5 imm_4_0
 
-    op add imm imm_4_0 imm_11_5
-
-    set value imm
-    set length 12
-    op add ret @counter 1
-    jump extend_sign always
-    set imm result
+    # extend sign
+    op xor imm imm 0b100000000000
+    op sub imm imm 0b100000000000
+    op and imm imm 0xffffffff
 
     # rs2
     op shr rs2 instruction 20
@@ -411,26 +402,11 @@ decode_type_I:
     op shr imm instruction 20
     op mod imm imm 4096 # 2^12 (trunc 12)
 
-    set value imm
-    set length 12
-    set decode_type_I__ret ret
-    op add ret @counter 1
-    jump extend_sign always
-    set imm result
+    # extend sign
+    op xor imm imm 0b100000000000
+    op sub imm imm 0b100000000000
+    op and imm imm 0xffffffff
 
-    set @counter decode_type_I__ret
-
-# common decoder for U-type instructions (only LUI and AUIPC)
-decode_type_U:
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # imm
-    op shr imm instruction 12
-    op mod imm imm 1048576 # 2^20 (trunc 20)
-    op shl imm imm 12
-    
     set @counter ret
 
 # all instructions jump here after completing successfully
@@ -744,18 +720,27 @@ store_value:
 # instruction handlers
 
 LUI:
-    op add ret @counter 1
-    jump decode_type_U always
-
+    # U-type
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
     jump end_instruction equal rd 0
+
+    # imm
+    op and imm instruction 0b11111111111111111111000000000000
+
     write imm REGISTERS rd
     jump end_instruction always
 
 AUIPC:
-    op add ret @counter 1
-    jump decode_type_U always
-    
+    # U-type
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
     jump end_instruction equal rd 0
+
+    # imm
+    op and imm instruction 0b11111111111111111111000000000000
 
     op add result imm pc
     op mod result result 0x100000000 # trunc 32
@@ -770,32 +755,23 @@ JAL:
     op mod rd rd 32 # 2^5 (trunc 5)
 
     # imm
-    op shr imm_19_12 instruction 12
-    op shr imm_11 imm_19_12 8
-    op shr imm_10_1 imm_11 1
-    op shr imm_20 imm_10_1 10
+    op shr imm_20 instruction 11 # instruction[31] -> imm[20]
+    op shr imm_11 instruction 9 # instruction[20] -> imm[11]
+    op shr imm_10_1 instruction 20 # instruction[30:21] -> imm[10:1]
 
-    op mod imm_19_12 imm_19_12 256 # 2^8 (trunc 8)
-    op shl imm_19_12 imm_19_12 12
+    op and imm_20 imm_20         0b100000000000000000000
+    op and imm_19_12 instruction 0b011111111000000000000 # instruction[19:12] -> imm[19:12]
+    op and imm_11 imm_11         0b000000000100000000000
+    op and imm_10_1 imm_10_1     0b000000000011111111110
 
-    op mod imm_11 imm_11 2 # 2^1 (trunc 1)
-    op shl imm_11 imm_11 11
+    op add imm imm_20 imm_19_12
+    op add imm imm imm_11
+    op add imm imm imm_10_1
 
-    op mod imm_10_1 imm_10_1 1024 # 2^10 (trunc 10)
-    op shl imm_10_1 imm_10_1 1
-
-    op mod imm_20 imm_20 2 # 2^1 (trunc 1)
-    op shl imm_20 imm_20 20
-
-    op add imm imm_10_1 imm_11
-    op add imm imm imm_19_12
-    op add imm imm imm_20
-
-    set value imm
-    set length 21
-    op add ret @counter 1
-    jump extend_sign always
-    set imm result
+    # extend sign
+    op xor imm imm 0b100000000000000000000
+    op sub imm imm 0b100000000000000000000
+    op and imm imm 0xffffffff
 
     # instruction handler
 

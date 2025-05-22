@@ -120,29 +120,8 @@ main:
     jump main__skip_time_update lessThan @time next_time_update
     op add next_time_update @time 1
 
-    # update cycle
-    # we define the number of cycles as "@ipt * ticks since reset"
-    # this should be a decent estimation of the number of mlog instructions executed since reset
-    # TODO: we could theoretically only update these when they're actually being read, but that would look weird on a debugger
-    op sub cycle @tick RESET_TICK
-    op mul cycle cycle @ipt
-    op floor cycle cycle
-
-    op mod low cycle 0x100000000
-    op shr high cycle 32
-
-    write low CSRS CSR_CYCLE
-    write high CSRS CSR_CYCLEH
-
-    # update time
-    op sub time @time RESET_TIME
-    op floor time time
-
-    op mod low time 0x100000000
-    op shr high time 32
-
-    write low CSRS CSR_TIME
-    write high CSRS CSR_TIMEH
+    op add ret @counter 1
+    jump update_time_and_cycle always
 
 main__skip_time_update:
 
@@ -488,11 +467,17 @@ inaccessible_store:
 
 # enable the reset switch, wait until it's disabled, then reset the processor
 halt:
+    op add ret @counter 1
+    jump update_time_and_cycle always
+
     control enabled RESET_SWITCH true
     jump reset always
 
 # we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
+    op add ret @counter 1
+    jump update_time_and_cycle always
+
     control enabled PAUSE_SWITCH true
     set pause_step_tick @tick
 
@@ -507,9 +492,40 @@ pause_step__loop:
     op sub delta @tick pause_step_tick
     op add RESET_TICK RESET_TICK delta
 
+    op add ret @counter 1
+    jump update_time_and_cycle always
+
     jump unpause_step always
 
 # helper functions
+
+# update the time/timeh and cycle/cycleh CSRs
+# TODO: we could theoretically only update these when they're actually being read, but that would look weird on a debugger
+update_time_and_cycle:
+    # update time
+    op sub time @time RESET_TIME
+    op floor time time
+
+    op mod low time 0x100000000
+    op shr high time 32
+
+    write low CSRS CSR_TIME
+    write high CSRS CSR_TIMEH
+
+    # update cycle
+    # we define the number of cycles as "@ipt * ticks since reset"
+    # this should be a decent estimation of the number of mlog instructions executed since reset
+    op sub cycle @tick RESET_TICK
+    op mul cycle cycle @ipt
+    op floor cycle cycle
+
+    op mod low cycle 0x100000000
+    op shr high cycle 32
+
+    write low CSRS CSR_CYCLE
+    write high CSRS CSR_CYCLEH
+
+    set @counter ret
 
 # sign extension function
 # value, length -> result
@@ -1264,6 +1280,9 @@ ECALL_drawflush:
     jump end_instruction_preserve_instret always
 
 EBREAK:
+    op add ret @counter 1
+    jump update_time_and_cycle always
+
     control enabled PAUSE_SWITCH true
     print "Paused on EBREAK, disable pause switch to continue"
     printflush ERROR_OUTPUT
@@ -1280,6 +1299,9 @@ EBREAK__loop:
     # this should have the effect of pausing cycle while paused here
     op sub delta @tick pause_tick
     op add RESET_TICK RESET_TICK delta
+
+    op add ret @counter 1
+    jump update_time_and_cycle always
 
     printflush ERROR_OUTPUT
     jump end_instruction_preserve_instret always

@@ -152,42 +152,55 @@ unpause_step:
 
     # decode instruction
 
-    op mod opcode instruction 128 # 2^7 (trunc 7)
+    # almost everything needs funct3 and rs1, so just decode them here
+    op shr funct3 instruction 12
+    op and funct3 funct3 0b111
 
-    # instructions disambiguated by just the opcode
-
-    jump LUI equal opcode 55
-    jump AUIPC equal opcode 23
-    jump JAL equal opcode 111
-
-    # all below instructions use rs1, so just decode and read it here
     # note: rs1_id is stored as a separate variable because FENCE needs it
     op shr rs1_id instruction 15
     op mod rs1_id rs1_id 32 # 2^5 (trunc 5)
     read rs1 REGISTERS rs1_id
 
-    jump JALR equal opcode 103
+    # the lowest 2 bits are always "11" for non-compressed instructions
+    op and low_bits instruction 0b11
+    jump illegal_instruction notEqual low_bits 0b11
 
-    # instructions disambiguated by funct3
+    # counter array based on (opcode >> 2), since the low 2 bits don't matter
+    op and opcode instruction 0b1111111
+    op shr opcode_jump opcode 2
+    op add @counter @counter opcode_jump
 
-    op shr funct3 instruction 12
-    op mod funct3 funct3 8 # 2^3 (trunc 3)
-    
-    jump decode_branch equal opcode 99
-    jump decode_load equal opcode 3
-    jump decode_save equal opcode 35
-    jump decode_system equal opcode 115
-    jump FENCE equal opcode 15
-
-    # instructions disambiguated by funct7
-
-    op shr funct7 instruction 25
-    op mod funct7 funct7 128 # 2^7 (trunc 7)
-
-    jump decode_arithmetic_imm equal opcode 19
-    jump decode_arithmetic equal opcode 51
-
-    # :(
+    jump decode_load always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump FENCE always
+    jump decode_arithmetic_imm always
+    jump AUIPC always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_store always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_arithmetic always
+    jump LUI always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_branch always
+    jump JALR always
+    jump illegal_instruction always
+    jump JAL always
+    jump decode_system always
+    jump illegal_instruction always
+    jump illegal_instruction always
     jump illegal_instruction always
 
 decode_branch:
@@ -224,27 +237,34 @@ decode_branch:
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
-    jump BEQ equal funct3 0
-    jump BNE equal funct3 1
-    jump BLT equal funct3 4
-    jump BGE equal funct3 5
-    jump BLTU equal funct3 6
-    jump BGEU equal funct3 7
+    op add @counter @counter funct3
+
+    jump BEQ always
+    jump BNE always
     jump illegal_instruction always
+    jump illegal_instruction always
+    jump BLT always
+    jump BGE always
+    jump BLTU always
+    jump BGEU always
 
 decode_load:
     # I-type
     op add ret @counter 1
     jump decode_type_I always
 
-    jump LB equal funct3 0
-    jump LH equal funct3 1
-    jump LW equal funct3 2
-    jump LBU equal funct3 4
-    jump LHU equal funct3 5
+    op add @counter @counter funct3
+
+    jump LB always
+    jump LH always
+    jump LW always
+    jump illegal_instruction always
+    jump LBU always
+    jump LHU always
+    jump illegal_instruction always
     jump illegal_instruction always
 
-decode_save:
+decode_store:
     # S-type
     # imm
     op shr imm_4_0 instruction 7
@@ -267,9 +287,15 @@ decode_save:
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
-    jump SB equal funct3 0
-    jump SH equal funct3 1
-    jump SW equal funct3 2
+    op add @counter @counter funct3
+
+    jump SB always
+    jump SH always
+    jump SW always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
     jump illegal_instruction always
 
 decode_system:
@@ -298,7 +324,6 @@ decode_system:
     op add ret @counter 1
     jump access_csr always
 
-    # TODO: use counter arrays for everything else too
     op add @counter @counter funct3
 
     jump decode_ECALL_EBREAK always # this jump should never actually be taken
@@ -320,15 +345,20 @@ decode_arithmetic_imm:
     op add ret @counter 1
     jump decode_type_I always
 
-    jump ADDI equal funct3 0
-    jump SLLI equal funct3 1
-    jump SLTI equal funct3 2
-    jump SLTIU equal funct3 3
-    jump XORI equal funct3 4
-    jump decode_SRLI_SRAI equal funct3 5
-    jump ORI equal funct3 6
-    jump ANDI equal funct3 7
-    jump illegal_instruction always
+    # funct7
+    op shr funct7 instruction 25
+    op and funct7 funct7 0b1111111
+
+    op add @counter @counter funct3
+
+    jump ADDI always
+    jump SLLI always
+    jump SLTI always
+    jump SLTIU always
+    jump XORI always
+    jump decode_SRLI_SRAI always
+    jump ORI always
+    jump ANDI always
 
 decode_SRLI_SRAI:
     jump SRLI equal funct7 0
@@ -346,15 +376,20 @@ decode_arithmetic:
     op mod rs2 rs2 32 # 2^5 (trunc 5)
     read rs2 REGISTERS rs2
 
-    jump decode_ADD_SUB equal funct3 0
-    jump SLL equal funct3 1
-    jump SLT equal funct3 2
-    jump SLTU equal funct3 3
-    jump XOR equal funct3 4
-    jump decode_SRL_SRA equal funct3 5
-    jump OR equal funct3 6
-    jump AND equal funct3 7
-    jump illegal_instruction always
+    # funct7
+    op shr funct7 instruction 25
+    op and funct7 funct7 0b1111111
+
+    op add @counter @counter funct3
+
+    jump decode_ADD_SUB always
+    jump SLL always
+    jump SLT always
+    jump SLTU always
+    jump XOR always
+    jump decode_SRL_SRA always
+    jump OR always
+    jump AND always
 
 decode_ADD_SUB:
     jump ADD equal funct7 0

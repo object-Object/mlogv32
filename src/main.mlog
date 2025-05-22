@@ -1,5 +1,3 @@
-    setrate 1000
-
     # constants
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
@@ -16,14 +14,14 @@
     set RAM_PROC_SIZE 4096  # variables (not bytes) per ram proc
     set LOOKUP_LINKS 16  # number of ram variable lookup processors
     set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
-    set IPT @ipt  # for debug output
 
     # initialization
 reset:
-
-reset__wait_for_reset_switch:
     sensor enabled RESET_SWITCH @enabled
-    jump reset__wait_for_reset_switch equal enabled true
+    jump reset equal enabled true
+
+    setrate 1000
+    set IPT @ipt  # for debug output
 
     control enabled PAUSE_SWITCH false
 

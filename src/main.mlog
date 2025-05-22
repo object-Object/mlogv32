@@ -108,6 +108,7 @@ reset__zero_registers:
     set pc 0
 
     # reset instret
+    set instret 0
     write 0 CSRS CSR_INSTRET
     write 0 CSRS CSR_INSTRETH
 
@@ -397,29 +398,26 @@ decode_type_I:
 # all instructions jump here after completing successfully
 end_instruction:
     # increment instret
-    read low CSRS CSR_INSTRET
-    op add low low 1
-    jump end_instruction__no_overflow lessThan low 0x100000000
+    op add instret instret 1
+    jump end_instruction__no_overflow lessThan instret 0x100000000
 
-    op shr overflow low 32
-    op mod low low 0x100000000 # trunc 32
+    set instret 0
 
     read high CSRS CSR_INSTRETH
-    op add high high overflow
+    op add high high 1
     write high CSRS CSR_INSTRETH
 
 end_instruction__no_overflow:
-    write low CSRS CSR_INSTRET
+    write instret CSRS CSR_INSTRET
 
 end_instruction_preserve_instret:
     op add pc pc 4
-    op mod pc pc 0x100000000 # trunc 32
 
 end_instruction_preserve_pc:
     # halt if the reset switch was manually enabled
     sensor enabled RESET_SWITCH @enabled
-    jump halt equal enabled true
-    jump main always
+    jump main notEqual enabled true
+    jump halt always
 
 # exceptions
 

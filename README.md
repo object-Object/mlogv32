@@ -1,6 +1,6 @@
 # mlogv32
 
-RISC-V processor in Mindustry logic. Requires the bleeding edge version of Mindustry (for `printchar`).
+RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ![image](https://github.com/user-attachments/assets/3951b4b7-cc56-494a-85f8-54bd9f2ee7d5)
 

@@ -1,24 +1,25 @@
     setrate 1000
-    
-    set RAM_MIN_X 1
-    set RAM_MIN_Y 1
 
-    set RAM_MAX_X @thisx
-    op sub RAM_MAX_Y @thisy 1
-    op sub RAM_WIDTH RAM_MAX_X RAM_MIN_X
-    op add RAM_WIDTH RAM_WIDTH 1
-    op sub RAM_HEIGHT RAM_MAX_Y RAM_MIN_Y
-    op add RAM_HEIGHT RAM_HEIGHT 1
-    op mul RAM_SIZE RAM_WIDTH RAM_HEIGHT
+    set CPU processor1
+    
+    read RAM_X CPU "RAM_X"
+    read RAM_Y CPU "RAM_Y"
+    read RAM_WIDTH CPU "RAM_WIDTH"
+    read RAM_SIZE CPU "RAM_SIZE"
+
+    op div RAM_SIZE RAM_SIZE 4
 
     set i 0
 loop:
     op mod x i RAM_WIDTH
-    op add x x RAM_MIN_Y
+    op add x x RAM_X
+
     op idiv y i RAM_WIDTH
-    op add y y RAM_MIN_Y
+    op add y y RAM_Y
+
     getblock building ram x y
     control enabled ram false
+
     op add i i 1
     jump loop lessThan i RAM_SIZE
 

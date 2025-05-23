@@ -4,6 +4,7 @@
 *.dump
 *.hex
 /build/
+/out/
 
 node_modules/
 

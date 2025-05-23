@@ -97,9 +97,9 @@ reset__find_lookup_start:
     set START_TIME @time
 
 main:
-    set arg1 0
-    set arg2 0
-    set arg3 0
+    set arg1 null
+    set arg2 null
+    set arg3 null
 
     # load instruction
     set address pc

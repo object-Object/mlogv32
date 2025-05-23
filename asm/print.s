@@ -1,6 +1,3 @@
-.section .text.start
-    .word __etext
-
 .global _start
 _start:
     la s0, msg

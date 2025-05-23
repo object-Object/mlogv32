@@ -30,8 +30,6 @@ static HEAP: Heap = Heap::empty();
 #[rustfmt::skip]
 global_asm!("
 .section .text.start
-    .word __etext
-
     la gp, __global_pointer$
     
     la t1, _stack_start

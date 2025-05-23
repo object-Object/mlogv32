@@ -138,10 +138,14 @@ reset__init_incr_proc:
     set pc 0
     set opcache_var null
 
-    # reset instret
-    set instret 0
+    # reset cycle/time/instret
+    write 0 CSR_PROC CSR_CYCLE
+    write 0 CSR_PROC CSR_CYCLEH
+    write 0 CSR_PROC CSR_TIME
+    write 0 CSR_PROC CSR_TIMEH
     write 0 CSR_PROC CSR_INSTRET
     write 0 CSR_PROC CSR_INSTRETH
+    set instret 0
 
     # transfer control to the decoder
 reset__wait_for_decoder:

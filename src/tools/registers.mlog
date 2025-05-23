@@ -112,6 +112,7 @@ loop:
     read arg3 CPU "arg3"
     read exit_code CPU "exit_code"
 
+    read __etext DECODER "__etext"
     read decode_time DECODER "DECODE_DURATION"
     op floor decode_time decode_time
 
@@ -295,6 +296,12 @@ loop:
 
     print "state       = {0}\n"
     format state
+    format ipt
+
+    print "__etext     = {0}\n"
+    set n __etext
+    op add ret @counter 1
+    jump format_hex always
 
     print "decode_time = {0} ms\n"
     format decode_time

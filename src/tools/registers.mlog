@@ -4,6 +4,7 @@
     set CSRS processor18
     set DISPLAY display1
     set CPU processor1
+    set DECODER processor19
 
     set LOOKUP_PROC_SIZE 260
 
@@ -102,10 +103,17 @@ loop:
     op shl instreth instreth 32
     op add instret instret instreth
 
-    read pc CPU "pc"
-    read state CPU "STATE"
-    read exit_code CPU "exit_code"
     read ipt CPU "IPT"
+    read state CPU "STATE"
+    read pc CPU "pc"
+    read op_id CPU "op_id"
+    read arg1 CPU "arg1"
+    read arg2 CPU "arg2"
+    read arg3 CPU "arg3"
+    read exit_code CPU "exit_code"
+
+    read decode_time DECODER "DECODE_DURATION"
+    op floor decode_time decode_time
 
     print "x0_zero  = {0}\n"
     set n x0_zero
@@ -270,23 +278,6 @@ loop:
     op add ret @counter 1
     jump format_hex always
 
-    print "pc        = {0}\n"
-    set n pc
-    op add ret @counter 1
-    jump format_hex always
-
-    print "state     = {0}\n"
-    format state
-
-    print "exit_code = {0}\n"
-    format exit_code
-
-    draw print 7 300 topLeft
-    drawflush DISPLAY
-
-    print "@ipt    = {0}\n"
-    format ipt
-
     print "cycle   = {0}\n"
     format cycle
 
@@ -295,6 +286,40 @@ loop:
 
     print "instret = {0}\n"
     format instret
+
+    draw print 7 300 topLeft
+    drawflush DISPLAY
+
+    print "@ipt        = {0}\n"
+    format ipt
+
+    print "state       = {0}\n"
+    format state
+
+    print "decode_time = {0} ms\n"
+    format decode_time
+
+    print "exit_code   = {0}\n\n"
+    format exit_code
+
+    print "pc    = {0}\n"
+    set n pc
+    op add ret @counter 1
+    jump format_hex always
+
+    print "op_id = {0}\n"
+    set n op_id
+    op add ret @counter 1
+    jump format_op_id always
+
+    print "arg1  = {0}\n"
+    format arg1
+
+    print "arg2  = {0}\n"
+    format arg2
+
+    print "arg3  = {0}\n"
+    format arg3
 
     draw print 256 508 topLeft
     drawflush DISPLAY
@@ -361,6 +386,60 @@ format_bin__next:
     jump format_bin__loop lessThan i 32
     format "0b"
     set @counter ret
+
+format_op_id:
+    jump format_op_id__unknown greaterThan n 46
+    op mul n n 2
+    op add @counter @counter n
+    format "illegal_instruction"; set @counter ret
+    format "LUI"; set @counter ret
+    format "AUIPC"; set @counter ret
+    format "JAL"; set @counter ret
+    format "JALR"; set @counter ret
+    format "BEQ"; set @counter ret
+    format "BNE"; set @counter ret
+    format "BLT"; set @counter ret
+    format "BGE"; set @counter ret
+    format "BLTU"; set @counter ret
+    format "BGEU"; set @counter ret
+    format "LB"; set @counter ret
+    format "LH"; set @counter ret
+    format "LW"; set @counter ret
+    format "LBU"; set @counter ret
+    format "LHU"; set @counter ret
+    format "SB"; set @counter ret
+    format "SH"; set @counter ret
+    format "SW"; set @counter ret
+    format "ADDI"; set @counter ret
+    format "SLTI"; set @counter ret
+    format "SLTIU"; set @counter ret
+    format "XORI"; set @counter ret
+    format "ORI"; set @counter ret
+    format "ANDI"; set @counter ret
+    format "SLLI"; set @counter ret
+    format "SRLI"; set @counter ret
+    format "SRAI"; set @counter ret
+    format "ADD"; set @counter ret
+    format "SUB"; set @counter ret
+    format "SLL"; set @counter ret
+    format "SLT"; set @counter ret
+    format "SLTU"; set @counter ret
+    format "XOR"; set @counter ret
+    format "SRL"; set @counter ret
+    format "SRA"; set @counter ret
+    format "OR"; set @counter ret
+    format "AND"; set @counter ret
+    format "FENCE"; set @counter ret
+    format "ECALL"; set @counter ret
+    format "EBREAK"; set @counter ret
+    format "CSRRW"; set @counter ret
+    format "CSRRS"; set @counter ret
+    format "CSRRC"; set @counter ret
+    format "CSRRWI"; set @counter ret
+    format "CSRRSI"; set @counter ret
+    format "CSRRCI"; set @counter ret
+format_op_id__unknown:
+    format n; set @counter ret
 
 # get the variable name in CSRS for the specified CSR
 # csr -> variable

@@ -103,7 +103,7 @@ loop:
     op add instret instret instreth
 
     read pc CPU "pc"
-    read instruction CPU "instruction"
+    read state CPU "STATE"
     read exit_code CPU "exit_code"
     read ipt CPU "IPT"
 
@@ -270,17 +270,15 @@ loop:
     op add ret @counter 1
     jump format_hex always
 
-    print "pc          = {0}\n"
+    print "pc        = {0}\n"
     set n pc
     op add ret @counter 1
     jump format_hex always
 
-    print "instruction = {0}\n"
-    set n instruction
-    op add ret @counter 1
-    jump format_bin always
+    print "state     = {0}\n"
+    format state
 
-    print "exit_code   = {0}\n"
+    print "exit_code = {0}\n"
     format exit_code
 
     draw print 7 300 topLeft

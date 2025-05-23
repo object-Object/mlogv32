@@ -39,11 +39,11 @@ global.override.block(LogicBlock, {
  */
 function isMlogv32Processor(processor) {
     return (
-        processor.executor.optionalVar("RAM_X") != null &&
-        processor.executor.optionalVar("RAM_Y") != null &&
-        processor.executor.optionalVar("RAM_WIDTH") != null &&
-        processor.executor.optionalVar("RAM_SIZE") != null &&
-        processor.executor.optionalVar("RAM_PROC_SIZE") != null
+        processor.executor.optionalVar("MEMORY_X") != null &&
+        processor.executor.optionalVar("MEMORY_Y") != null &&
+        processor.executor.optionalVar("MEMORY_WIDTH") != null &&
+        processor.executor.optionalVar("MEMORY_END") != null &&
+        processor.executor.optionalVar("MEMORY_PROC_SIZE") != null
     );
 }
 
@@ -52,11 +52,11 @@ function isMlogv32Processor(processor) {
  * @param {Fi} file
  */
 function flashMlogv32Processor(processor, file) {
-    const RAM_X = processor.executor.optionalVar("RAM_X").numval;
-    const RAM_Y = processor.executor.optionalVar("RAM_Y").numval;
-    const RAM_WIDTH = processor.executor.optionalVar("RAM_WIDTH").numval;
-    const RAM_SIZE = processor.executor.optionalVar("RAM_SIZE").numval;
-    const RAM_PROC_SIZE = processor.executor.optionalVar("RAM_PROC_SIZE").numval;
+    const RAM_X = processor.executor.optionalVar("MEMORY_X").numval;
+    const RAM_Y = processor.executor.optionalVar("MEMORY_Y").numval;
+    const RAM_WIDTH = processor.executor.optionalVar("MEMORY_WIDTH").numval;
+    const RAM_SIZE = processor.executor.optionalVar("MEMORY_END").numval;
+    const RAM_PROC_SIZE = processor.executor.optionalVar("MEMORY_PROC_SIZE").numval;
 
     /** @type number[] */
     const data = file.readBytes();

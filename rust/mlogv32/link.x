@@ -9,11 +9,14 @@ MEMORY {
     LENGTH = num_ram_procs * 4096*4
     0x10000000 = 128*128 * 4096*4
     0x8000000 = 128*64 * 4096*4
+    0x3000000 = 128*24 * 4096*4
+    0x1000000 = 128*8 * 4096*4
     */
-    ram (rwx) : ORIGIN = 0, LENGTH = 0x8000000
+    rom (rx) : ORIGIN = 0, LENGTH = 0x1000000
+    ram (rw) : ORIGIN = 0x1000000, LENGTH = 0x3000000
 }
 
-REGION_ALIAS("REGION_TEXT",   ram);
+REGION_ALIAS("REGION_TEXT",   rom);
 REGION_ALIAS("REGION_RODATA", ram);
 REGION_ALIAS("REGION_DATA",   ram);
 REGION_ALIAS("REGION_BSS",    ram);

@@ -4,14 +4,27 @@
     set PAUSE_SWITCH switch2
     set SINGLE_STEP_SWITCH switch3
     set REGISTERS cell1
-    set CSRS processor17
+    set CSR_PROC processor17
+    set DECODER_PROC processor18
+    set INCR_PROC processor19
     set DISPLAY display1
 
-    set RAM_X 1  # bottom left ram proc x
-    set RAM_Y 1  # bottom left ram proc y
-    set RAM_WIDTH 128  # physical width of the ram procs
-    set RAM_SIZE 0x8000000  # total ram size in bytes
-    set RAM_PROC_SIZE 4096  # variables (not bytes) per ram proc
+    set MEMORY_X 1  # bottom left memory proc x
+    set MEMORY_Y 1  # bottom left memory proc y
+    set MEMORY_WIDTH 128  # physical width of the memory procs
+    set MEMORY_PROC_SIZE 4096  # variables (not bytes) per memory proc
+
+    set ROM_SIZE 0x1000000  # total rom size in bytes (rx); also total decoded size in variables
+    set ROM_START 0x0  # inclusive
+    op add ROM_END ROM_START ROM_SIZE  # exclusive
+
+    set RAM_SIZE 0x3000000  # total ram size in bytes (rw)
+    set RAM_START ROM_END  # inclusive
+    op add RAM_END RAM_START RAM_SIZE  # exclusive
+
+    set MEMORY_END RAM_END
+    op idiv MEMORY_END_INDEX MEMORY_END 4
+
     set LOOKUP_LINKS 16  # number of ram variable lookup processors
     set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
 
@@ -104,13 +117,44 @@ reset__zero_registers:
     op add i i 1
     jump reset__zero_registers lessThan i 32
 
+    # initialize INCR_PROC by abusing access_csr
+    set csr 0
+    op add ret @counter 1
+    jump access_csr always
+    set prev_variable variable
+
+    set csr 1
+reset__init_incr_proc:
+    set variable null
+    op add ret @counter 1
+    jump access_csr lessThan csr MEMORY_PROC_SIZE
+
+    write variable INCR_PROC prev_variable
+    set prev_variable variable
+    op add csr csr 1
+    jump reset__init_incr_proc lessThanEq csr MEMORY_PROC_SIZE
+
     # start executing code at address 0
     set pc 0
+    set opcache_var null
 
     # reset instret
     set instret 0
-    write 0 CSRS CSR_INSTRET
-    write 0 CSRS CSR_INSTRETH
+    write 0 CSR_PROC CSR_INSTRET
+    write 0 CSR_PROC CSR_INSTRETH
+
+    # transfer control to the decoder
+reset__wait_for_decoder:
+    read decoder_state DECODER_PROC "STATE"
+    jump reset__wait_for_decoder notEqual decoder_state "ready"
+
+    read counter DECODER_PROC "@counter"
+    op add counter counter 1
+    write counter DECODER_PROC "@counter"
+
+    set STATE "decoding" # for debug output
+    stop
+    set STATE "running"
 
     # start cycle timer
     set next_time_update @time
@@ -118,282 +162,89 @@ reset__zero_registers:
     set RESET_TICK @tick
 
 main:
+    # update time/cycle
     jump main__skip_time_update lessThan @time next_time_update
     op add next_time_update @time 1
-
     op add ret @counter 1
     jump update_time_and_cycle always
-
 main__skip_time_update:
 
-    # load instruction
-    set address pc
-    op add ret @counter 1
-    jump load_word always
-    set instruction result
+    # get the current instruction cache processor and variable
+    jump main__skip_locate_pc notEqual opcache_var null
+    jump inaccessible_load greaterThanEq pc ROM_SIZE
+    op add _address MEMORY_END_INDEX pc
+    op add access_ram__ret @counter 1
+    jump access_ram_raw always
+    set opcache ram
+    set opcache_var variable
+main__skip_locate_pc:
+
+    # load instruction and arguments
+    read op_id opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    read arg1 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    read arg2 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    read arg3 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
     
+    # pause if in single-stepping mode
     sensor enabled SINGLE_STEP_SWITCH @enabled
     jump pause_step equal enabled true
 unpause_step:
 
-    # decode instruction
+    # jump to instruction handler
+    # TODO: we could save one cycle by using a symbol table, but that would make updating the code a pain
+    op add @counter @counter op_id
 
-    # almost everything needs funct3 and rs1, so just decode them here
-    op shr funct3 instruction 12
-    op and funct3 funct3 0b111
-
-    # note: rs1_id is stored as a separate variable because FENCE needs it
-    op shr rs1_id instruction 15
-    op mod rs1_id rs1_id 32 # 2^5 (trunc 5)
-    read rs1 REGISTERS rs1_id
-
-    # the lowest 2 bits are always "11" for non-compressed instructions
-    op and low_bits instruction 0b11
-    jump illegal_instruction notEqual low_bits 0b11
-
-    # counter array based on (opcode >> 2), since the low 2 bits don't matter
-    op and opcode instruction 0b1111111
-    op shr opcode_jump opcode 2
-    op add @counter @counter opcode_jump
-
-    jump decode_load always
     jump illegal_instruction always
-    jump illegal_instruction always
-    jump FENCE always
-    jump decode_arithmetic_imm always
-    jump AUIPC always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump decode_store always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump decode_arithmetic always
     jump LUI always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump decode_branch always
-    jump JALR always
-    jump illegal_instruction always
+    jump AUIPC always
     jump JAL always
-    jump decode_system always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-
-decode_branch:
-    # B-type
-    # imm
-    op shr imm_12 instruction 19 # instruction[31] -> imm[12]
-    op shl imm_11 instruction 4 # instruction[7] -> imm[11]
-    op shr imm_10_5 instruction 20 # instruction[30:25] -> imm[10:5]
-    op shr imm_4_1 instruction 7 # instruction[11:8] -> imm[4:1]
-
-    op and imm_12 imm_12     0b1000000000000
-    op and imm_11 imm_11     0b0100000000000
-    op and imm_10_5 imm_10_5 0b0011111100000
-    op and imm_4_1 imm_4_1   0b0000000011110
-
-    op add imm imm_12 imm_11
-    op add imm imm imm_10_5
-    op add imm imm imm_4_1
-
-    # extend sign
-    op xor imm imm 0b1000000000000
-    op sub imm imm 0b1000000000000
-    op and imm imm 0xffffffff
-
-    # rs2
-    op shr rs2 instruction 20
-    op mod rs2 rs2 32 # 2^5 (trunc 5)
-    read rs2 REGISTERS rs2
-
-    op add @counter @counter funct3
-
+    jump JALR always
     jump BEQ always
     jump BNE always
-    jump illegal_instruction always
-    jump illegal_instruction always
     jump BLT always
     jump BGE always
     jump BLTU always
     jump BGEU always
-
-decode_load:
-    # I-type
-    op add ret @counter 1
-    jump decode_type_I always
-
-    op add @counter @counter funct3
-
     jump LB always
     jump LH always
     jump LW always
-    jump illegal_instruction always
     jump LBU always
     jump LHU always
-    jump illegal_instruction always
-    jump illegal_instruction always
-
-decode_store:
-    # S-type
-    # imm
-    op shr imm_11_5 instruction 20 # instruction[31:25] -> imm[11:5]
-    op shr imm_4_0 instruction 7 # instruction[11:7] -> imm[4:0]
-    
-    op and imm_11_5 imm_11_5 0b111111100000
-    op and imm_4_0 imm_4_0   0b000000011111
-
-    op add imm imm_11_5 imm_4_0
-
-    # extend sign
-    op xor imm imm 0b100000000000
-    op sub imm imm 0b100000000000
-    op and imm imm 0xffffffff
-
-    # rs2
-    op shr rs2 instruction 20
-    op mod rs2 rs2 32 # 2^5 (trunc 5)
-    read rs2 REGISTERS rs2
-
-    op add @counter @counter funct3
-
     jump SB always
     jump SH always
     jump SW always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-    jump illegal_instruction always
-
-decode_system:
-    jump illegal_instruction greaterThan funct3 7
-
-    # funct12
-    op shr funct12 instruction 20
-    op mod funct12 funct12 4096 # 2^12 (trunc 12)
-
-    jump decode_ECALL_EBREAK equal funct3 0
-
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # uimm and csr (aliases for readability)
-    set uimm rs1_id
-    set csr funct12
-
-    # from privileged architecture csr chapter:
-    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
-    op and csr_readonly csr 0b110000000000
-    op equal csr_readonly csr_readonly 0b110000000000
-
-    # look up csr variable name
-    op add ret @counter 1
-    jump access_csr always
-
-    op add @counter @counter funct3
-
-    jump decode_ECALL_EBREAK always # this jump should never actually be taken
-    jump CSRRW always
-    jump CSRRS always
-    jump CSRRC always
-    jump illegal_instruction always
-    jump CSRRWI always
-    jump CSRRSI always
-    jump CSRRCI always
-
-decode_ECALL_EBREAK:
-    jump ECALL equal funct12 0
-    jump EBREAK equal funct12 1
-    jump illegal_instruction always
-
-decode_arithmetic_imm:
-    # I-type
-    op add ret @counter 1
-    jump decode_type_I always
-
-    # funct7
-    op shr funct7 instruction 25
-    op and funct7 funct7 0b1111111
-
-    op add @counter @counter funct3
-
     jump ADDI always
-    jump SLLI always
     jump SLTI always
     jump SLTIU always
     jump XORI always
-    jump decode_SRLI_SRAI always
     jump ORI always
     jump ANDI always
-
-decode_SRLI_SRAI:
-    jump SRLI equal funct7 0
-    jump SRAI equal funct7 32
-    jump illegal_instruction always
-
-decode_arithmetic:
-    # R-type
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # rs2
-    op shr rs2 instruction 20
-    op mod rs2 rs2 32 # 2^5 (trunc 5)
-    read rs2 REGISTERS rs2
-
-    # funct7
-    op shr funct7 instruction 25
-    op and funct7 funct7 0b1111111
-
-    op add @counter @counter funct3
-
-    jump decode_ADD_SUB always
+    jump SLLI always
+    jump SRLI always
+    jump SRAI always
+    jump ADD always
+    jump SUB always
     jump SLL always
     jump SLT always
     jump SLTU always
     jump XOR always
-    jump decode_SRL_SRA always
+    jump SRL always
+    jump SRA always
     jump OR always
     jump AND always
-
-decode_ADD_SUB:
-    jump ADD equal funct7 0
-    jump SUB equal funct7 32
-    jump illegal_instruction always
-
-decode_SRL_SRA:
-    jump SRL equal funct7 0
-    jump SRA equal funct7 32
-    jump illegal_instruction always
-
-# common decoder for I-type instructions
-decode_type_I:
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # imm
-    op shr imm instruction 20
-    op mod imm imm 4096 # 2^12 (trunc 12)
-
-    # extend sign
-    op xor imm imm 0b100000000000
-    op sub imm imm 0b100000000000
-    op and imm imm 0xffffffff
-
-    set @counter ret
+    jump FENCE always
+    jump ECALL always
+    jump EBREAK always
+    jump CSRRW always
+    jump CSRRS always
+    jump CSRRC always
+    jump CSRRWI always
+    jump CSRRSI always
+    jump CSRRCI always
 
 # all instructions jump here after completing successfully
 end_instruction:
@@ -403,12 +254,12 @@ end_instruction:
 
     set instret 0
 
-    read high CSRS CSR_INSTRETH
+    read high CSR_PROC CSR_INSTRETH
     op add high high 1
-    write high CSRS CSR_INSTRETH
+    write high CSR_PROC CSR_INSTRETH
 
 end_instruction__no_overflow:
-    write instret CSRS CSR_INSTRET
+    write instret CSR_PROC CSR_INSTRET
 
 end_instruction_preserve_instret:
     op add pc pc 4
@@ -507,8 +358,8 @@ update_time_and_cycle:
     op mod low time 0x100000000
     op shr high time 32
 
-    write low CSRS CSR_TIME
-    write high CSRS CSR_TIMEH
+    write low CSR_PROC CSR_TIME
+    write high CSR_PROC CSR_TIMEH
 
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
@@ -520,8 +371,8 @@ update_time_and_cycle:
     op mod low cycle 0x100000000
     op shr high cycle 32
 
-    write low CSRS CSR_CYCLE
-    write high CSRS CSR_CYCLEH
+    write low CSR_PROC CSR_CYCLE
+    write high CSR_PROC CSR_CYCLEH
 
     set @counter ret
 
@@ -567,19 +418,20 @@ access_ram:
     # we store 4 bytes in each value
     op idiv _address address 4
 
+access_ram_raw:
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_SIZE
+    op idiv _ram_index _address MEMORY_PROC_SIZE
 
-    op mod _ram_x _ram_index RAM_WIDTH
-    op add _ram_x _ram_x RAM_X
+    op mod _ram_x _ram_index MEMORY_WIDTH
+    op add _ram_x _ram_x MEMORY_X
 
-    op idiv _ram_y _ram_index RAM_WIDTH
-    op add _ram_y _ram_y RAM_Y
+    op idiv _ram_y _ram_index MEMORY_WIDTH
+    op add _ram_y _ram_y MEMORY_Y
 
     getblock building ram _ram_x _ram_y
 
     # get the variable within the ram proc containing this address
-    op mod _address _address RAM_PROC_SIZE
+    op mod _address _address MEMORY_PROC_SIZE
     
     op idiv _lookup _address LOOKUP_PROC_SIZE
     op add _lookup _lookup LOOKUP_START
@@ -592,8 +444,8 @@ access_ram:
 
     set @counter access_ram__ret
 
-# get the variable name in CSRS for the specified CSR
-# csr -> variable
+# get the variable name in CSR_PROC for the specified CSR, and also check if it's read-only
+# csr -> variable, readonly
 access_csr:
     op idiv _lookup csr LOOKUP_PROC_SIZE
     op add _lookup _lookup LOOKUP_START
@@ -604,12 +456,16 @@ access_csr:
     sensor variable variable @name
     read variable _lookup variable
 
+    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
+    op and readonly csr 0b110000000000
+    op equal readonly readonly 0b110000000000
+
     set @counter ret
 
 # loads the word from memory that contains the specified address
 # address -> result
 load_word:
-    jump inaccessible_load greaterThanEq address RAM_SIZE
+    jump inaccessible_load greaterThanEq address MEMORY_END
 
     # locate and read value from ram
     op add access_ram__ret @counter 1
@@ -683,7 +539,8 @@ load_value:
 # NOTE: does not perform an alignment check
 # address, value ->
 store_word:
-    jump inaccessible_store greaterThanEq address RAM_SIZE
+    jump inaccessible_store lessThan address RAM_START
+    jump inaccessible_store greaterThanEq address RAM_END
 
     set store_word__ret ret
     
@@ -704,7 +561,8 @@ store_value:
 
     # truncate address, because every caller needs to do it anyway
     op mod address address 0x100000000 # 2^32 (trunc 32)
-    jump inaccessible_store greaterThanEq address RAM_SIZE
+    jump inaccessible_store lessThan address RAM_START
+    jump inaccessible_store greaterThanEq address RAM_END
 
     # check alignment
     op idiv _bytes length 8
@@ -749,62 +607,24 @@ store_value:
 # instruction handlers
 
 LUI:
-    # U-type
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-    jump end_instruction equal rd 0
-
-    # imm
-    op and imm instruction 0b11111111111111111111000000000000
-
-    write imm REGISTERS rd
+    # U-type: arg1=rd, arg2=imm
+    jump end_instruction equal arg1 0
+    write arg2 REGISTERS arg1
     jump end_instruction always
 
 AUIPC:
-    # U-type
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-    jump end_instruction equal rd 0
+    # U-type: arg1=rd, arg2=imm
+    jump end_instruction equal arg1 0
 
-    # imm
-    op and imm instruction 0b11111111111111111111000000000000
-
-    op add result imm pc
+    op add result arg2 pc
     op mod result result 0x100000000 # trunc 32
-    write result REGISTERS rd
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 JAL:
-    # J-type
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # imm
-    op shr imm_20 instruction 11 # instruction[31] -> imm[20]
-    op shr imm_11 instruction 9 # instruction[20] -> imm[11]
-    op shr imm_10_1 instruction 20 # instruction[30:21] -> imm[10:1]
-
-    op and imm_20 imm_20         0b100000000000000000000
-    op and imm_19_12 instruction 0b011111111000000000000 # instruction[19:12] -> imm[19:12]
-    op and imm_11 imm_11         0b000000000100000000000
-    op and imm_10_1 imm_10_1     0b000000000011111111110
-
-    op add imm imm_20 imm_19_12
-    op add imm imm imm_11
-    op add imm imm imm_10_1
-
-    # extend sign
-    op xor imm imm 0b100000000000000000000
-    op sub imm imm 0b100000000000000000000
-    op and imm imm 0xffffffff
-
-    # instruction handler
-
-    op add target pc imm
+    # J-type: arg1=rd, arg2=imm
+    op add target pc arg2
 
 jump_to_target:
     op mod target target 0x100000000 # trunc 32
@@ -812,242 +632,296 @@ jump_to_target:
     op mod remainder target 4
     jump instruction_address_misaligned notEqual remainder 0
 
-    jump jump_to_target__no_write equal rd 0
+    jump jump_to_target__no_write equal arg1 0
 
     op add result pc 4
     op mod result result 0x100000000 # trunc 32
-    write result REGISTERS rd
+    write result REGISTERS arg1
 
 jump_to_target__no_write:
     set pc target
+    set opcache_var null
     jump end_instruction_preserve_pc always
 
 JALR:
-    op add ret @counter 1
-    jump decode_type_I always
-
-    op add target rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+    op add target rs1 arg3
     jump jump_to_target always
 
 BEQ:
-    op add target pc imm
-    set rd 0
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read rs2 REGISTERS arg2
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target equal rs1 rs2
     jump end_instruction always
 
 BNE:
-    op add target pc imm
-    set rd 0
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read rs2 REGISTERS arg2
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target notEqual rs1 rs2
     jump end_instruction always
 
 BLT:
-    set value1 rs1
-    set value2 rs2
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read value1 REGISTERS arg1
+    read value2 REGISTERS arg2
     op add ret @counter 1
     jump swap_signedness always
 
-    op add target pc imm
-    set rd 0
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target lessThan result1 result2
     jump end_instruction always
 
 BGE:
-    set value1 rs1
-    set value2 rs2
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read value1 REGISTERS arg1
+    read value2 REGISTERS arg2
     op add ret @counter 1
     jump swap_signedness always
 
-    op add target pc imm
-    set rd 0
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target greaterThanEq result1 result2
     jump end_instruction always
 
 BLTU:
-    op add target pc imm
-    set rd 0
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read rs2 REGISTERS arg2
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target lessThan rs1 rs2
     jump end_instruction always
 
 BGEU:
-    op add target pc imm
-    set rd 0
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read rs2 REGISTERS arg2
+    op add target pc arg3
+    set arg1 0
     jump jump_to_target greaterThanEq rs1 rs2
     jump end_instruction always
 
 LB:
-    op add address rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+
+    op add address rs1 arg3
     set length 8
     set is_signed true
     op add ret @counter 1
     jump load_value always
 
-    jump end_instruction equal rd 0
-    write result REGISTERS rd
+    jump end_instruction equal arg1 0
+    write result REGISTERS arg1
     jump end_instruction always
 
 LH:
-    op add address rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+
+    op add address rs1 arg3
     set length 16
     set is_signed true
     op add ret @counter 1
     jump load_value always
 
-    jump end_instruction equal rd 0
-    write result REGISTERS rd
+    jump end_instruction equal arg1 0
+    write result REGISTERS arg1
     jump end_instruction always
 
 LW:
-    op add address rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+
+    op add address rs1 arg3
     set length 32
     set is_signed false
     op add ret @counter 1
     jump load_value always
 
-    jump end_instruction equal rd 0
-    write result REGISTERS rd
+    jump end_instruction equal arg1 0
+    write result REGISTERS arg1
     jump end_instruction always
 
 LBU:
-    op add address rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+
+    op add address rs1 arg3
     set length 8
     set is_signed false
     op add ret @counter 1
     jump load_value always
 
-    jump end_instruction equal rd 0
-    write result REGISTERS rd
+    jump end_instruction equal arg1 0
+    write result REGISTERS arg1
     jump end_instruction always
 
 LHU:
-    op add address rs1 imm
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    read rs1 REGISTERS arg2
+
+    op add address rs1 arg3
     set length 16
     set is_signed false
     op add ret @counter 1
     jump load_value always
 
-    jump end_instruction equal rd 0
-    write result REGISTERS rd
+    jump end_instruction equal arg1 0
+    write result REGISTERS arg1
     jump end_instruction always
 
 SB:
-    op add address rs1 imm
-    set value rs2
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read value REGISTERS arg2
+
+    op add address rs1 arg3
     set length 8
     op add ret @counter 1
     jump store_value always
     jump end_instruction always
 
 SH:
-    op add address rs1 imm
-    set value rs2
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read value REGISTERS arg2
+
+    op add address rs1 arg3
     set length 16
     op add ret @counter 1
     jump store_value always
     jump end_instruction always
 
 SW:
-    op add address rs1 imm
-    set value rs2
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    read rs1 REGISTERS arg1
+    read value REGISTERS arg2
+
+    op add address rs1 arg3
     set length 32
     op add ret @counter 1
     jump store_value always
     jump end_instruction always
 
 ADDI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op add result rs1 imm
+    read rs1 REGISTERS arg2
+
+    op add result rs1 arg3
     op mod result result 0x100000000 # 2^32 (trunc 32)
-    write result REGISTERS rd
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 SLTI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    set value1 rs1
-    set value2 imm
+    read value1 REGISTERS arg2
+    set value2 arg3
     op add ret @counter 1
     jump swap_signedness always
 
     op lessThan result result1 result2
-    write result REGISTERS rd
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 SLTIU:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op lessThan result rs1 imm
-    write result REGISTERS rd
+    read rs1 REGISTERS arg2
+
+    op lessThan result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 XORI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op xor result rs1 imm
-    write result REGISTERS rd
+    read rs1 REGISTERS arg2
+
+    op xor result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 ORI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op or result rs1 imm
-    write result REGISTERS rd
+    read rs1 REGISTERS arg2
+
+    op or result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 ANDI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op and result rs1 imm
-    write result REGISTERS rd
+    read rs1 REGISTERS arg2
+
+    op and result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 SLLI:
-    # put the check here because there are no other instructions with this opcode and funct3
-    jump illegal_instruction notEqual funct7 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    jump end_instruction equal rd 0
-
-    op mod imm imm 32 # 2^5 (trunc 5)
+    read rs1 REGISTERS arg2
 
     # truncate before shifting to avoid overflowing 52 integer bits in double
-    op sub length 32 imm
+    op sub length 32 arg3
     op pow divisor 2 length
     op mod rs1 rs1 divisor
 
-    op shl result rs1 imm
-    write result REGISTERS rd
+    op shl result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 SRLI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op mod imm imm 32 # 2^5 (trunc 5)
+    read rs1 REGISTERS arg2
 
-    op shr result rs1 imm
-    write result REGISTERS rd
+    op shr result rs1 arg3
+    write result REGISTERS arg1
 
     jump end_instruction always
 
 SRAI:
-    jump end_instruction equal rd 0
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal arg1 0
 
-    op mod imm imm 32 # 2^5 (trunc 5)
+    read rs1 REGISTERS arg2
 
-    op shr value rs1 imm
+    op shr value rs1 arg3
 
-    op sub length 32 imm
+    op sub length 32 arg3
     op add ret @counter 1
     jump extend_sign always
 
-    write result REGISTERS rd
+    write result REGISTERS arg1
 
     jump end_instruction always
 
@@ -1055,77 +929,71 @@ SRAI:
 # so just set imm to rs2 and reuse the existing logic
 
 ADD:
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump ADDI always
 
 SUB:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
+
     # apply two's complement to negate the value in rs2 and put it into imm
-    op sub imm 0x100000000 rs2
-    op mod imm imm 0x100000000
+    op sub arg3 0x100000000 arg3
+    op mod arg3 arg3 0x100000000
 
     jump ADDI always
 
 SLL:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
+    op mod arg3 arg3 32 # 2^5 (trunc 5)
     jump SLLI always
 
 SLT:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump SLTI always
 
 SLTU:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump SLTIU always
 
 XOR:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump XORI always
 
 SRL:
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
+    op mod arg3 arg3 32 # 2^5 (trunc 5)
     jump SRLI always
 
 SRA:
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
+    op mod arg3 arg3 32 # 2^5 (trunc 5)
     jump SRAI always
 
 OR:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump ORI always
 
 AND:
-    jump illegal_instruction notEqual funct7 0
-
-    set imm rs2
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    read arg3 REGISTERS arg3
     jump ANDI always
 
 FENCE:
-    jump illegal_instruction notEqual funct3 0
-
-    # I-type, but without sign extension
-    # rd
-    op shr rd instruction 7
-    op mod rd rd 32 # 2^5 (trunc 5)
-
-    # imm
-    op shr imm instruction 20
-    op mod imm imm 4096 # 2^12 (trunc 12)
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
 
     # PAUSE
     # TODO: there's probably a better way to do this
-    jump FENCE__not_pause notEqual rd 0
-    jump FENCE__not_pause notEqual rs1_id 0
-    jump FENCE__not_pause notEqual imm 0b000000010000
+    jump FENCE__not_pause notEqual arg1 0
+    jump FENCE__not_pause notEqual arg2 0
+    jump FENCE__not_pause notEqual arg3 0b000000010000
 
     wait 0.00001
 
@@ -1305,59 +1173,85 @@ EBREAK__loop:
     jump end_instruction_preserve_instret always
 
 CSRRW:
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    read rs1 REGISTERS arg2
+CSRRW__no_read_rs1:
+
+    set csr arg3
+    op add ret @counter 1
+    jump access_csr always
+
     # technically we're not supposed to perform this read, but it doesn't really make a difference
-    read value CSRS variable
+    read value CSR_PROC variable
 
-    jump illegal_instruction equal csr_readonly true
-    write rs1 CSRS variable
+    jump illegal_instruction equal readonly true
+    write rs1 CSR_PROC variable
 
-    jump end_instruction equal rd 0
-    write value REGISTERS rd
+    jump end_instruction equal arg1 0
+    write value REGISTERS arg1
 
     jump end_instruction always
 
 CSRRS:
-    read value CSRS variable
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    read rs1 REGISTERS arg2
+CSRRS__no_read_rs1:
 
-    jump CSRRS__skip_write equal rs1_id 0
-    jump illegal_instruction equal csr_readonly true
+    set csr arg3
+    op add ret @counter 1
+    jump access_csr always
+
+    read value CSR_PROC variable
+
+    jump CSRRS__skip_write equal arg2 0
+    jump illegal_instruction equal readonly true
 
     op or result rs1 value
 
-    write result CSRS variable
+    write result CSR_PROC variable
 
 CSRRS__skip_write:
-    jump end_instruction equal rd 0
-    write value REGISTERS rd
+    jump end_instruction equal arg1 0
+    write value REGISTERS arg1
 
     jump end_instruction always
 
 CSRRC:
-    read value CSRS variable
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    read rs1 REGISTERS arg2
+CSRRC__no_read_rs1:
 
-    jump CSRRC__skip_write equal rs1_id 0
-    jump illegal_instruction equal csr_readonly true
+    set csr arg3
+    op add ret @counter 1
+    jump access_csr always
+
+    read value CSR_PROC variable
+
+    jump CSRRC__skip_write equal arg2 0
+    jump illegal_instruction equal readonly true
 
     op not result rs1
     op and result result value
 
-    write result CSRS variable
+    write result CSR_PROC variable
 
 CSRRC__skip_write:
-    jump end_instruction equal rd 0
-    write value REGISTERS rd
+    jump end_instruction equal arg1 0
+    write value REGISTERS arg1
 
     jump end_instruction always
 
 CSRRWI:
-    set rs1 uimm
-    jump CSRRW always
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    set rs1 arg2
+    jump CSRRW__no_read_rs1 always
 
 CSRRSI:
-    # rs1_id is already equal to uimm, that's where we got uimm from
-    set rs1 uimm
-    jump CSRRS always
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    set rs1 arg2
+    jump CSRRS__no_read_rs1 always
 
 CSRRCI:
-    set rs1 uimm
-    jump CSRRC always
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    set rs1 arg2
+    jump CSRRC__no_read_rs1 always

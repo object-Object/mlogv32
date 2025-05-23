@@ -1,0 +1,885 @@
+    # automatically compute op ids
+    # the first instruction will see @counter as 1, so set illegal_instruction last
+    set LUI @counter
+    set AUIPC @counter
+    set JAL @counter
+    set JALR @counter
+    set BEQ @counter
+    set BNE @counter
+    set BLT @counter
+    set BGE @counter
+    set BLTU @counter
+    set BGEU @counter
+    set LB @counter
+    set LH @counter
+    set LW @counter
+    set LBU @counter
+    set LHU @counter
+    set SB @counter
+    set SH @counter
+    set SW @counter
+    set ADDI @counter
+    set SLTI @counter
+    set SLTIU @counter
+    set XORI @counter
+    set ORI @counter
+    set ANDI @counter
+    set SLLI @counter
+    set SRLI @counter
+    set SRAI @counter
+    set ADD @counter
+    set SUB @counter
+    set SLL @counter
+    set SLT @counter
+    set SLTU @counter
+    set XOR @counter
+    set SRL @counter
+    set SRA @counter
+    set OR @counter
+    set AND @counter
+    set FENCE @counter
+    set ECALL @counter
+    set EBREAK @counter
+    set CSRRW @counter
+    set CSRRS @counter
+    set CSRRC @counter
+    set CSRRWI @counter
+    set CSRRSI @counter
+    set CSRRCI @counter
+    set illegal_instruction 0
+
+    # constants
+    set CPU processor17
+    set INCR_PROC processor18
+
+reset:
+    setrate 60
+    wait 0.00001
+    set STATE "ready"
+    stop
+    set STATE "running"
+    setrate 500000
+    
+    read MEMORY_X CPU "MEMORY_X"
+    read MEMORY_Y CPU "MEMORY_Y"
+    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+    read MEMORY_PROC_SIZE CPU "MEMORY_PROC_SIZE"
+    read ROM_END CPU "ROM_END"
+    read MEMORY_END_INDEX CPU "MEMORY_END_INDEX"
+    read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
+
+    # find the index of the first linked lookup proc
+    # NOTE: the lookup procs must be linked in a contiguous group
+    # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to replace the proc and re-link everything
+    # also, things may fail if the lookups haven't been given enough time to initialize, so do that first
+    set i -1
+reset__find_lookup_start:
+    op add i i 1
+    getlink block i
+    sensor type block @type
+    jump reset__find_lookup_start notEqual type @micro-processor
+    read type_var block "_type"
+    jump reset__find_lookup_start notEqual type_var "lookup"
+
+    set LOOKUP_START i
+
+    # start decoding at address 0
+    set pc 0
+    set opcache_var null
+
+    set START_TIME @time
+
+main:
+    set arg1 0
+    set arg2 0
+    set arg3 0
+
+    # load instruction
+    set address pc
+    op add ret @counter 1
+    jump load_word always
+    set instruction result
+
+    # decode instruction
+
+    # almost everything needs funct3 and rs1, so just decode them here
+    op shr funct3 instruction 12
+    op and funct3 funct3 0b111
+
+    op shr rs1 instruction 15
+    op mod rs1 rs1 32 # 2^5 (trunc 5)
+
+    # the lowest 2 bits are always "11" for non-compressed instructions
+    op and low_bits instruction 0b11
+    jump illegal_instruction notEqual low_bits 0b11
+
+    # counter array based on (opcode >> 2), since the low 2 bits don't matter
+    op and opcode instruction 0b1111111
+    op shr opcode_jump opcode 2
+    op add @counter @counter opcode_jump
+
+    jump decode_load always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump FENCE always
+    jump decode_arithmetic_imm always
+    jump AUIPC always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_store always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_arithmetic always
+    jump LUI always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump decode_branch always
+    jump JALR always
+    jump illegal_instruction always
+    jump JAL always
+    jump decode_system always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+
+decode_branch:
+    # B-type
+    # imm
+    op shr imm_12 instruction 19 # instruction[31] -> imm[12]
+    op shl imm_11 instruction 4 # instruction[7] -> imm[11]
+    op shr imm_10_5 instruction 20 # instruction[30:25] -> imm[10:5]
+    op shr imm_4_1 instruction 7 # instruction[11:8] -> imm[4:1]
+
+    op and imm_12 imm_12     0b1000000000000
+    op and imm_11 imm_11     0b0100000000000
+    op and imm_10_5 imm_10_5 0b0011111100000
+    op and imm_4_1 imm_4_1   0b0000000011110
+
+    op add imm imm_12 imm_11
+    op add imm imm imm_10_5
+    op add imm imm imm_4_1
+
+    # extend sign
+    op xor imm imm 0b1000000000000
+    op sub imm imm 0b1000000000000
+    op and imm imm 0xffffffff
+
+    # rs2
+    op shr rs2 instruction 20
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+
+    op add @counter @counter funct3
+
+    jump BEQ always
+    jump BNE always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump BLT always
+    jump BGE always
+    jump BLTU always
+    jump BGEU always
+
+decode_load:
+    # I-type
+    op add ret @counter 1
+    jump decode_type_I always
+
+    op add @counter @counter funct3
+
+    jump LB always
+    jump LH always
+    jump LW always
+    jump illegal_instruction always
+    jump LBU always
+    jump LHU always
+    jump illegal_instruction always
+    jump illegal_instruction always
+
+decode_store:
+    # S-type
+    # imm
+    op shr imm_11_5 instruction 20 # instruction[31:25] -> imm[11:5]
+    op shr imm_4_0 instruction 7 # instruction[11:7] -> imm[4:0]
+    
+    op and imm_11_5 imm_11_5 0b111111100000
+    op and imm_4_0 imm_4_0   0b000000011111
+
+    op add imm imm_11_5 imm_4_0
+
+    # extend sign
+    op xor imm imm 0b100000000000
+    op sub imm imm 0b100000000000
+    op and imm imm 0xffffffff
+
+    # rs2
+    op shr rs2 instruction 20
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+
+    op add @counter @counter funct3
+
+    jump SB always
+    jump SH always
+    jump SW always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+    jump illegal_instruction always
+
+decode_system:
+    jump illegal_instruction greaterThan funct3 7
+
+    # funct12
+    op shr funct12 instruction 20
+    op mod funct12 funct12 4096 # 2^12 (trunc 12)
+
+    jump decode_ECALL_EBREAK equal funct3 0
+
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # uimm and csr (aliases for readability)
+    set uimm rs1
+    set csr funct12
+
+    op add @counter @counter funct3
+
+    jump decode_ECALL_EBREAK always # this jump should never actually be taken
+    jump CSRRW always
+    jump CSRRS always
+    jump CSRRC always
+    jump illegal_instruction always
+    jump CSRRWI always
+    jump CSRRSI always
+    jump CSRRCI always
+
+decode_ECALL_EBREAK:
+    jump ECALL equal funct12 0
+    jump EBREAK equal funct12 1
+    jump illegal_instruction always
+
+decode_arithmetic_imm:
+    # I-type
+    op add ret @counter 1
+    jump decode_type_I always
+
+    # funct7
+    op shr funct7 instruction 25
+    op and funct7 funct7 0b1111111
+
+    op add @counter @counter funct3
+
+    jump ADDI always
+    jump SLLI always
+    jump SLTI always
+    jump SLTIU always
+    jump XORI always
+    jump decode_SRLI_SRAI always
+    jump ORI always
+    jump ANDI always
+
+decode_SRLI_SRAI:
+    jump SRLI equal funct7 0
+    jump SRAI equal funct7 32
+    jump illegal_instruction always
+
+decode_arithmetic:
+    # R-type
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # rs2
+    op shr rs2 instruction 20
+    op mod rs2 rs2 32 # 2^5 (trunc 5)
+
+    # funct7
+    op shr funct7 instruction 25
+    op and funct7 funct7 0b1111111
+
+    op add @counter @counter funct3
+
+    jump decode_ADD_SUB always
+    jump SLL always
+    jump SLT always
+    jump SLTU always
+    jump XOR always
+    jump decode_SRL_SRA always
+    jump OR always
+    jump AND always
+
+decode_ADD_SUB:
+    jump ADD equal funct7 0
+    jump SUB equal funct7 32
+    jump illegal_instruction always
+
+decode_SRL_SRA:
+    jump SRL equal funct7 0
+    jump SRA equal funct7 32
+    jump illegal_instruction always
+
+# common decoder for I-type instructions
+decode_type_I:
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op shr imm instruction 20
+    op mod imm imm 4096 # 2^12 (trunc 12)
+
+    # extend sign
+    op xor imm imm 0b100000000000
+    op sub imm imm 0b100000000000
+    op and imm imm 0xffffffff
+
+    set @counter ret
+
+# this must stay immediately before end_instruction
+illegal_instruction:
+    set op_id illegal_instruction
+
+# all instructions jump here after completing successfully
+end_instruction:
+    # get the current instruction cache processor and variable
+    jump reset__skip_locate_pc notEqual opcache_var null
+    op add _address MEMORY_END_INDEX pc
+    op add access_ram__ret @counter 1
+    jump access_ram_raw always
+    set opcache ram
+    set opcache_var variable
+reset__skip_locate_pc:
+
+    write op_id opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    write arg1 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    write arg2 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+    write arg3 opcache opcache_var
+    read opcache_var INCR_PROC opcache_var
+
+    op add pc pc 4
+    jump main lessThan pc ROM_END
+
+    # done!
+    op sub DECODE_DURATION @time START_TIME
+    read counter CPU "@counter"
+    op add counter counter 1
+    write counter CPU "@counter"
+    jump reset always
+
+# helper functions
+
+# helper function to find the ram proc and variable for a given address
+# address -> ram, variable
+access_ram:
+    # we store 4 bytes in each value
+    op idiv _address address 4
+
+access_ram_raw:
+    # get the ram proc containing this address
+    op idiv _ram_index _address MEMORY_PROC_SIZE
+
+    op mod _ram_x _ram_index MEMORY_WIDTH
+    op add _ram_x _ram_x MEMORY_X
+
+    op idiv _ram_y _ram_index MEMORY_WIDTH
+    op add _ram_y _ram_y MEMORY_Y
+
+    getblock building ram _ram_x _ram_y
+
+    # get the variable within the ram proc containing this address
+    op mod _address _address MEMORY_PROC_SIZE
+    
+    op idiv _lookup _address LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable _address LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter access_ram__ret
+
+# loads the word from memory that contains the specified address
+# address -> result
+load_word:
+    # locate and read value from ram
+    op add access_ram__ret @counter 1
+    jump access_ram always
+    read value ram variable
+    # null is coerced to 0 below
+
+    # swap endianness
+    # https://stackoverflow.com/a/2182184
+
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl _tmp value 8
+    op and _tmp _tmp 0xff0000
+    op or result result _tmp
+
+    # byte 2 -> byte 1
+    op shr _tmp value 8
+    op and _tmp _tmp 0xff00
+    op or result result _tmp
+
+    # byte 0 -> byte 3
+    op shl _tmp value 24
+    op and _tmp _tmp 0xff000000
+    op or result result _tmp
+
+    set @counter ret
+
+# instruction handlers
+
+LUI:
+    # U-type: arg1=rd, arg2=imm
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+    jump end_instruction equal rd 0
+
+    # imm
+    op and imm instruction 0b11111111111111111111000000000000
+
+    set op_id LUI
+    set arg1 rd
+    set arg2 imm
+    jump end_instruction always
+
+AUIPC:
+    # U-type: arg1=rd, arg2=imm
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+    jump end_instruction equal rd 0
+
+    # imm
+    op and imm instruction 0b11111111111111111111000000000000
+
+    set op_id AUIPC
+    set arg1 rd
+    set arg2 imm
+    jump end_instruction always
+
+JAL:
+    # J-type: arg1=rd, arg2=imm
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op shr imm_20 instruction 11 # instruction[31] -> imm[20]
+    op shr imm_11 instruction 9 # instruction[20] -> imm[11]
+    op shr imm_10_1 instruction 20 # instruction[30:21] -> imm[10:1]
+
+    op and imm_20 imm_20         0b100000000000000000000
+    op and imm_19_12 instruction 0b011111111000000000000 # instruction[19:12] -> imm[19:12]
+    op and imm_11 imm_11         0b000000000100000000000
+    op and imm_10_1 imm_10_1     0b000000000011111111110
+
+    op add imm imm_20 imm_19_12
+    op add imm imm imm_11
+    op add imm imm imm_10_1
+
+    # extend sign
+    op xor imm imm 0b100000000000000000000
+    op sub imm imm 0b100000000000000000000
+    op and imm imm 0xffffffff
+
+    set op_id JAL
+    set arg1 rd
+    set arg2 imm
+    jump end_instruction always
+
+JALR:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    op add ret @counter 1
+    jump decode_type_I always
+
+    set op_id JALR
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+BEQ:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BEQ
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+BNE:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BNE
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+BLT:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BLT
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+BGE:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BGE
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+BLTU:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BLTU
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+BGEU:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id BGEU
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+LB:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id LB
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+LH:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id LH
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+LW:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id LW
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+LBU:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id LBU
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+LHU:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id LHU
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SB:
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id SB
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+SH:
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id SH
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+SW:
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    set op_id SW
+    set arg1 rs1
+    set arg2 rs2
+    set arg3 imm
+    jump end_instruction always
+
+ADDI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id ADDI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SLTI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id SLTI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SLTIU:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id SLTIU
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+XORI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id XORI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+ORI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id ORI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+ANDI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    set op_id ANDI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SLLI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    # put the check here because there are no other instructions with this opcode and funct3
+    jump illegal_instruction notEqual funct7 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    set op_id SLLI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SRLI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal rd 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    set op_id SRLI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+SRAI:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump end_instruction equal rd 0
+
+    op mod imm imm 32 # 2^5 (trunc 5)
+
+    set op_id SRAI
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+ADD:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    set op_id ADD
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SUB:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    set op_id SUB
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SLL:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id SLL
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SLT:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id SLT
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SLTU:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id SLTU
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+XOR:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id XOR
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SRL:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    set op_id SRL
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+SRA:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    set op_id SRA
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+OR:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id OR
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+AND:
+    # R-type: arg1=rd, arg2=rs1, arg3=rs2
+    jump illegal_instruction notEqual funct7 0
+
+    set op_id AND
+    set arg1 rd
+    set arg2 rs1
+    set arg3 rs2
+    jump end_instruction always
+
+FENCE:
+    # I-type: arg1=rd, arg2=rs1, arg3=imm
+    jump illegal_instruction notEqual funct3 0
+
+    # I-type, but without sign extension
+    # rd
+    op shr rd instruction 7
+    op mod rd rd 32 # 2^5 (trunc 5)
+
+    # imm
+    op shr imm instruction 20
+    op mod imm imm 4096 # 2^12 (trunc 12)
+
+    set op_id FENCE
+    set arg1 rd
+    set arg2 rs1
+    set arg3 imm
+    jump end_instruction always
+
+ECALL:
+    set op_id ECALL
+    jump end_instruction always
+
+EBREAK:
+    set op_id EBREAK
+    jump end_instruction always
+
+CSRRW:
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    set op_id CSRRW
+    set arg1 rd
+    set arg2 rs1
+    set arg3 csr
+    jump end_instruction always
+
+CSRRS:
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    set op_id CSRRS
+    set arg1 rd
+    set arg2 rs1
+    set arg3 csr
+    jump end_instruction always
+
+CSRRC:
+    # CSR-type: arg1=rd, arg2=rs1, arg3=csr
+    set op_id CSRRC
+    set arg1 rd
+    set arg2 rs1
+    set arg3 csr
+    jump end_instruction always
+
+CSRRWI:
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    set op_id CSRRWI
+    set arg1 rd
+    set arg2 uimm
+    set arg3 csr
+    jump end_instruction always
+
+CSRRSI:
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    # rs1_id is already equal to uimm, that's where we got uimm from
+    set op_id CSRRSI
+    set arg1 rd
+    set arg2 uimm
+    set arg3 csr
+    jump end_instruction always
+
+CSRRCI:
+    # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
+    set op_id CSRRCI
+    set arg1 rd
+    set arg2 uimm
+    set arg3 csr
+    jump end_instruction always

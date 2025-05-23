@@ -2,26 +2,23 @@
 
     set CPU processor1
     
-    read RAM_X CPU "RAM_X"
-    read RAM_Y CPU "RAM_Y"
-    read RAM_WIDTH CPU "RAM_WIDTH"
-    read RAM_SIZE CPU "RAM_SIZE"
-
-    op div RAM_SIZE RAM_SIZE 4
+    read MEMORY_X CPU "MEMORY_X"
+    read MEMORY_Y CPU "MEMORY_Y"
+    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
 
     set i 0
 loop:
-    op mod x i RAM_WIDTH
-    op add x x RAM_X
+    op mod x i MEMORY_WIDTH
+    op add x x MEMORY_X
 
-    op idiv y i RAM_WIDTH
-    op add y y RAM_Y
+    op idiv y i MEMORY_WIDTH
+    op add y y MEMORY_Y
 
     getblock building ram x y
     control enabled ram false
 
     op add i i 1
-    jump loop lessThan i RAM_SIZE
+    jump loop lessThan y @thisy
 
     setrate 1
     stop

@@ -1,3 +1,6 @@
+.section .text.start
+    .word __etext
+
 .global _start
 _start:
     li x1, 0b1

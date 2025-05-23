@@ -83,8 +83,15 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    # start decoding at address 0
-    set pc 0
+    # read __etext from address 0
+    set address 0
+    op add ret @counter 1
+    jump load_word always
+    set __etext result
+
+    # start decoding at address 4
+    # (address 0 is __etext)
+    set pc 4
     set opcache_var null
 
     set START_TIME @time
@@ -370,7 +377,7 @@ reset__skip_locate_pc:
     read opcache_var INCR_PROC opcache_var
 
     op add pc pc 4
-    jump main lessThan pc ROM_END
+    jump main lessThan pc __etext
 
     # done!
     op sub DECODE_DURATION @time START_TIME

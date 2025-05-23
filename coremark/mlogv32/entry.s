@@ -1,6 +1,7 @@
 .section .text.start
-.global _start
+    .word __etext
 
+.global _start
 _start:
     la t1, _stack_start
     andi sp, t1, -16

@@ -134,8 +134,9 @@ reset__init_incr_proc:
     op add csr csr 1
     jump reset__init_incr_proc lessThanEq csr MEMORY_PROC_SIZE
 
-    # start executing code at address 0
-    set pc 0
+    # start executing code at address 4
+    # (address 0 is __etext)
+    set pc 4
     set opcache_var null
 
     # reset cycle/time/instret

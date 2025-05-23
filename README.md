@@ -4,6 +4,16 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ![image](https://github.com/user-attachments/assets/3951b4b7-cc56-494a-85f8-54bd9f2ee7d5)
 
+## Architecture
+
+Extensions: `rv32i_Zicsr_Zicntr_Zihintpause`
+
+The processor consists of two world processors, `main.mlog` and `decoder.mlog`. `main.mlog` is the main CPU/compute unit. `decoder.mlog` decodes instructions into a separate instruction cache ahead of time.
+
+Memory consists of three sections. Two are accessible by the processor: ROM (rx) and RAM (rw). ROM is 1/4 of total memory, RAM is 3/4. The third section is an instruction cache which is equal in physical size to the full memory but only stores data for ROM.
+
+Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the decoder how much data to decode.
+
 ## System calls
 
 | Index (a7) | Description      | a0        | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |

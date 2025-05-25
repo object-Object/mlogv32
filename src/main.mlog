@@ -21,11 +21,14 @@ reset:
 
     # load config
     read IPT CONFIG "IPT"
-    read MEMORY_X CONFIG "MEMORY_X"
-    read MEMORY_Y CONFIG "MEMORY_Y"
+    read MEMORY_X_OFFSET CONFIG "MEMORY_X_OFFSET"
+    read MEMORY_Y_OFFSET CONFIG "MEMORY_Y_OFFSET"
     read MEMORY_WIDTH CONFIG "MEMORY_WIDTH"
     read ROM_SIZE CONFIG "ROM_SIZE"
     read RAM_SIZE CONFIG "RAM_SIZE"
+
+    op add MEMORY_X MEMORY_X_OFFSET @thisx
+    op add MEMORY_Y MEMORY_Y_OFFSET @thisy
 
     set ROM_START 0x0  # inclusive
     op add ROM_END ROM_START ROM_SIZE  # exclusive

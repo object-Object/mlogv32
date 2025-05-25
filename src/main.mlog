@@ -4,6 +4,8 @@
     set MEMORY_PROC_SIZE 4096  # number of variables (not bytes) per memory proc
     
 reset:
+    set STATE "reset"
+
     # linked buildings
     set DECODER processor17
 

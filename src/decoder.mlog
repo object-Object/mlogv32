@@ -63,8 +63,9 @@ reset:
     read MEMORY_Y CPU "MEMORY_Y"
     read MEMORY_WIDTH CPU "MEMORY_WIDTH"
     read MEMORY_PROC_SIZE CPU "MEMORY_PROC_SIZE"
-    read MEMORY_END_INDEX CPU "MEMORY_END_INDEX"
     read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
+    read ROM_SIZE CPU "ROM_SIZE"
+    read MEMORY_END_INDEX CPU "MEMORY_END_INDEX"
 
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
@@ -87,11 +88,17 @@ reset__find_lookup_start:
     jump load_word always
     set __etext result
 
+    # if __etext is 0, decode the entire ROM
+    jump reset__nonzero_etext notEqual __etext 0
+    set __etext ROM_SIZE
+reset__nonzero_etext:
+
     # start decoding at address 4
     # (address 0 is __etext)
     set pc 4
     set opcache_var null
 
+    set DECODE_DURATION null
     set START_TIME @time
 
 main:

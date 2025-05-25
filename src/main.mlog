@@ -1,45 +1,60 @@
     # constants
+    set LOOKUP_LINKS 16  # number of ram variable lookup processors
+    set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
+    set MEMORY_PROC_SIZE 4096  # number of variables (not bytes) per memory proc
+    
+reset:
+    # linked buildings
+    set DECODER processor17
+
+    set REGISTERS cell1
+    set CSRS processor18
+    set INCR processor19
+    set CONFIG processor20
+
     set ERROR_OUTPUT message1
     set RESET_SWITCH switch1
     set PAUSE_SWITCH switch2
     set SINGLE_STEP_SWITCH switch3
-    set REGISTERS cell1
-    set CSR_PROC processor17
-    set DECODER_PROC processor18
-    set INCR_PROC processor19
+
     set DISPLAY display1
 
-    set MEMORY_X 1  # bottom left memory proc x
-    set MEMORY_Y 1  # bottom left memory proc y
-    set MEMORY_WIDTH 128  # physical width of the memory procs
-    set MEMORY_PROC_SIZE 4096  # variables (not bytes) per memory proc
+    # load config
+    read IPT CONFIG "IPT"
+    read MEMORY_X CONFIG "MEMORY_X"
+    read MEMORY_Y CONFIG "MEMORY_Y"
+    read MEMORY_WIDTH CONFIG "MEMORY_WIDTH"
+    read ROM_SIZE CONFIG "ROM_SIZE"
+    read RAM_SIZE CONFIG "RAM_SIZE"
 
-    set ROM_SIZE 0x1000000  # total rom size in bytes (rx); also total decoded size in variables
     set ROM_START 0x0  # inclusive
     op add ROM_END ROM_START ROM_SIZE  # exclusive
 
-    set RAM_SIZE 0x3000000  # total ram size in bytes (rw)
     set RAM_START ROM_END  # inclusive
     op add RAM_END RAM_START RAM_SIZE  # exclusive
 
     set MEMORY_END RAM_END
     op idiv MEMORY_END_INDEX MEMORY_END 4
 
-    set LOOKUP_LINKS 16  # number of ram variable lookup processors
-    set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
-
-    # initialization
-reset:
+    # loop until the reset switch is linked and disabled
+    jump reset strictEqual RESET_SWITCH null
     sensor enabled RESET_SWITCH @enabled
     jump reset equal enabled true
 
-    setrate 500000
-    set IPT @ipt  # for debug output
+    # initialization
 
+    # ipt go brrrr
+    setrate IPT
+
+    # initialize peripherals
     control enabled PAUSE_SWITCH false
 
     printflush ERROR_OUTPUT
 
+    draw clear 0 0 0
+    drawflush DISPLAY
+
+    # reset exit code (for debug output)
     set exit_code null
 
     # find the index of the first linked lookup proc
@@ -117,7 +132,7 @@ reset__zero_registers:
     op add i i 1
     jump reset__zero_registers lessThan i 32
 
-    # initialize INCR_PROC by abusing access_csr
+    # initialize INCR by abusing access_csr
     set csr 0
     op add ret @counter 1
     jump access_csr always
@@ -129,7 +144,7 @@ reset__init_incr_proc:
     op add ret @counter 1
     jump access_csr lessThan csr MEMORY_PROC_SIZE
 
-    write variable INCR_PROC prev_variable
+    write variable INCR prev_variable
     set prev_variable variable
     op add csr csr 1
     jump reset__init_incr_proc lessThanEq csr MEMORY_PROC_SIZE
@@ -140,22 +155,23 @@ reset__init_incr_proc:
     set opcache_var null
 
     # reset cycle/time/instret
-    write 0 CSR_PROC CSR_CYCLE
-    write 0 CSR_PROC CSR_CYCLEH
-    write 0 CSR_PROC CSR_TIME
-    write 0 CSR_PROC CSR_TIMEH
-    write 0 CSR_PROC CSR_INSTRET
-    write 0 CSR_PROC CSR_INSTRETH
+    write 0 CSRS CSR_CYCLE
+    write 0 CSRS CSR_CYCLEH
+    write 0 CSRS CSR_TIME
+    write 0 CSRS CSR_TIMEH
+    write 0 CSRS CSR_INSTRET
+    write 0 CSRS CSR_INSTRETH
     set instret 0
 
     # transfer control to the decoder
 reset__wait_for_decoder:
-    read decoder_state DECODER_PROC "STATE"
+    wait 0.00001
+    read decoder_state DECODER "STATE"
     jump reset__wait_for_decoder notEqual decoder_state "ready"
 
-    read counter DECODER_PROC "@counter"
+    read counter DECODER "@counter"
     op add counter counter 1
-    write counter DECODER_PROC "@counter"
+    write counter DECODER "@counter"
 
     set STATE "decoding" # for debug output
     stop
@@ -175,24 +191,18 @@ main:
 main__skip_time_update:
 
     # get the current instruction cache processor and variable
-    jump main__skip_locate_pc notEqual opcache_var null
-    jump inaccessible_load greaterThanEq pc ROM_SIZE
-    op add _address MEMORY_END_INDEX pc
-    op add access_ram__ret @counter 1
-    jump access_ram_raw always
-    set opcache ram
-    set opcache_var variable
-main__skip_locate_pc:
+    jump access_opcache strictEqual opcache_var null
+done_access_opcache:
 
     # load instruction and arguments
     read op_id opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     read arg1 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     read arg2 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     read arg3 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     
     # pause if in single-stepping mode
     sensor enabled SINGLE_STEP_SWITCH @enabled
@@ -259,12 +269,12 @@ end_instruction:
 
     set instret 0
 
-    read high CSR_PROC CSR_INSTRETH
+    read high CSRS CSR_INSTRETH
     op add high high 1
-    write high CSR_PROC CSR_INSTRETH
+    write high CSRS CSR_INSTRETH
 
 end_instruction__no_overflow:
-    write instret CSR_PROC CSR_INSTRET
+    write instret CSRS CSR_INSTRET
 
 end_instruction_preserve_instret:
     op add pc pc 4
@@ -327,6 +337,19 @@ halt:
     control enabled RESET_SWITCH true
     jump reset always
 
+# we jump here at the start of the main loop if opcache_var is null
+access_opcache:
+    jump inaccessible_load greaterThanEq pc ROM_SIZE
+
+    op add _address MEMORY_END_INDEX pc
+    op add access_ram__ret @counter 1
+    jump access_ram_raw always
+
+    set opcache ram
+    set opcache_var variable
+
+    jump done_access_opcache always
+
 # we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
     op add ret @counter 1
@@ -363,8 +386,8 @@ update_time_and_cycle:
     op mod low time 0x100000000
     op shr high time 32
 
-    write low CSR_PROC CSR_TIME
-    write high CSR_PROC CSR_TIMEH
+    write low CSRS CSR_TIME
+    write high CSRS CSR_TIMEH
 
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
@@ -376,8 +399,8 @@ update_time_and_cycle:
     op mod low cycle 0x100000000
     op shr high cycle 32
 
-    write low CSR_PROC CSR_CYCLE
-    write high CSR_PROC CSR_CYCLEH
+    write low CSRS CSR_CYCLE
+    write high CSRS CSR_CYCLEH
 
     set @counter ret
 
@@ -449,7 +472,7 @@ access_ram_raw:
 
     set @counter access_ram__ret
 
-# get the variable name in CSR_PROC for the specified CSR, and also check if it's read-only
+# get the variable name in CSRS for the specified CSR, and also check if it's read-only
 # csr -> variable, readonly
 access_csr:
     op idiv _lookup csr LOOKUP_PROC_SIZE
@@ -1105,7 +1128,7 @@ ECALL_draw_image:
     lookup liquid image a3; jump ECALL_draw_image__end always
 
 ECALL_draw_image__end:
-    jump ECALL_draw_image__lookup_fail equal image null
+    jump ECALL_draw_image__lookup_fail strictEqual image null
 
     write 1 REGISTERS 10
     draw image a0 a1 image a4 a5
@@ -1187,10 +1210,10 @@ CSRRW__no_read_rs1:
     jump access_csr always
 
     # technically we're not supposed to perform this read, but it doesn't really make a difference
-    read value CSR_PROC variable
+    read value CSRS variable
 
     jump illegal_instruction equal readonly true
-    write rs1 CSR_PROC variable
+    write rs1 CSRS variable
 
     jump end_instruction equal arg1 0
     write value REGISTERS arg1
@@ -1206,14 +1229,14 @@ CSRRS__no_read_rs1:
     op add ret @counter 1
     jump access_csr always
 
-    read value CSR_PROC variable
+    read value CSRS variable
 
     jump CSRRS__skip_write equal arg2 0
     jump illegal_instruction equal readonly true
 
     op or result rs1 value
 
-    write result CSR_PROC variable
+    write result CSRS variable
 
 CSRRS__skip_write:
     jump end_instruction equal arg1 0
@@ -1230,7 +1253,7 @@ CSRRC__no_read_rs1:
     op add ret @counter 1
     jump access_csr always
 
-    read value CSR_PROC variable
+    read value CSRS variable
 
     jump CSRRC__skip_write equal arg2 0
     jump illegal_instruction equal readonly true
@@ -1238,7 +1261,7 @@ CSRRC__no_read_rs1:
     op not result rs1
     op and result result value
 
-    write result CSR_PROC variable
+    write result CSRS variable
 
 CSRRC__skip_write:
     jump end_instruction equal arg1 0

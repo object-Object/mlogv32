@@ -1,15 +1,31 @@
     setrate 1000
-    
-    set REGISTERS cell1
-    set CSRS processor18
-    set DISPLAY display1
-    set CPU processor1
-    set DECODER processor19
-
-    set LOOKUP_PROC_SIZE 260
 
     draw reset
     draw color 255 255 255 255
+
+    draw clear 0 0 0
+    drawflush DISPLAY
+
+reset:
+    wait 0.00001
+
+    set CPU processor17
+    set DECODER processor18
+
+    set REGISTERS cell1
+    set CSRS processor19
+
+    set DISPLAY display1
+
+    read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
+
+    # wait until everything is properly initialized
+    jump reset strictEqual CPU null
+    jump reset strictEqual DECODER null
+    jump reset strictEqual REGISTERS null
+    jump reset strictEqual CSRS null
+    jump reset strictEqual DISPLAY null
+    jump reset strictEqual LOOKUP_PROC_SIZE null
 
     set i -1
 reset__find_lookup_start:

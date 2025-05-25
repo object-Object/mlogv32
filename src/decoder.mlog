@@ -48,10 +48,6 @@
     set CSRRCI @counter
     set illegal_instruction 0
 
-    # constants
-    set CPU processor17
-    set INCR_PROC processor18
-
 reset:
     setrate 60
     wait 0.00001
@@ -59,12 +55,14 @@ reset:
     stop
     set STATE "running"
     setrate 500000
+
+    set CPU processor17
+    set INCR processor18
     
     read MEMORY_X CPU "MEMORY_X"
     read MEMORY_Y CPU "MEMORY_Y"
     read MEMORY_WIDTH CPU "MEMORY_WIDTH"
     read MEMORY_PROC_SIZE CPU "MEMORY_PROC_SIZE"
-    read ROM_END CPU "ROM_END"
     read MEMORY_END_INDEX CPU "MEMORY_END_INDEX"
     read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
 
@@ -368,13 +366,13 @@ end_instruction:
 reset__skip_locate_pc:
 
     write op_id opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     write arg1 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     write arg2 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
     write arg3 opcache opcache_var
-    read opcache_var INCR_PROC opcache_var
+    read opcache_var INCR opcache_var
 
     op add pc pc 4
     jump main lessThan pc __etext

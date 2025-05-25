@@ -1,0 +1,8 @@
+    # per-world config options
+    set IPT 500000
+    set MEMORY_X 1  # bottom left memory proc x
+    set MEMORY_Y 1  # bottom left memory proc y
+    set MEMORY_WIDTH 128  # physical width of the memory procs
+    set ROM_SIZE 0x1000000  # total rom size in bytes (rx); also total decoded size in variables
+    set RAM_SIZE 0x3000000  # total ram size in bytes (rw)
+    stop

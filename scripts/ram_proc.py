@@ -1,5 +1,5 @@
 import itertools
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -273,14 +273,14 @@ BLOCK_IDS = [
 ]
 
 
-class VariableFormat(Enum):
-    minimize = "minimize"
+class VariableFormat(StrEnum):
+    minimized = "minimized"
     decimal = "decimal"
     hex = "hex"
 
     def iter_variables(self):
         match self:
-            case VariableFormat.minimize:
+            case VariableFormat.minimized:
                 for c1 in VARIABLE_NAME_CHARS:
                     for c2 in VARIABLE_NAME_CHARS:
                         yield c1 + c2
@@ -317,7 +317,7 @@ def lookup(
     variable_format: Annotated[
         VariableFormat,
         Option("-f", "--format"),
-    ] = VariableFormat.hex,
+    ] = VariableFormat.minimized,
 ):
     address = int(address_str, base=0)
 
@@ -342,7 +342,7 @@ def build(
     variable_format: Annotated[
         VariableFormat,
         Option("-f", "--format"),
-    ] = VariableFormat.hex,
+    ] = VariableFormat.minimized,
     out: Path = Path("schematics"),
 ):
     lookup_procs, ram_proc = generate_code(ram_size, variable_format)

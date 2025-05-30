@@ -284,7 +284,6 @@ end_instruction__no_overflow:
 end_instruction_preserve_instret:
     op add pc pc 4
 
-end_instruction_preserve_pc:
     # halt if the reset switch was manually enabled
     sensor enabled RESET_SWITCH @enabled
     jump main notEqual enabled true
@@ -672,9 +671,9 @@ jump_to_target:
     write result REGISTERS arg1
 
 jump_to_target__no_write:
-    set pc target
+    op sub pc target 4 # HACK: end_instruction always increments the pc, so set the new pc to target - 4
     set opcache_var null
-    jump end_instruction_preserve_pc always
+    jump end_instruction always
 
 JALR:
     # I-type: arg1=rd, arg2=rs1, arg3=imm

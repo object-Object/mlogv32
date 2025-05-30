@@ -1,3 +1,5 @@
+import itertools
+from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
@@ -270,6 +272,40 @@ BLOCK_IDS = [
     "tile-logic-display",
 ]
 
+
+class VariableFormat(Enum):
+    minimize = "minimize"
+    decimal = "decimal"
+    hex = "hex"
+
+    def iter_variables(self):
+        match self:
+            case VariableFormat.minimize:
+                for c1 in VARIABLE_NAME_CHARS:
+                    for c2 in VARIABLE_NAME_CHARS:
+                        yield c1 + c2
+
+            case VariableFormat.decimal:
+                for i in itertools.count():
+                    yield f"_{i}"
+
+            case VariableFormat.hex:
+                # only prepend an underscore if we need to
+                # otherwise we hit the save size limit with 4096 vars
+                for i in itertools.count():
+                    variable = f"{i:x}"
+                    if variable[0].isdigit():
+                        yield f"_{variable}"
+                    else:
+                        yield variable
+
+    def get_variable(self, index: int):
+        for i, variable in enumerate(self.iter_variables()):
+            if i == index:
+                return variable
+        raise AssertionError
+
+
 app = Typer()
 
 
@@ -278,6 +314,10 @@ def lookup(
     address_str: str,
     ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
     ram_width: int = 128,
+    variable_format: Annotated[
+        VariableFormat,
+        Option("-f", "--format"),
+    ] = VariableFormat.hex,
 ):
     address = int(address_str, base=0)
 
@@ -288,7 +328,7 @@ def lookup(
     ram_y = ram_index // ram_width + 1
 
     variable_index = word_address % ram_size
-    variable = get_variable(variable_index)
+    variable = variable_format.get_variable(variable_index)
 
     print(
         f"Address {hex(address)} is at processor {ram_index} ({ram_x}, {ram_y}) in variable {variable}."
@@ -299,9 +339,13 @@ def lookup(
 def build(
     ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
     lookup_width: Annotated[int, Option(min=1)] = 4,
+    variable_format: Annotated[
+        VariableFormat,
+        Option("-f", "--format"),
+    ] = VariableFormat.hex,
     out: Path = Path("schematics"),
 ):
-    lookup_procs, ram_proc = generate_code(ram_size)
+    lookup_procs, ram_proc = generate_code(ram_size, variable_format)
 
     out.mkdir(parents=True, exist_ok=True)
 
@@ -338,17 +382,7 @@ def build(
     )
 
 
-def get_variable(index: int):
-    i = 0
-    for c1 in VARIABLE_NAME_CHARS:
-        for c2 in VARIABLE_NAME_CHARS:
-            if i == index:
-                return c1 + c2
-            i += 1
-    raise AssertionError
-
-
-def generate_code(ram_size: int):
+def generate_code(ram_size: int, variable_format: VariableFormat):
     done = False
 
     lookup_procs = list[str]()
@@ -357,40 +391,36 @@ def generate_code(ram_size: int):
     ram_proc = list[str]()
     ram_proc_line = list[str]()
 
-    for c1 in VARIABLE_NAME_CHARS:
-        for c2 in VARIABLE_NAME_CHARS:
-            variable = c1 + c2
-
-            ram_proc_line.append(variable)
-            remaining_space = ram_size - len(ram_proc) * 6
-            if remaining_space == len(ram_proc_line):
-                done = True
-                if remaining_space > 0:
-                    ram_proc.append(
-                        "draw triangle "
-                        + " ".join(
-                            ram_proc_line
-                            + ram_proc_line[-1:] * (6 - len(ram_proc_line))
-                        )
+    for variable in variable_format.iter_variables():
+        ram_proc_line.append(variable)
+        remaining_space = ram_size - len(ram_proc) * 6
+        if remaining_space == len(ram_proc_line):
+            done = True
+            if remaining_space > 0:
+                ram_proc.append(
+                    "draw triangle "
+                    + " ".join(
+                        ram_proc_line + ram_proc_line[-1:] * (6 - len(ram_proc_line))
                     )
-            elif len(ram_proc_line) == 6:
-                ram_proc.append("draw triangle " + " ".join(ram_proc_line))
-                ram_proc_line.clear()
+                )
+        elif len(ram_proc_line) == 6:
+            ram_proc.append("draw triangle " + " ".join(ram_proc_line))
+            ram_proc_line.clear()
 
-            block_id = BLOCK_IDS[len(lookup_proc)]
-            lookup_proc.append(f'set {block_id} "{variable}"')
-            if len(lookup_proc) == len(BLOCK_IDS) or done:
-                lines = [
-                    'set _type "lookup"',
-                    f"set _index {len(lookup_procs)}",
-                    *lookup_proc,
-                    "stop",
-                ]
-                lookup_procs.append("\n".join(lines))
-                lookup_proc.clear()
+        block_id = BLOCK_IDS[len(lookup_proc)]
+        lookup_proc.append(f'set {block_id} "{variable}"')
+        if len(lookup_proc) == len(BLOCK_IDS) or done:
+            lines = [
+                'set _type "lookup"',
+                f"set _index {len(lookup_procs)}",
+                *lookup_proc,
+                "stop",
+            ]
+            lookup_procs.append("\n".join(lines))
+            lookup_proc.clear()
 
-            if done:
-                return lookup_procs, "\n".join(["stop"] + ram_proc)
+        if done:
+            return lookup_procs, "\n".join(["stop"] + ram_proc)
 
     raise ValueError("Ran out of variable names!")
 

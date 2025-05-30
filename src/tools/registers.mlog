@@ -18,6 +18,7 @@ reset:
     set DISPLAY display1
 
     read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
+    read MEMORY_PROC_SIZE CPU "MEMORY_PROC_SIZE"
 
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
@@ -26,6 +27,7 @@ reset:
     jump reset strictEqual CSRS null
     jump reset strictEqual DISPLAY null
     jump reset strictEqual LOOKUP_PROC_SIZE null
+    jump reset strictEqual MEMORY_PROC_SIZE null
 
     set i -1
 reset__find_lookup_start:
@@ -69,6 +71,7 @@ reset__find_lookup_start:
     set CSR_INSTRETH variable
 
 loop:
+    set mark_ram_id 0
     draw clear 0 0 0
 
     read x0_zero REGISTERS 0
@@ -131,6 +134,51 @@ loop:
     read __etext DECODER "__etext"
     read decode_time DECODER "DECODE_DURATION"
     op floor decode_time decode_time
+
+    read MEMORY_X CPU "MEMORY_X"
+    read MEMORY_Y CPU "MEMORY_Y"
+    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+
+    read ROM_SIZE CPU "ROM_SIZE"
+    read ROM_START CPU "ROM_START"
+    read ROM_END CPU "ROM_END"
+
+    read RAM_START CPU "RAM_START"
+    read RAM_END CPU "RAM_END"
+
+    op mul ICACHE_SIZE ROM_SIZE 4
+    set ICACHE_START RAM_END
+    op add ICACHE_END ICACHE_START ICACHE_SIZE
+
+    print "ROM_START\n{0}"
+    set address ROM_START
+    op add ret @counter 1
+    jump mark_ram always
+
+    print "ROM_END\n{0}"
+    op sub address ROM_END 1
+    op add ret @counter 1
+    jump mark_ram always
+
+    print "RAM_START\n{0}"
+    set address RAM_START
+    op add ret @counter 1
+    jump mark_ram always
+
+    print "RAM_END\n{0}"
+    op sub address RAM_END 1
+    op add ret @counter 1
+    jump mark_ram always
+
+    print "ICACHE_START\n{0}"
+    set address ICACHE_START
+    op add ret @counter 1
+    jump mark_ram always
+
+    print "ICACHE_END\n{0}"
+    op sub address ICACHE_END 1
+    op add ret @counter 1
+    jump mark_ram always
 
     print "x0_zero  = {0}\n"
     set n x0_zero
@@ -347,7 +395,7 @@ loop:
     draw print 256 508 topLeft
     drawflush DISPLAY
 
-    wait 0.02
+    wait 0.025
     jump loop always
 
 format_hex:
@@ -477,3 +525,33 @@ access_csr:
     read variable _lookup variable
 
     set @counter ret
+
+# creates a marker on the ram proc containing a given address
+# the caller should print a format string with a placeholder for the address
+# address ->
+mark_ram:
+    set mark_ram__ret ret
+
+    # we store 4 bytes in each value
+    op idiv _address address 4
+
+    # get the ram proc containing this address
+    op idiv _ram_index _address MEMORY_PROC_SIZE
+
+    op mod _ram_x _ram_index MEMORY_WIDTH
+    op add _ram_x _ram_x MEMORY_X
+
+    op idiv _ram_y _ram_index MEMORY_WIDTH
+    op add _ram_y _ram_y MEMORY_Y
+
+    set n address
+    op add ret @counter 1
+    jump format_hex always
+
+    setmarker remove mark_ram_id
+    makemarker shapeText mark_ram_id _ram_x _ram_y false
+    setmarker shape 0 4 0 0
+    setmarker flushText mark_ram_id false
+
+    op add mark_ram_id mark_ram_id 1
+    set @counter mark_ram__ret

@@ -1232,79 +1232,92 @@ ECALL:
     jump illegal_syscall lessThan a7 0 # this SHOULD never happen, but just in case
     jump illegal_syscall greaterThanEq a7 20 # number of syscalls
 
-    op add @counter @counter a7
-    
-    jump ECALL_halt always
-    jump ECALL_printchar always
-    jump ECALL_printflush always
-    jump ECALL_draw_clear always
-    jump ECALL_draw_color always
-    jump ECALL_draw_col always
-    jump ECALL_draw_stroke always
-    jump ECALL_draw_line always
-    jump ECALL_draw_rect always
-    jump ECALL_draw_lineRect always
-    jump ECALL_draw_poly always
-    jump ECALL_draw_linePoly always
-    jump ECALL_draw_triangle always
-    jump ECALL_draw_image always
-    jump ECALL_draw_print always
-    jump ECALL_draw_translate always
-    jump ECALL_draw_scale always
-    jump ECALL_draw_rotate always
-    jump ECALL_draw_reset always
-    jump ECALL_drawflush always
+    op mul jump a7 2
+    op add @counter @counter jump
 
-ECALL_halt:
+    # halt
     jump halt always
+    stop # to fill space
 
-ECALL_printchar:
+    # printchar
     printchar a0
     jump end_instruction_preserve_instret always
 
-ECALL_printflush:
+    # printflush
     printflush ERROR_OUTPUT
     jump end_instruction_preserve_instret always
 
-ECALL_draw_clear:
+    # draw_clear
     draw clear a0 a1 a2
     jump end_instruction_preserve_instret always
 
-ECALL_draw_color:
+    # draw_color
     draw color a0 a1 a2 a3
+    jump end_instruction_preserve_instret always
+
+    # draw_col
+    jump ECALL_draw_col always
+    stop
+
+    # draw_stroke
+    draw stroke a0
+    jump end_instruction_preserve_instret always
+
+    # draw_line
+    draw line a0 a1 a2 a3
+    jump end_instruction_preserve_instret always
+
+    # draw_rect
+    draw rect a0 a1 a2 a3
+    jump end_instruction_preserve_instret always
+
+    # draw_lineRect
+    draw lineRect a0 a1 a2 a3
+    jump end_instruction_preserve_instret always
+
+    # draw_poly
+    draw poly a0 a1 a2 a3 a4
+    jump end_instruction_preserve_instret always
+
+    # draw_linePoly
+    draw linePoly a0 a1 a2 a3 a4
+    jump end_instruction_preserve_instret always
+
+    # draw_triangle
+    draw triangle a0 a1 a2 a3 a4 a5
+    jump end_instruction_preserve_instret always
+
+    # draw_image
+    jump ECALL_draw_image always
+    stop
+
+    # draw_print
+    jump ECALL_draw_print always
+    stop
+
+    # draw_translate
+    draw translate a0 a1
+    jump end_instruction_preserve_instret always
+
+    # draw_scale
+    draw scale a0 a1
+    jump end_instruction_preserve_instret always
+
+    # draw_rotate
+    draw rotate a0
+    jump end_instruction_preserve_instret always
+
+    # draw_reset
+    draw reset
+    jump end_instruction_preserve_instret always
+
+    # drawflush
+    drawflush DISPLAY
     jump end_instruction_preserve_instret always
 
 ECALL_draw_col:
     op mul a0 a0 %00000001
     draw col a0
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_stroke:
-    draw stroke a0
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_line:
-    draw line a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_rect:
-    draw rect a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_lineRect:
-    draw lineRect a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_poly:
-    draw poly a0 a1 a2 a3 a4
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_linePoly:
-    draw linePoly a0 a1 a2 a3 a4
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_triangle:
-    draw triangle a0 a1 a2 a3 a4 a5
     jump end_instruction_preserve_instret always
 
 ECALL_draw_image:
@@ -1342,26 +1355,6 @@ ECALL_draw_print:
     draw print a0 a1 top; jump end_instruction_preserve_instret always
     draw print a0 a1 topLeft; jump end_instruction_preserve_instret always
     draw print a0 a1 topRight; jump end_instruction_preserve_instret always
-
-ECALL_draw_translate:
-    draw translate a0 a1
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_scale:
-    draw scale a0 a1
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_rotate:
-    draw rotate a0
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_reset:
-    draw reset
-    jump end_instruction_preserve_instret always
-
-ECALL_drawflush:
-    drawflush DISPLAY
-    jump end_instruction_preserve_instret always
 
 EBREAK:
     op add ret @counter 1

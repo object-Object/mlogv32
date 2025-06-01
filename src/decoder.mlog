@@ -96,7 +96,7 @@ reset__nonzero_etext:
     # start decoding at address 4
     # (address 0 is __etext)
     set pc 4
-    set opcache_var null
+    set icache_var null
 
     set DECODE_DURATION null
     set START_TIME @time
@@ -364,22 +364,22 @@ illegal_instruction:
 # all instructions jump here after completing successfully
 end_instruction:
     # get the current instruction cache processor and variable
-    jump reset__skip_locate_pc notEqual opcache_var null
+    jump reset__skip_locate_pc notEqual icache_var null
     op add _address MEMORY_END_INDEX pc
     op add access_ram__ret @counter 1
     jump access_ram_raw always
-    set opcache ram
-    set opcache_var variable
+    set icache ram
+    set icache_var variable
 reset__skip_locate_pc:
 
-    write op_id opcache opcache_var
-    read opcache_var INCR opcache_var
-    write arg1 opcache opcache_var
-    read opcache_var INCR opcache_var
-    write arg2 opcache opcache_var
-    read opcache_var INCR opcache_var
-    write arg3 opcache opcache_var
-    read opcache_var INCR opcache_var
+    write op_id icache icache_var
+    read icache_var INCR icache_var
+    write arg1 icache icache_var
+    read icache_var INCR icache_var
+    write arg2 icache icache_var
+    read icache_var INCR icache_var
+    write arg3 icache icache_var
+    read icache_var INCR icache_var
 
     op add pc pc 4
     jump main lessThan pc __etext

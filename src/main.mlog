@@ -157,7 +157,7 @@ reset__init_incr_proc:
     # start executing code at address 4
     # (address 0 is __etext)
     set pc 4
-    set opcache_var null
+    set icache_var null
 
     # reset cycle/time/instret
     write 0 CSRS CSR_CYCLE
@@ -196,18 +196,18 @@ main:
 main__skip_time_update:
 
     # get the current instruction cache processor and variable
-    jump access_opcache strictEqual opcache_var null
-done_access_opcache:
+    jump access_icache strictEqual icache_var null
+done_access_icache:
 
     # load instruction and arguments
-    read op_id opcache opcache_var
-    read opcache_var INCR opcache_var
-    read arg1 opcache opcache_var
-    read opcache_var INCR opcache_var
-    read arg2 opcache opcache_var
-    read opcache_var INCR opcache_var
-    read arg3 opcache opcache_var
-    read opcache_var INCR opcache_var
+    read op_id icache icache_var
+    read icache_var INCR icache_var
+    read arg1 icache icache_var
+    read icache_var INCR icache_var
+    read arg2 icache icache_var
+    read icache_var INCR icache_var
+    read arg3 icache icache_var
+    read icache_var INCR icache_var
     
     # pause if in single-stepping mode
     sensor enabled SINGLE_STEP_SWITCH @enabled
@@ -341,18 +341,18 @@ halt:
     control enabled RESET_SWITCH true
     jump reset always
 
-# we jump here at the start of the main loop if opcache_var is null
-access_opcache:
+# we jump here at the start of the main loop if icache_var is null
+access_icache:
     jump inaccessible_load greaterThanEq pc ROM_SIZE
 
     op add _address MEMORY_END_INDEX pc
     op add access_ram__ret @counter 1
     jump access_ram_raw always
 
-    set opcache ram
-    set opcache_var variable
+    set icache ram
+    set icache_var variable
 
-    jump done_access_opcache always
+    jump done_access_icache always
 
 # we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
@@ -672,7 +672,7 @@ jump_to_target:
 
 jump_to_target__no_write:
     op sub pc target 4 # HACK: end_instruction always increments the pc, so set the new pc to target - 4
-    set opcache_var null
+    set icache_var null
     jump end_instruction always
 
 JALR:

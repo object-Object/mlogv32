@@ -501,8 +501,7 @@ format_op_id:
     format "OR"; set @counter ret
     format "AND"; set @counter ret
     format "FENCE"; set @counter ret
-    format "ECALL"; set @counter ret
-    format "EBREAK"; set @counter ret
+    format "PRIV"; set @counter ret
     format "CSRRW"; set @counter ret
     format "CSRRS"; set @counter ret
     format "CSRRC"; set @counter ret

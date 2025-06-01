@@ -200,13 +200,13 @@ main__skip_time_update:
 done_access_icache:
 
     # load instruction and arguments
-    read op_id icache icache_var
+    read op_id icache_ram icache_var
     read icache_var INCR icache_var
-    read arg1 icache icache_var
+    read arg1 icache_ram icache_var
     read icache_var INCR icache_var
-    read arg2 icache icache_var
+    read arg2 icache_ram icache_var
     read icache_var INCR icache_var
-    read arg3 icache icache_var
+    read arg3 icache_ram icache_var
     read icache_var INCR icache_var
     
     # pause if in single-stepping mode
@@ -257,8 +257,7 @@ unpause_step:
     jump OR always
     jump AND always
     jump FENCE always
-    jump ECALL always
-    jump EBREAK always
+    jump PRIV always
     jump CSRRW always
     jump CSRRS always
     jump CSRRC always
@@ -349,7 +348,7 @@ access_icache:
     op add access_ram__ret @counter 1
     jump access_ram_raw always
 
-    set icache ram
+    set icache_ram ram
     set icache_var variable
 
     jump done_access_icache always
@@ -1033,7 +1032,19 @@ FENCE__not_pause:
     # no-op
     jump end_instruction always
 
+PRIV:
+    # SYSTEM-type: arg1=rd, arg2=rs1, arg3=funct12
+    # we partially decode this at runtime to simplify the decoding logic
+    # privilege mode changes should be relatively rare, so it should be fine for them to be a bit slower
+    jump ECALL equal arg3 0
+    jump EBREAK equal arg3 1
+    jump illegal_instruction always
+
 ECALL:
+    # TODO: this code should be moved to a custom instruction and/or MMIO
+    # ECALL has a different meaning in the privileged spec, this is not what it's supposed to be for
+    # see: https://jborza.com/post/2021-04-21-ecalls-and-syscalls/
+
     read a0 REGISTERS 10
     read a1 REGISTERS 11
     read a2 REGISTERS 12

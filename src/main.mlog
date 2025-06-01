@@ -1,5 +1,4 @@
     # constants
-    set LOOKUP_LINKS 16  # number of ram variable lookup processors
     set LOOKUP_PROC_SIZE 260  # number of variables per lookup proc
     set MEMORY_PROC_SIZE 4096  # number of variables (not bytes) per memory proc
     
@@ -59,9 +58,6 @@ reset:
     draw clear 0 0 0
     drawflush DISPLAY
 
-    # reset exit code (for debug output)
-    set exit_code null
-
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
     # eg. if you link lookup procs, then a switch, then want to add more lookup procs, you need to replace the proc and re-link everything
@@ -76,28 +72,6 @@ reset__find_lookup_start:
     jump reset__find_lookup_start notEqual type_var "lookup"
 
     set LOOKUP_START i
-
-    # hack
-    read prev_lookup_index block "_index"
-    op sub prev_lookup_index prev_lookup_index 1
-
-    # validate the number of linked lookup procs
-reset__find_lookup_size:
-    read lookup_index block "_index"
-    op sub delta lookup_index prev_lookup_index
-    jump invalid_lookup_link_order notEqual delta 1
-    set prev_lookup_index lookup_index
-
-    op add i i 1
-    getlink block i
-    sensor type block @type
-    jump reset__done_find_lookup_size notEqual type @micro-processor
-    read type_var block "_type"
-    jump reset__find_lookup_size equal type_var "lookup"
-
-reset__done_find_lookup_size:
-    op sub lookup_links i LOOKUP_START
-    jump invalid_lookup_link_order notEqual lookup_links LOOKUP_LINKS
 
     # look up commonly used CSRs
     set csr 0xc00
@@ -130,40 +104,12 @@ reset__done_find_lookup_size:
     jump access_csr always
     set CSR_INSTRETH variable
 
-    # zero all of the registers
-    set i 0
-reset__zero_registers:
-    write 0 REGISTERS i
-    op add i i 1
-    jump reset__zero_registers lessThan i 32
-
-    # initialize INCR by abusing access_csr
-    set csr 0
-    op add ret @counter 1
-    jump access_csr always
-    set prev_variable variable
-
-    set csr 1
-reset__init_incr_proc:
-    set variable null
-    op add ret @counter 1
-    jump access_csr lessThan csr MEMORY_PROC_SIZE
-
-    write variable INCR prev_variable
-    set prev_variable variable
-    op add csr csr 1
-    jump reset__init_incr_proc lessThanEq csr MEMORY_PROC_SIZE
-
     # start executing code at address 4
     # (address 0 is __etext)
     set pc 4
     set icache_var null
 
-    # reset cycle/time/instret
-    write 0 CSRS CSR_CYCLE
-    write 0 CSRS CSR_CYCLEH
-    write 0 CSRS CSR_TIME
-    write 0 CSRS CSR_TIMEH
+    # reset instret
     write 0 CSRS CSR_INSTRET
     write 0 CSRS CSR_INSTRETH
     set instret 0
@@ -212,10 +158,10 @@ done_access_icache:
     # pause if in single-stepping mode
     sensor enabled SINGLE_STEP_SWITCH @enabled
     jump pause_step equal enabled true
-unpause_step:
+done_pause_step:
 
     # jump to instruction handler
-    # TODO: we could save one cycle by using a symbol table, but that would make updating the code a pain
+    # TODO: we could save space by using a symbol table, but that would make updating the code a pain
     op add @counter @counter op_id
 
     jump illegal_instruction always
@@ -265,81 +211,6 @@ unpause_step:
     jump CSRRSI always
     jump CSRRCI always
 
-# all instructions jump here after completing successfully
-end_instruction:
-    # increment instret
-    op add instret instret 1
-    jump end_instruction__no_overflow lessThan instret 0x100000000
-
-    set instret 0
-
-    read high CSRS CSR_INSTRETH
-    op add high high 1
-    write high CSRS CSR_INSTRETH
-
-end_instruction__no_overflow:
-    write instret CSRS CSR_INSTRET
-
-end_instruction_preserve_instret:
-    op add pc pc 4
-
-    # halt if the reset switch was manually enabled
-    sensor enabled RESET_SWITCH @enabled
-    jump main notEqual enabled true
-    jump halt always
-
-# exceptions
-
-invalid_lookup_link_order:
-    print "Invalid ROM proc lookup link order! Lookups must be linked to the processor in one contiguous chunk in the order specified by the _index variable."
-    printflush ERROR_OUTPUT
-    jump halt always
-
-illegal_instruction:
-    print "Illegal instruction!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-illegal_syscall:
-    print "Illegal syscall!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-instruction_address_misaligned:
-    print "Instruction address misaligned!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-misaligned_load:
-    print "Attempted misaligned load!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-misaligned_store:
-    print "Attempted misaligned store!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-inaccessible_load:
-    print "Attempted to load from an inaccessible address!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-inaccessible_store:
-    print "Attempted to store to an inaccessible address!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-# pause/halt
-
-# enable the reset switch, wait until it's disabled, then reset the processor
-halt:
-    op add ret @counter 1
-    jump update_time_and_cycle always
-
-    control enabled RESET_SWITCH true
-    jump reset always
-
 # we jump here at the start of the main loop if icache_var is null
 access_icache:
     jump inaccessible_load greaterThanEq pc ROM_SIZE
@@ -375,7 +246,75 @@ pause_step__loop:
     op add ret @counter 1
     jump update_time_and_cycle always
 
-    jump unpause_step always
+    jump done_pause_step always
+
+# all instructions jump here after completing successfully
+end_instruction:
+    # increment instret
+    op add instret instret 1
+    jump end_instruction__no_overflow lessThan instret 0x100000000
+
+    set instret 0
+
+    read high CSRS CSR_INSTRETH
+    op add high high 1
+    write high CSRS CSR_INSTRETH
+
+end_instruction__no_overflow:
+    write instret CSRS CSR_INSTRET
+
+end_instruction_preserve_instret:
+    op add pc pc 4
+
+    # halt if the reset switch was manually enabled
+    sensor enabled RESET_SWITCH @enabled
+    jump main notEqual enabled true
+
+# enable the reset switch, wait until it's disabled, then reset the processor
+# this must stay directly after end_instruction
+halt:
+    op add ret @counter 1
+    jump update_time_and_cycle always
+
+    control enabled RESET_SWITCH true
+    jump reset always
+
+# exceptions
+
+illegal_instruction:
+    print "Illegal instruction!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+illegal_syscall:
+    print "Illegal syscall!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+instruction_address_misaligned:
+    print "Instruction address misaligned!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+misaligned_load:
+    print "Attempted misaligned load!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+misaligned_store:
+    print "Attempted misaligned store!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+inaccessible_load:
+    print "Attempted to load from an inaccessible address!"
+    printflush ERROR_OUTPUT
+    jump halt always
+
+inaccessible_store:
+    print "Attempted to store to an inaccessible address!"
+    printflush ERROR_OUTPUT
+    jump halt always
 
 # helper functions
 
@@ -443,6 +382,17 @@ swap_signedness__done_2:
 
     set @counter ret
 
+# get the variable name in CSRS for the specified CSR, and also check if it's read-only
+# csr -> variable, readonly
+access_csr:
+    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
+    op and readonly csr 0b110000000000
+    op equal readonly readonly 0b110000000000
+
+    set _address csr
+    set lookup_variable__ret ret
+    jump lookup_variable always
+
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 access_ram:
@@ -463,7 +413,12 @@ access_ram_raw:
 
     # get the variable within the ram proc containing this address
     op mod _address _address MEMORY_PROC_SIZE
-    
+    set lookup_variable__ret access_ram__ret
+
+# given a value 0 <= _address < MEMORY_PROC_SIZE, resolve that variable in the lookup table
+# this must stay directly after access_ram
+# _address -> variable
+lookup_variable:
     op idiv _lookup _address LOOKUP_PROC_SIZE
     op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
@@ -473,25 +428,7 @@ access_ram_raw:
     sensor variable variable @name
     read variable _lookup variable
 
-    set @counter access_ram__ret
-
-# get the variable name in CSRS for the specified CSR, and also check if it's read-only
-# csr -> variable, readonly
-access_csr:
-    op idiv _lookup csr LOOKUP_PROC_SIZE
-    op add _lookup _lookup LOOKUP_START
-    getlink _lookup _lookup
-
-    op mod variable csr LOOKUP_PROC_SIZE
-    lookup block variable variable
-    sensor variable variable @name
-    read variable _lookup variable
-
-    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
-    op and readonly csr 0b110000000000
-    op equal readonly readonly 0b110000000000
-
-    set @counter ret
+    set @counter lookup_variable__ret
 
 # loads the word from memory that contains the specified address
 # address -> result
@@ -565,24 +502,6 @@ load_value:
     jump extend_sign equal is_signed true # tail call
 
     set @counter load_value__ret
-
-# stores a word to memory at the specified address
-# NOTE: does not perform an alignment check
-# address, value ->
-store_word:
-    jump inaccessible_store lessThan address RAM_START
-    jump inaccessible_store greaterThanEq address RAM_END
-
-    set store_word__ret ret
-    
-    op add ret @counter 1
-    jump swap_endianness always
-
-    op add access_ram__ret @counter 1
-    jump access_ram always
-    write result ram variable
-
-    set @counter store_word__ret
 
 # stores a value with a specified length in bits (8, 16, or 32) to memory
 # raises a misaligned-store exception if the address is misaligned for the specified length
@@ -1080,7 +999,6 @@ ECALL:
     jump ECALL_drawflush always
 
 ECALL_halt:
-    set exit_code a0
     jump halt always
 
 ECALL_printchar:
@@ -1217,84 +1135,75 @@ EBREAK__loop:
 
 CSRRW:
     # CSR-type: arg1=rd, arg2=rs1, arg3=csr
-    read rs1 REGISTERS arg2
-CSRRW__no_read_rs1:
-
-    set csr arg3
-    op add ret @counter 1
-    jump access_csr always
-
-    # technically we're not supposed to perform this read, but it doesn't really make a difference
-    read value CSRS variable
-
-    jump illegal_instruction equal readonly true
-    write rs1 CSRS variable
-
-    jump end_instruction equal arg1 0
-    write value REGISTERS arg1
-
-    jump end_instruction always
+    set csr_op 0 # read/write
+    jump read_modify_write_csr always
 
 CSRRS:
     # CSR-type: arg1=rd, arg2=rs1, arg3=csr
-    read rs1 REGISTERS arg2
-CSRRS__no_read_rs1:
-
-    set csr arg3
-    op add ret @counter 1
-    jump access_csr always
-
-    read value CSRS variable
-
-    jump CSRRS__skip_write equal arg2 0
-    jump illegal_instruction equal readonly true
-
-    op or result rs1 value
-
-    write result CSRS variable
-
-CSRRS__skip_write:
-    jump end_instruction equal arg1 0
-    write value REGISTERS arg1
-
-    jump end_instruction always
+    set csr_op 2 # read and set bits
+    jump read_modify_write_csr always
 
 CSRRC:
     # CSR-type: arg1=rd, arg2=rs1, arg3=csr
-    read rs1 REGISTERS arg2
-CSRRC__no_read_rs1:
-
-    set csr arg3
-    op add ret @counter 1
-    jump access_csr always
-
-    read value CSRS variable
-
-    jump CSRRC__skip_write equal arg2 0
-    jump illegal_instruction equal readonly true
-
-    op not result rs1
-    op and result result value
-
-    write result CSRS variable
-
-CSRRC__skip_write:
-    jump end_instruction equal arg1 0
-    write value REGISTERS arg1
-
-    jump end_instruction always
+    set csr_op 4 # read and clear bits
+    jump read_modify_write_csr always
 
 CSRRWI:
     # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
     set rs1 arg2
-    jump CSRRW__no_read_rs1 always
+    set csr_op 0 # read/write
+    jump read_modify_write_csr_no_read_rs1 always
 
 CSRRSI:
     # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
     set rs1 arg2
-    jump CSRRS__no_read_rs1 always
+    set csr_op 2 # read and set bits
+    jump read_modify_write_csr_no_read_rs1 always
 
 CSRRCI:
     # CSRI-type: arg1=rd, arg2=uimm, arg3=csr
     set rs1 arg2
-    jump CSRRC__no_read_rs1 always
+    set csr_op 4 # read and clear bits
+    jump read_modify_write_csr_no_read_rs1 always
+
+read_modify_write_csr:
+    read rs1 REGISTERS arg2
+read_modify_write_csr_no_read_rs1:
+
+    set csr arg3
+    op add ret @counter 1
+    jump access_csr always
+
+    # read
+
+    read value CSRS variable
+
+    # modify
+
+    op add @counter @counter csr_op
+
+    # read/write (always write)
+    set result value
+    jump read_modify_write_csr__always_write always
+    # read and set bits (conditional write)
+    op or result rs1 value
+    jump read_modify_write_csr__conditional_write always
+    # read and clear bits (conditional write)
+    op not result rs1
+    op and result result value
+
+    # write
+
+read_modify_write_csr__conditional_write:
+    jump read_modify_write_csr__skip_write equal arg2 0
+read_modify_write_csr__always_write:
+    jump illegal_instruction equal readonly true
+
+    write result CSRS variable
+
+    # write initial CSR value to rd
+
+read_modify_write_csr__skip_write:
+    jump end_instruction equal arg1 0
+    write value REGISTERS arg1
+    jump end_instruction always

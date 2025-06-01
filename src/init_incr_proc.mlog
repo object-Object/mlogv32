@@ -1,0 +1,51 @@
+# this processor initializes INCR using a lookup table
+# the lookup table must be linked first, and INCR must be linked last
+
+    set LOOKUP_START 0
+    set LOOKUP_LINKS 16
+    set LOOKUP_PROC_SIZE 260
+    set MEMORY_PROC_SIZE 4096
+
+    # wait until ready
+reset:
+    jump reset lessThanEq @links LOOKUP_LINKS # 16 lookup procs + 1 incr proc
+    op sub i @links 1
+    getlink INCR i
+    read type INCR "_type"
+    jump reset equal type "lookup" # sanity check
+
+    # initialize INCR
+
+    setrate 1000
+
+    set address 0
+    op add ret @counter 1
+    jump lookup_variable always
+    set prev_variable variable
+
+    set address 1
+loop:
+    set variable null
+    op add ret @counter 1
+    jump lookup_variable lessThan address MEMORY_PROC_SIZE
+
+    write variable INCR prev_variable
+    set prev_variable variable
+    op add address address 1
+    jump loop lessThanEq address MEMORY_PROC_SIZE
+
+    stop
+
+# given a value 0 <= address < MEMORY_PROC_SIZE, resolve that variable in the lookup table
+# address -> variable
+lookup_variable:
+    op idiv _lookup address LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable address LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter ret

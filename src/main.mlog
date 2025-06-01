@@ -985,6 +985,7 @@ SB:
 
 # helper for STORE instructions to store a value with a specified length in bits (8, 16, or 32) to memory
 # raises a misaligned-store exception if the address is misaligned for the specified length
+# TODO: the 32-bit case could be optimized a lot
 # rs1 (address), rs2 (value), arg3 (offset), length ->
 store_value:
     op add address rs1 arg3
@@ -998,7 +999,9 @@ store_value:
     jump misaligned_store notEqual _alignment 0
 
     # take the low n bits of the value to store, and shift it to line up with the zeros in the mask (big endian)
+    # also get decode_address (word-aligned) for later
     op mod _shift address 4
+    op sub decode_address address _shift
     op mul _shift _shift 8
 
     op pow _length_squared 2 length
@@ -1025,10 +1028,20 @@ store_value:
 
     # insert the value into the word
     op and _word _word _bitmask
-    op add result result _word
+    op add value result _word
 
     # store the new value
-    write result ram variable
+    write value ram variable
+
+    # decode the new value and update the icache to allow executing from RAM and self-modifying code
+    # TODO: add a way for the CPU to temporarily disable this for performance?
+    op add ret @counter 1
+    jump swap_endianness always
+
+    set instruction result
+    set decode_var null
+    op add decode_ret @counter 1
+    jump decode always
 
     jump end_instruction always
 

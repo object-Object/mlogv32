@@ -507,6 +507,20 @@ swap_endianness:
 # instruction, decode_address -> op_id, arg1, arg2, arg3
 # ret: decode_ret
 decode:
+    # the lowest 2 bits are always "11" for non-compressed instructions
+    # check this first to increase the odds of an early exit for non-code addresses
+    op and low_bits instruction 0b11
+    jump decode_illegal_instruction notEqual low_bits 0b11
+
+    # opcode
+    op and opcode instruction 0b1111111
+
+    # also bail out if we're in the big group of illegal instructions between OP-32 and 48b
+    # TODO: we could use this to reduce the code size a bit
+    jump decode__ok lessThan opcode 0b0111011 # OP-32
+    jump decode_illegal_instruction lessThanEq opcode 0b1011111 # 48b
+decode__ok:
+
     # decode common fields to save space
     # we assume arg1=rs1, arg2=rs2, arg3=rd, which is close enough to most of the formats to save space
     # rs1
@@ -532,12 +546,7 @@ decode:
     op shr funct7 instruction 25
     op and funct7 funct7 0b1111111
 
-    # the lowest 2 bits are always "11" for non-compressed instructions
-    op and low_bits instruction 0b11
-    jump decode_illegal_instruction notEqual low_bits 0b11
-
     # counter array based on (opcode >> 2), since the low 2 bits don't matter
-    op and opcode instruction 0b1111111
     op shr jump opcode 2
     op add @counter @counter jump
 

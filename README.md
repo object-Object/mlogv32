@@ -8,36 +8,34 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 Extensions: `rv32i_Zicsr_Zicntr_Zihintpause`
 
-The processor consists of two world processors, `main.mlog` and `decoder.mlog`. `main.mlog` is the main CPU/compute unit. `decoder.mlog` decodes instructions into a separate instruction cache ahead of time.
+Memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rw). The third section is an instruction cache, which takes up 4x as much space as the executable portion of memory. The instruction cache is updated at reset and whenever an instruction writes to RAM.
 
-Memory consists of three sections. Two are accessible by the processor: ROM (rx) and RAM (rw). ROM is 1/4 of total memory, RAM is 3/4. The third section is an instruction cache which is equal in physical size to the full memory but only stores data for ROM.
-
-Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the decoder how much data to decode.
+Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM; alternatively, it can be `0` to decode the entire ROM.
 
 ## System calls
 
-| Index (a7) | Description      | a0        | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |
-| ---------- | ---------------- | --------- | ----- | --------- | ------ | -------- | -------- | --- | ----------------------- |
-| 0          | Halt             | exit code |       |           |        |          |          |     |                         |
-| 1          | `printchar`      | value     |       |           |        |          |          |     |                         |
-| 2          | `printflush`     |           |       |           |        |          |          |     |                         |
-| 3          | `draw clear`     | red       | green | blue      |        |          |          |     |                         |
-| 4          | `draw color`     | red       | green | blue      | alpha  |          |          |     |                         |
-| 5          | `draw col`       | color     |       |           |        |          |          |     |                         |
-| 6          | `draw stroke`    | width     |       |           |        |          |          |     |                         |
-| 7          | `draw line`      | x1        | y1    | x2        | y2     |          |          |     |                         |
-| 8          | `draw rect`      | x         | y     | width     | height |          |          |     |                         |
-| 9          | `draw lineRect`  | x         | y     | width     | height |          |          |     |                         |
-| 10         | `draw poly`      | x         | y     | sides     | radius | rotation |          |     |                         |
-| 11         | `draw linePoly`  | x         | y     | sides     | radius | rotation |          |     |                         |
-| 12         | `draw triangle`  | x1        | y1    | x2        | y2     | x3       | y3       |     |                         |
-| 13         | `draw image`     | x         | y     | type      | id     | size     | rotation |     | lookup success (1 or 0) |
-| 14         | `draw print`     | x         | y     | alignment |        |          |          |     |                         |
-| 15         | `draw translate` | x         | y     |           |        |          |          |     |                         |
-| 16         | `draw scale`     | x         | y     |           |        |          |          |     |                         |
-| 17         | `draw rotate`    | degrees   |       |           |        |          |          |     |                         |
-| 18         | `draw reset`     |           |       |           |        |          |          |     |                         |
-| 19         | `drawflush`      |           |       |           |        |          |          |     |                         |
+| Index (a7) | Description      | a0      | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |
+| ---------- | ---------------- | ------- | ----- | --------- | ------ | -------- | -------- | --- | ----------------------- |
+| 0          | Halt             |         |       |           |        |          |          |     |                         |
+| 1          | `printchar`      | value   |       |           |        |          |          |     |                         |
+| 2          | `printflush`     |         |       |           |        |          |          |     |                         |
+| 3          | `draw clear`     | red     | green | blue      |        |          |          |     |                         |
+| 4          | `draw color`     | red     | green | blue      | alpha  |          |          |     |                         |
+| 5          | `draw col`       | color   |       |           |        |          |          |     |                         |
+| 6          | `draw stroke`    | width   |       |           |        |          |          |     |                         |
+| 7          | `draw line`      | x1      | y1    | x2        | y2     |          |          |     |                         |
+| 8          | `draw rect`      | x       | y     | width     | height |          |          |     |                         |
+| 9          | `draw lineRect`  | x       | y     | width     | height |          |          |     |                         |
+| 10         | `draw poly`      | x       | y     | sides     | radius | rotation |          |     |                         |
+| 11         | `draw linePoly`  | x       | y     | sides     | radius | rotation |          |     |                         |
+| 12         | `draw triangle`  | x1      | y1    | x2        | y2     | x3       | y3       |     |                         |
+| 13         | `draw image`     | x       | y     | type      | id     | size     | rotation |     | lookup success (1 or 0) |
+| 14         | `draw print`     | x       | y     | alignment |        |          |          |     |                         |
+| 15         | `draw translate` | x       | y     |           |        |          |          |     |                         |
+| 16         | `draw scale`     | x       | y     |           |        |          |          |     |                         |
+| 17         | `draw rotate`    | degrees |       |           |        |          |          |     |                         |
+| 18         | `draw reset`     |         |       |           |        |          |          |     |                         |
+| 19         | `drawflush`      |         |       |           |        |          |          |     |                         |
 
 ### `draw col`
 

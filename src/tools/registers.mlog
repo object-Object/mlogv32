@@ -10,10 +10,9 @@ reset:
     wait 0.00001
 
     set CPU processor17
-    set DECODER processor18
 
     set REGISTERS cell1
-    set CSRS processor19
+    set CSRS processor18
 
     set DISPLAY display1
 
@@ -22,7 +21,6 @@ reset:
 
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
-    jump reset strictEqual DECODER null
     jump reset strictEqual REGISTERS null
     jump reset strictEqual CSRS null
     jump reset strictEqual DISPLAY null
@@ -130,8 +128,8 @@ loop:
     read arg2 CPU "arg2"
     read arg3 CPU "arg3"
 
-    read __etext DECODER "__etext"
-    read decode_time DECODER "DECODE_DURATION"
+    read __etext CPU "__etext"
+    read decode_time CPU "decode_duration"
     op floor decode_time decode_time
 
     read MEMORY_X CPU "MEMORY_X"

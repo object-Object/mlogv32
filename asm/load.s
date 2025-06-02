@@ -15,9 +15,10 @@ _start:
 
     lh x12, 3(x0)  # misaligned load exception
 
-    j 0
+loop:
+    j loop
 
-.section .data
+.section .rodata
 .balign 4
 word:
     .word 0x01020304 # LE: 0x04030201

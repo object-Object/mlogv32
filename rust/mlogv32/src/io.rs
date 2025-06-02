@@ -3,8 +3,6 @@ use core::arch::asm;
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
-use crate::constants::Syscall;
-
 #[cfg(feature = "alloc")]
 #[macro_export]
 macro_rules! println {
@@ -34,9 +32,8 @@ pub fn print_str(msg: &str) {
 pub fn print_char(c: char) {
     unsafe {
         asm!(
-            "ecall",
+            ".insn i CUSTOM_0, 0, zero, a0, 1",
             in("a0") c as u32,
-            in("a7") Syscall::PrintChar as u32,
             options(nomem, preserves_flags, nostack),
         );
     };
@@ -45,8 +42,7 @@ pub fn print_char(c: char) {
 pub fn print_flush() {
     unsafe {
         asm!(
-            "ecall",
-            in("a7") Syscall::PrintFlush as u32,
+            ".insn i CUSTOM_0, 0, zero, zero, 2",
             options(nomem, preserves_flags, nostack),
         );
     }

@@ -15,9 +15,10 @@ _start:
     sb zero, 3(x7)
     lw x9, 0(x7)
 
-    j 0
+loop:
+    j loop
 
-.section .data
+.section .rodata
 
     .org 512
     .balign 4

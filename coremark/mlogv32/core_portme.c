@@ -17,7 +17,7 @@ Original Author: Shay Gal-on
 */
 #include "coremark.h"
 #include "core_portme.h"
-#include "ecall.h"
+#include "xmlogsys.h"
 
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
@@ -157,5 +157,5 @@ portable_fini(core_portable *p)
 {
     p->portable_id = 0;
 
-    ecall(0, 0, 0, 0, 0, 0, 0, Halt);
+    MLOGSYS_halt();
 }

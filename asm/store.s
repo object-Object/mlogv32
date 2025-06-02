@@ -28,6 +28,9 @@ _start:
 
     sw x2, 1(x1) # misaligned store exception
 
+loop:
+    j loop
+
 .section .data
 .balign 4
 word:

@@ -255,6 +255,8 @@ done_pause_step:
     jump AMOMAX.W always
     jump AMOMINU.W always
     jump AMOMAXU.W always
+    jump MLOGSYS always
+    jump MLOGDRAW always
 
 # we jump here at the start of the main loop if icache_var is null
 access_icache:
@@ -334,11 +336,6 @@ halt:
 
 illegal_instruction:
     print "Illegal instruction!"
-    printflush ERROR_OUTPUT
-    jump halt always
-
-illegal_syscall:
-    print "Illegal syscall!"
     printflush ERROR_OUTPUT
     jump halt always
 
@@ -633,7 +630,7 @@ decode__before_OP-32:
 
     jump decode_LOAD always
     jump decode_illegal_instruction always # LOAD-FP
-    jump decode_illegal_instruction always # custom-0
+    jump decode_custom-0 always
     jump decode_MISC-MEM always
     jump decode_OP-IMM always
     jump decode_AUIPC always
@@ -870,6 +867,13 @@ decode_SYSTEM:
     set op_id 43; jump decode_I-type_no_extend_sign always # CSRRWI
     set op_id 44; jump decode_I-type_no_extend_sign always # CSRRSI
     set op_id 45; jump decode_I-type_no_extend_sign always # CSRRCI
+
+decode_custom-0:
+    # Xmlogsys
+    jump decode_illegal_instruction greaterThanEq funct3 2
+
+    op add op_id 65 funct3 # 65 (MLOGSYS) to 66 (MLOGDRAW)
+    jump decode_I-type_no_extend_sign always
 
 # common decoder for I-type instructions
 # this should be called AFTER setting op_id
@@ -1543,144 +1547,8 @@ PRIV:
     jump illegal_instruction always
 
 ECALL:
-    # TODO: this code should be moved to a custom instruction and/or MMIO
-    # ECALL has a different meaning in the privileged spec, this is not what it's supposed to be for
-    # see: https://jborza.com/post/2021-04-21-ecalls-and-syscalls/
-
-    read a0 REGISTERS 10
-    read a1 REGISTERS 11
-    read a2 REGISTERS 12
-    read a3 REGISTERS 13
-    read a4 REGISTERS 14
-    read a5 REGISTERS 15
-    read a7 REGISTERS 17
-
-    jump illegal_syscall lessThan a7 0 # this SHOULD never happen, but just in case
-    jump illegal_syscall greaterThanEq a7 20 # number of syscalls
-
-    op mul jump a7 2
-    op add @counter @counter jump
-
-    # halt
-    jump halt always
-    stop # to fill space
-
-    # printchar
-    printchar a0
-    jump end_instruction_preserve_instret always
-
-    # printflush
-    printflush ERROR_OUTPUT
-    jump end_instruction_preserve_instret always
-
-    # draw_clear
-    draw clear a0 a1 a2
-    jump end_instruction_preserve_instret always
-
-    # draw_color
-    draw color a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-    # draw_col
-    jump ECALL_draw_col always
-    stop
-
-    # draw_stroke
-    draw stroke a0
-    jump end_instruction_preserve_instret always
-
-    # draw_line
-    draw line a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-    # draw_rect
-    draw rect a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-    # draw_lineRect
-    draw lineRect a0 a1 a2 a3
-    jump end_instruction_preserve_instret always
-
-    # draw_poly
-    draw poly a0 a1 a2 a3 a4
-    jump end_instruction_preserve_instret always
-
-    # draw_linePoly
-    draw linePoly a0 a1 a2 a3 a4
-    jump end_instruction_preserve_instret always
-
-    # draw_triangle
-    draw triangle a0 a1 a2 a3 a4 a5
-    jump end_instruction_preserve_instret always
-
-    # draw_image
-    jump ECALL_draw_image always
-    stop
-
-    # draw_print
-    jump ECALL_draw_print always
-    stop
-
-    # draw_translate
-    draw translate a0 a1
-    jump end_instruction_preserve_instret always
-
-    # draw_scale
-    draw scale a0 a1
-    jump end_instruction_preserve_instret always
-
-    # draw_rotate
-    draw rotate a0
-    jump end_instruction_preserve_instret always
-
-    # draw_reset
-    draw reset
-    jump end_instruction_preserve_instret always
-
-    # drawflush
-    drawflush DISPLAY
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_col:
-    op mul a0 a0 %00000001
-    draw col a0
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_image:
-    op mod a2 a2 4 # number of indices
-    op mul a2 a2 2 # instructions per index
-    op add @counter @counter a2
-
-    lookup block image a3; jump ECALL_draw_image__end always
-    lookup unit image a3; jump ECALL_draw_image__end always
-    lookup item image a3; jump ECALL_draw_image__end always
-    lookup liquid image a3; jump ECALL_draw_image__end always
-
-ECALL_draw_image__end:
-    jump ECALL_draw_image__lookup_fail strictEqual image null
-
-    write 1 REGISTERS 10
-    draw image a0 a1 image a4 a5
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_image__lookup_fail:
-    write 0 REGISTERS 10
-    jump end_instruction_preserve_instret always
-
-ECALL_draw_print:
-    op mod a2 a2 9 # number of indices
-    op mul a2 a2 2 # instructions per index
-    op add @counter @counter a2
-
-    draw print a0 a1 bottom; jump end_instruction_preserve_instret always
-    draw print a0 a1 bottomLeft; jump end_instruction_preserve_instret always
-    draw print a0 a1 bottomRight; jump end_instruction_preserve_instret always
-    draw print a0 a1 center; jump end_instruction_preserve_instret always
-    draw print a0 a1 left; jump end_instruction_preserve_instret always
-    draw print a0 a1 right; jump end_instruction_preserve_instret always
-    draw print a0 a1 top; jump end_instruction_preserve_instret always
-    draw print a0 a1 topLeft; jump end_instruction_preserve_instret always
-    draw print a0 a1 topRight; jump end_instruction_preserve_instret always
+    # TODO: implement
+    jump end_instruction always
 
 EBREAK:
     op add ret @counter 1
@@ -1775,3 +1643,147 @@ read_modify_write_csr__always_write:
     write new_value CSRS variable
 
     jump end_instruction_with_result always
+
+MLOGSYS:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    jump illegal_instruction greaterThanEq arg2 4
+    
+    op mul jump arg2 2
+    op add @counter @counter jump
+
+    # halt
+    jump halt always
+    stop # placeholder
+
+    # printchar
+    printchar rs1
+    jump end_instruction always
+
+    # printflush
+    printflush ERROR_OUTPUT
+    jump end_instruction always
+
+    # drawflush
+    drawflush DISPLAY
+    jump end_instruction always
+
+MLOGDRAW:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    jump illegal_instruction greaterThanEq arg2 16
+
+    read a0 REGISTERS 10
+    read a1 REGISTERS 11
+    read a2 REGISTERS 12
+    read a3 REGISTERS 13
+    read a4 REGISTERS 14
+    read a5 REGISTERS 15
+
+    op mul jump arg2 2
+    op add @counter @counter jump
+
+    # draw_clear
+    draw clear a0 a1 a2
+    jump end_instruction always
+
+    # draw_color
+    draw color a0 a1 a2 a3
+    jump end_instruction always
+
+    # draw_col
+    jump MLOGDRAW_draw_col always
+    stop
+
+    # draw_stroke
+    draw stroke a0
+    jump end_instruction always
+
+    # draw_line
+    draw line a0 a1 a2 a3
+    jump end_instruction always
+
+    # draw_rect
+    draw rect a0 a1 a2 a3
+    jump end_instruction always
+
+    # draw_lineRect
+    draw lineRect a0 a1 a2 a3
+    jump end_instruction always
+
+    # draw_poly
+    draw poly a0 a1 a2 a3 a4
+    jump end_instruction always
+
+    # draw_linePoly
+    draw linePoly a0 a1 a2 a3 a4
+    jump end_instruction always
+
+    # draw_triangle
+    draw triangle a0 a1 a2 a3 a4 a5
+    jump end_instruction always
+
+    # draw_image
+    jump MLOGDRAW_draw_image always
+    stop
+
+    # draw_print
+    jump MLOGDRAW_draw_print always
+    stop
+
+    # draw_translate
+    draw translate a0 a1
+    jump end_instruction always
+
+    # draw_scale
+    draw scale a0 a1
+    jump end_instruction always
+
+    # draw_rotate
+    draw rotate a0
+    jump end_instruction always
+
+    # draw_reset
+    draw reset
+    jump end_instruction always
+
+MLOGDRAW_draw_col:
+    op mul a0 a0 %00000001
+    draw col a0
+    jump end_instruction always
+
+MLOGDRAW_draw_image:
+    jump illegal_instruction greaterThanEq a2 4
+
+    op mul a2 a2 2 # instructions per index
+    op add @counter @counter a2
+
+    lookup block image a3; jump MLOGDRAW_draw_image__end always
+    lookup unit image a3; jump MLOGDRAW_draw_image__end always
+    lookup item image a3; jump MLOGDRAW_draw_image__end always
+    lookup liquid image a3; jump MLOGDRAW_draw_image__end always
+
+MLOGDRAW_draw_image__end:
+    jump MLOGDRAW_draw_image__lookup_fail strictEqual image null
+
+    set result 1
+    draw image a0 a1 image a4 a5
+    jump end_instruction_with_result always
+
+MLOGDRAW_draw_image__lookup_fail:
+    set result 0
+    jump end_instruction_with_result always
+
+MLOGDRAW_draw_print:
+    jump illegal_instruction greaterThanEq a2 9
+
+    op mul a2 a2 2 # instructions per index
+    op add @counter @counter a2
+
+    draw print a0 a1 bottom; jump end_instruction always
+    draw print a0 a1 bottomLeft; jump end_instruction always
+    draw print a0 a1 bottomRight; jump end_instruction always
+    draw print a0 a1 center; jump end_instruction always
+    draw print a0 a1 left; jump end_instruction always
+    draw print a0 a1 right; jump end_instruction always
+    draw print a0 a1 top; jump end_instruction always
+    draw print a0 a1 topLeft; jump end_instruction always
+    draw print a0 a1 topRight; jump end_instruction always

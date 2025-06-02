@@ -481,7 +481,7 @@ format_bin__next:
 format_op_id:
     jump format_null strictEqual n null
     jump format_op_id__unknown lessThan n 0
-    jump format_op_id__unknown greaterThan n 64
+    jump format_op_id__unknown greaterThan n 66
     op mul n n 2
     op add @counter @counter n
     format "illegal_instruction"; set @counter ret
@@ -549,6 +549,8 @@ format_op_id:
     format "AMOMAX.W"; set @counter ret
     format "AMOMINU.W"; set @counter ret
     format "AMOMAXU.W"; set @counter ret
+    format "MLOGSYS"; set @counter ret
+    format "MLOGDRAW"; set @counter ret
 format_op_id__unknown:
     format n; set @counter ret
 

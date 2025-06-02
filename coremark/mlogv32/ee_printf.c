@@ -16,7 +16,7 @@ limitations under the License.
 
 #include <coremark.h>
 #include <stdarg.h>
-#include "ecall.h"
+#include "xmlogsys.h"
 
 #define ZEROPAD   (1 << 0) /* Pad with zero */
 #define SIGN      (1 << 1) /* Unsigned/signed long */
@@ -666,16 +666,16 @@ static unsigned int print_y = 508;
 void
 uart_send_char(char c)
 {
-    ecall(c, 0, 0, 0, 0, 0, 0, PrintChar);
+    MLOGSYS_printchar(c);
 }
 
 void init_printf() {
     print_x = 7;
     print_y = 508;
-    ecall(0, 0, 0, 0, 0, 0, 0, DrawReset);
-    ecall(0, 0, 0, 0, 0, 0, 0, DrawClear);
-    ecall(255, 255, 255, 255, 0, 0, 0, DrawColor);
-    ecall(0, 0, 0, 0, 0, 0, 0, DrawFlush);
+    MLOGDRAW_reset();
+    MLOGDRAW_clear(0, 0, 0);
+    MLOGDRAW_color(255, 255, 255, 255);
+    MLOGSYS_drawflush();
 }
 
 int
@@ -710,8 +710,8 @@ ee_printf(const char *fmt, ...)
         p++;
     }
 
-    ecall(old_print_x, old_print_y, 7, 0, 0, 0, 0, DrawPrint);
-    ecall(0, 0, 0, 0, 0, 0, 0, DrawFlush);
+    MLOGDRAW_print(old_print_x, old_print_y, 7);
+    MLOGSYS_drawflush();
 
     return n;
 }

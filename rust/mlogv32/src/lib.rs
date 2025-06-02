@@ -14,7 +14,6 @@ use core::{
 #[cfg(feature = "alloc")]
 use embedded_alloc::LlffHeap as Heap;
 
-use constants::Syscall;
 use io::{print_flush, print_str};
 
 pub mod constants;
@@ -69,7 +68,7 @@ unsafe extern "C" fn _start() -> ! {
         // not using assert here because the panic handler uses println, which needs alloc
         if heap_size == 0 {
             print_str("heap size must be greater than 0");
-            halt(1);
+            halt();
         }
         HEAP.init(heap_bottom, heap_size);
     }
@@ -111,7 +110,7 @@ fn panic(info: &PanicInfo) -> ! {
 
     print_flush();
 
-    halt(1);
+    halt();
 }
 
 #[cfg(feature = "alloc")]
@@ -142,16 +141,13 @@ macro_rules! entry {
 
 // functions
 
-pub fn halt(code: u32) -> ! {
+pub fn halt() -> ! {
     unsafe {
         asm!(
-            "ecall",
-            in("a0") code,
-            in("a7") Syscall::Halt as u32,
-            options(nostack),
+            ".insn i CUSTOM_0, 0, zero, zero, 0",
+            options(nostack, noreturn),
         );
     };
-    loop {}
 }
 
 pub fn sleep_n(ticks: u32) {

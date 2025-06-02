@@ -1,26 +1,3 @@
-pub enum Syscall {
-    Halt,
-    PrintChar,
-    PrintFlush,
-    DrawClear,
-    DrawColor,
-    DrawCol,
-    DrawStroke,
-    DrawLine,
-    DrawRect,
-    DrawLineRect,
-    DrawPoly,
-    DrawLinePoly,
-    DrawTriangle,
-    DrawImage,
-    DrawPrint,
-    DrawTranslate,
-    DrawScale,
-    DrawRotate,
-    DrawReset,
-    DrawFlush,
-}
-
 pub enum DrawImageType {
     Block,
     Unit,

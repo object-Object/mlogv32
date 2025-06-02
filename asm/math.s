@@ -32,4 +32,5 @@ _start:
     li x23, 1
     sra x24, x22, x23
 
-    j 0
+loop:
+    j loop

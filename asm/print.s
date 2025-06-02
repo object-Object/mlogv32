@@ -5,20 +5,18 @@ _start:
     la s2, msg_len
     
 loop:
-    lbu a0, 0(s0)
-    li a7, 1 # printchar
-    ecall
+    lbu t0, 0(s0)
+    .insn i CUSTOM_0, 0, zero, t0, 1 # printchar
 
     addi s0, s0, 1
     addi s1, s1, 1
     blt s1, s2, loop
 
-    li a7, 2 # printflush
-    ecall
+    .insn i CUSTOM_0, 0, zero, zero, 2 # printflush
 
-    j 0
+    .insn i CUSTOM_0, 0, zero, zero, 0 # halt
 
-.section .data
+.section .rodata
 msg:
     .ascii "hello world!"
     .set msg_len, . - msg

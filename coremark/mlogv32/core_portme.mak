@@ -51,11 +51,11 @@ LFLAGS_END = -nostartfiles -nolibc
 # Flag : PORT_SRCS
 # 	Port specific source files can be added here
 #	You may also need cvt.c if the fcvt functions are not provided as intrinsics by your compiler!
-PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/ecall.c $(PORT_DIR)/entry.s $(PORT_DIR)/cvt.c
+PORT_SRCS = $(PORT_DIR)/core_portme.c $(PORT_DIR)/ee_printf.c $(PORT_DIR)/xmlogsys.c $(PORT_DIR)/entry.s $(PORT_DIR)/cvt.c
 vpath %.c $(PORT_DIR)
 vpath %.s $(PORT_DIR)
 
-PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/ecall.o $(PORT_DIR)/entry.o $(PORT_DIR)/cvt.o
+PORT_OBJS = $(PORT_DIR)/core_portme.o $(PORT_DIR)/ee_printf.o $(PORT_DIR)/xmlogsys.o $(PORT_DIR)/entry.o $(PORT_DIR)/cvt.o
 
 # Flag : LOAD
 #	For a simple port, we assume self hosted compile and run, no load needed.

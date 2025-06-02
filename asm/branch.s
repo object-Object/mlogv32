@@ -13,4 +13,5 @@ loop2:
     addi x3, x3, -1
     bge x3, x4, loop2
 
-    j 0
+loop:
+    j loop

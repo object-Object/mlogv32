@@ -12,36 +12,66 @@ Memory consists of three sections. Two are directly accessible by code: ROM (rx)
 
 Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM; alternatively, it can be `0` to decode the entire ROM.
 
-## System calls
+## Extensions
 
-| Index (a7) | Description      | a0      | a1    | a2        | a3     | a4       | a5       | a6  | Return (a0)             |
-| ---------- | ---------------- | ------- | ----- | --------- | ------ | -------- | -------- | --- | ----------------------- |
-| 0          | Halt             |         |       |           |        |          |          |     |                         |
-| 1          | `printchar`      | value   |       |           |        |          |          |     |                         |
-| 2          | `printflush`     |         |       |           |        |          |          |     |                         |
-| 3          | `draw clear`     | red     | green | blue      |        |          |          |     |                         |
-| 4          | `draw color`     | red     | green | blue      | alpha  |          |          |     |                         |
-| 5          | `draw col`       | color   |       |           |        |          |          |     |                         |
-| 6          | `draw stroke`    | width   |       |           |        |          |          |     |                         |
-| 7          | `draw line`      | x1      | y1    | x2        | y2     |          |          |     |                         |
-| 8          | `draw rect`      | x       | y     | width     | height |          |          |     |                         |
-| 9          | `draw lineRect`  | x       | y     | width     | height |          |          |     |                         |
-| 10         | `draw poly`      | x       | y     | sides     | radius | rotation |          |     |                         |
-| 11         | `draw linePoly`  | x       | y     | sides     | radius | rotation |          |     |                         |
-| 12         | `draw triangle`  | x1      | y1    | x2        | y2     | x3       | y3       |     |                         |
-| 13         | `draw image`     | x       | y     | type      | id     | size     | rotation |     | lookup success (1 or 0) |
-| 14         | `draw print`     | x       | y     | alignment |        |          |          |     |                         |
-| 15         | `draw translate` | x       | y     |           |        |          |          |     |                         |
-| 16         | `draw scale`     | x       | y     |           |        |          |          |     |                         |
-| 17         | `draw rotate`    | degrees |       |           |        |          |          |     |                         |
-| 18         | `draw reset`     |         |       |           |        |          |          |     |                         |
-| 19         | `drawflush`      |         |       |           |        |          |          |     |                         |
+`rv32ima_Zicsr_Zicntr_Zihintpause`
 
-### `draw col`
+| Extension   | Version |
+| ----------- | ------- |
+| I           | 2.1     |
+| M           | 2.0     |
+| A           | 2.1     |
+| Zicsr       | 2.0     |
+| Zicntr      | 2.0     |
+| Zihintpause | 2.0     |
+| Xmlogsys    | N/A     |
+
+### Xmlogsys
+
+This non-standard extension adds instructions to control the mlogv32 processor's hardware and access certain Mlog features.
+
+| funct12 (31:20) | rs1 (19:15) | funct3 (14:12) | rd (11:7) | opcode (6:0) | name     |
+| --------------- | ----------- | -------------- | --------- | ------------ | -------- |
+| funct12         | rs1         | `000`          | `00000`   | `0001011`    | MLOGSYS  |
+| funct12         | `00000`     | `001`          | rd        | `0001011`    | MLOGDRAW |
+
+The MLOG instructions are encoded with an I-type instruction format using the _custom-0_ opcode. The zero-extended immediate is used as a minor opcode (funct12) for implementation reasons.
+
+The MLOGSYS instruction is used for simple system controls, including halt, `printchar`, `printflush`, and `drawflush`.
+
+| funct12 | rs1     | name         |
+| ------- | ------- | ------------ |
+| 0       | `00000` | Halt         |
+| 1       | char    | `printchar`  |
+| 2       | `00000` | `printflush` |
+| 3       | `00000` | `drawflush`  |
+
+The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers a0 to a5 as necessary, and any return value is placed in _rd_. If _rd_ is specified as `00000` in the below table, no value will be written to `rd` in any case.
+
+| funct12 | rd                      | a0      | a1    | a2        | a3     | a4       | a5       | name             |
+| ------- | ----------------------- | ------- | ----- | --------- | ------ | -------- | -------- | ---------------- |
+| 0       | `00000`                 | red     | green | blue      |        |          |          | `draw clear`     |
+| 1       | `00000`                 | red     | green | blue      | alpha  |          |          | `draw color`     |
+| 2       | `00000`                 | color   |       |           |        |          |          | `draw col`       |
+| 3       | `00000`                 | width   |       |           |        |          |          | `draw stroke`    |
+| 4       | `00000`                 | x1      | y1    | x2        | y2     |          |          | `draw line`      |
+| 5       | `00000`                 | x       | y     | width     | height |          |          | `draw rect`      |
+| 6       | `00000`                 | x       | y     | width     | height |          |          | `draw lineRect`  |
+| 7       | `00000`                 | x       | y     | sides     | radius | rotation |          | `draw poly`      |
+| 8       | `00000`                 | x       | y     | sides     | radius | rotation |          | `draw linePoly`  |
+| 9       | `00000`                 | x1      | y1    | x2        | y2     | x3       | y3       | `draw triangle`  |
+| 10      | lookup success (1 or 0) | x       | y     | type      | id     | size     | rotation | `draw image`     |
+| 11      | `00000`                 | x       | y     | alignment |        |          |          | `draw print`     |
+| 12      | `00000`                 | x       | y     |           |        |          |          | `draw translate` |
+| 13      | `00000`                 | x       | y     |           |        |          |          | `draw scale`     |
+| 14      | `00000`                 | degrees |       |           |        |          |          | `draw rotate`    |
+| 15      | `00000`                 |         |       |           |        |          |          | `draw reset`     |
+
+#### `draw col`
 
 `color` should be in integer format, eg. `0xff0000ff`.
 
-### `draw image`
+#### `draw image`
 
 `type`: `lookup` type
 
@@ -56,7 +86,7 @@ Code begins executing at address `0x4`. Address `0x0` must contain the size of t
 
 Returns 1 if the id was successfully looked up, or 0 if the lookup returned null.
 
-### `draw print`
+#### `draw print`
 
 | Alignment   | Value |
 | ----------- | ----- |

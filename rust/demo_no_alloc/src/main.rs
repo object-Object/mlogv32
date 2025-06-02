@@ -54,5 +54,5 @@ fn main() -> ! {
 
     print_flush();
 
-    halt(0)
+    halt()
 }

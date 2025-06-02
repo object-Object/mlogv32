@@ -1,0 +1,19 @@
+#include "xmlogsys.h"
+#include "core_portme.h"
+
+_create_MLOGDRAW_3(clear, 0)
+_create_MLOGDRAW_4(color, 1)
+_create_MLOGDRAW_1(col, 2)
+_create_MLOGDRAW_1(stroke, 3)
+_create_MLOGDRAW_4(line, 4)
+_create_MLOGDRAW_4(rect, 5)
+_create_MLOGDRAW_4(lineRect, 6)
+_create_MLOGDRAW_5(poly, 7)
+_create_MLOGDRAW_5(linePoly, 8)
+_create_MLOGDRAW_6(triangle, 9)
+_create_MLOGDRAW_6(image, 10)
+_create_MLOGDRAW_3(print, 11)
+_create_MLOGDRAW_2(translate, 12)
+_create_MLOGDRAW_2(scale, 13)
+_create_MLOGDRAW_1(rotate, 14)
+_create_MLOGDRAW_0(reset, 15)

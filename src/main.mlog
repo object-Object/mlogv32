@@ -1110,33 +1110,41 @@ SW:
 
 LR.W:
     # R-type: arg1=rs1, arg2=0, arg3=rd
-    # check alignment
-    op mod alignment rs1 4
-    jump misaligned_load notEqual alignment 0
+
+    # check address and alignment
+    op add ret @counter 1
+    jump atomic_validate_address always
 
     # load value
-    set address rs1
     op add ret @counter 1
     jump load_word always
 
     # register reservation set
     # TODO: implement Za64rs?
-    set reservation_set rs1
+    set reservation_set address
 
     jump end_instruction_with_result always
+
+atomic_validate_address:
+    set address rs1
+
+    op mod alignment address 4
+    jump misaligned_load notEqual alignment 0
+
+    jump inaccessible_store lessThan address RAM_START
+    jump inaccessible_store greaterThanEq address RAM_END
+
+    set @counter ret
 
 SC.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
 
     # check address and alignment
-    jump inaccessible_store lessThan rs1 RAM_START
-    jump inaccessible_store greaterThanEq rs1 RAM_END
-
-    op mod alignment rs1 4
-    jump misaligned_load notEqual alignment 0
+    op add ret @counter 1
+    jump atomic_validate_address always
 
     # check if reservation is valid and contains rs1
-    op strictEqual success rs1 reservation_set
+    op strictEqual success address reservation_set
 
     # invalidate reservation
     set reservation_set null
@@ -1150,7 +1158,6 @@ SC.W__no_write_rd:
     # conditionally write value
     jump end_instruction notEqual success true
 
-    set address rs1
     op add access_ram__ret @counter 1
     jump access_ram always
 
@@ -1175,14 +1182,10 @@ AMOSWAP.W:
     
 amo:
     # check address and alignment
-    jump inaccessible_store lessThan rs1 RAM_START
-    jump inaccessible_store greaterThanEq rs1 RAM_END
-
-    op mod alignment rs1 4
-    jump misaligned_load notEqual alignment 0
+    op add ret @counter 1
+    jump atomic_validate_address always
 
     # read
-    set address rs1
     op add ret @counter 1
     jump load_word always
     

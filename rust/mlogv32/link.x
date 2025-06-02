@@ -12,8 +12,8 @@ MEMORY {
     0x3000000 = 128*24 * 4096*4
     0x1000000 = 128*8 * 4096*4
     */
-    rom (rx) : ORIGIN = 0, LENGTH = 0x1000000
-    ram (rw) : ORIGIN = 0x1000000, LENGTH = 0x3000000
+    rom (rx) : ORIGIN = 0, LENGTH = 0x200000
+    ram (rw) : ORIGIN = 0x200000, LENGTH = 0x200000
 }
 
 REGION_ALIAS("REGION_TEXT",   rom);
@@ -24,7 +24,7 @@ REGION_ALIAS("REGION_HEAP",   ram);
 REGION_ALIAS("REGION_STACK",  ram);
 
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
-PROVIDE(_stack_size = 8M);
+PROVIDE(_stack_size = 4K);
 
 /* users can optionally enable the heap by adding another linker script to override this value */
 PROVIDE(_heap_size = 0);

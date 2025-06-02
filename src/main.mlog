@@ -134,6 +134,9 @@ reset__decode:
     op sub decode_duration @time decode_start_time
     set STATE "running"
 
+    # clear LR/SC reservation set
+    set reservation_set null
+
     # start executing code at address 4 (address 0 is __etext)
     set pc 4
     set icache_var null
@@ -238,6 +241,17 @@ done_pause_step:
     jump DIVU always
     jump REM always
     jump REMU always
+    jump AMOADD.W always
+    jump AMOSWAP.W always
+    jump LR.W always
+    jump SC.W always
+    jump AMOXOR.W always
+    jump AMOOR.W always
+    jump AMOAND.W always
+    jump AMOMIN.W always
+    jump AMOMAX.W always
+    jump AMOMINU.W always
+    jump AMOMAXU.W always
 
 # we jump here at the start of the main loop if icache_var is null
 access_icache:
@@ -387,29 +401,29 @@ extend_sign:
 
     set @counter ret
 
-# converts a pair of two's complement unsigned values to signed, or vice versa
+# converts a pair of two's complement unsigned values to signed in-place, or vice versa
 # this converts two values at once because most usages of it need to convert two values
 # also, the values are assumed to be in rs1 and rs2
-# rs1, rs2 -> result1, result2
+# rs1, rs2 -> rs1, rs2
 swap_signedness_rs1_rs2:
     # value < 2^31 ? (value + 2^32) % 2^32 : value - 2^32
     jump swap_signedness__s2u_2 lessThan rs2 0x80000000
-    op sub result2 rs2 0x100000000
+    op sub rs2 rs2 0x100000000
     jump swap_signedness__done_2 always
 swap_signedness__s2u_2:
-    op add result2 rs2 0x100000000
-    op mod result2 result2 0x100000000
+    op add rs2 rs2 0x100000000
+    op mod rs2 rs2 0x100000000
 swap_signedness__done_2:
 
-# converts a two's complement unsigned value in rs1 to signed, or vice versa
-# rs1 -> result1
+# converts a two's complement unsigned value in rs1 to signed in-place, or vice versa
+# rs1 -> rs1
 swap_signedness_rs1:
     jump swap_signedness__s2u_1 lessThan rs1 0x80000000 # 2^31
-    op sub result1 rs1 0x100000000 # 2^32
+    op sub rs1 rs1 0x100000000 # 2^32
     jump swap_signedness__done_1 always
 swap_signedness__s2u_1:
-    op add result1 rs1 0x100000000
-    op mod result1 result1 0x100000000
+    op add rs1 rs1 0x100000000
+    op mod rs1 rs1 0x100000000
 swap_signedness__done_1:
 
     set @counter ret
@@ -572,7 +586,7 @@ decode__ok:
     jump decode_STORE always
     jump decode_illegal_instruction always # STORE-FP
     jump decode_illegal_instruction always # custom-1
-    jump decode_illegal_instruction always # AMO
+    jump decode_AMO always
     jump decode_OP always
     jump decode_LUI always
     jump decode_illegal_instruction always # OP-32
@@ -701,6 +715,32 @@ decode_STORE:
     jump decode_illegal_instruction greaterThanEq funct3 3
 
     op add op_id 16 funct3 # 16 (SB) to 18 (SW)
+    jump end_decode always
+
+decode_AMO:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump decode_illegal_instruction notEqual funct3 0b010
+
+    # funct5
+    # mlogv32 is single-hart, so just ignore aq and rl
+    op shr funct5 funct7 2
+
+    # funct5 either has bits in [4:2] or [1:0] set, never both
+    # (ab)use that so we don't need 32 lookup table entries
+    jump decode_AMO__high greaterThan funct5 0b11
+
+    # low bits
+    op add op_id 54 funct5 # 54 (AMOADD.W) to 57 (SC.W)
+    jump end_decode always
+
+decode_AMO__high:
+    # high bits
+    op and low funct5 0b11
+    jump decode_illegal_instruction notEqual low 0b00
+
+    # note: funct5 >> 2 starts at 1, not 0
+    op shr funct5 funct5 2
+    op add op_id 57 funct5 # 58 (AMOXOR.W) to 64 (AMOMAXU.W)
     jump end_decode always
 
 decode_OP-IMM:
@@ -906,7 +946,7 @@ BLT:
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
-    jump conditional_branch lessThan result1 result2
+    jump conditional_branch lessThan rs1 rs2
     jump end_instruction always
 
 BGE:
@@ -914,7 +954,7 @@ BGE:
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
-    jump conditional_branch greaterThanEq result1 result2
+    jump conditional_branch greaterThanEq rs1 rs2
     jump end_instruction always
 
 BLTU:
@@ -1070,6 +1110,152 @@ SW:
     set length 32
     jump store_value always
 
+LR.W:
+    # R-type: arg1=rs1, arg2=0, arg3=rd
+    # check alignment
+    op mod alignment rs1 4
+    jump misaligned_load notEqual alignment 0
+
+    # load value
+    set address rs1
+    op add ret @counter 1
+    jump load_word always
+
+    # register reservation set
+    # TODO: implement Za64rs?
+    set reservation_set rs1
+
+    jump end_instruction equal arg3 0
+    write result REGISTERS arg3
+    jump end_instruction always
+
+SC.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+
+    # check address and alignment
+    jump inaccessible_store lessThan rs1 RAM_START
+    jump inaccessible_store greaterThanEq rs1 RAM_END
+
+    op mod alignment rs1 4
+    jump misaligned_load notEqual alignment 0
+
+    # check if reservation is valid and contains rs1
+    op strictEqual success rs1 reservation_set
+
+    # invalidate reservation
+    set reservation_set null
+
+    # write 0 to rd if successful, else write 1
+    jump SC.W__no_write_rd equal arg3 0
+    op notEqual result success true
+    write result REGISTERS arg3
+SC.W__no_write_rd:
+
+    # conditionally write value
+    jump end_instruction notEqual success true
+
+    set address rs1
+    op add access_ram__ret @counter 1
+    jump access_ram always
+
+    set value rs2
+
+atomic_store_word:
+    op add ret @counter 1
+    jump swap_endianness always
+    
+    write result ram variable
+
+    set instruction value
+    set decode_var null
+    op add decode_ret @counter 1
+    jump decode always
+
+    jump end_instruction always
+
+AMOSWAP.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 0 # swap
+    
+amo:
+    # check address and alignment
+    jump inaccessible_store lessThan rs1 RAM_START
+    jump inaccessible_store greaterThanEq rs1 RAM_END
+
+    op mod alignment rs1 4
+    jump misaligned_load notEqual alignment 0
+
+    # read
+    set address rs1
+    op add ret @counter 1
+    jump load_word always
+    
+    # put value in rd
+    jump amo__no_write_rd equal arg3 0
+    write result REGISTERS arg3
+amo__no_write_rd:
+
+    # modify
+    op add @counter @counter amo_op
+
+    set result rs2; jump amo__done_modify always # swap
+    op add result result rs2; jump amo__done_modify always # add
+    op and result result rs2; jump amo__done_modify always # and
+    op or result result rs2; jump amo__done_modify always # or
+    op xor result result rs2; jump amo__done_modify always # xor
+    op min result result rs2; jump amo__done_modify always # min
+    op max result result rs2 # max
+
+amo__done_modify:
+
+    # write
+    op and value result 0xffffffff
+    jump atomic_store_word always
+
+AMOADD.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 2 # add
+    jump amo always
+
+AMOAND.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 4 # and
+    jump amo always
+
+AMOOR.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 6 # or
+    jump amo always
+
+AMOXOR.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 8 # xor
+    jump amo always
+
+AMOMIN.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+    set amo_op 10 # min
+    jump amo always
+
+AMOMAX.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+    set amo_op 12 # max
+    jump amo always
+
+AMOMINU.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 10 # min
+    jump amo always
+
+AMOMAXU.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set amo_op 12 # max
+    jump amo always
+
 ADDI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     jump end_instruction equal arg3 0
@@ -1088,7 +1274,7 @@ SLTI:
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
-    op lessThan result result1 result2
+    op lessThan result rs1 rs2
 
     write result REGISTERS arg3
     jump end_instruction always
@@ -1259,7 +1445,7 @@ MULH:
 mulh_s_u:
     jump end_instruction equal arg3 0
 
-    op mul result result1 result2
+    op mul result rs1 rs2
     op shr result result 32
     op and result result 0xffffffff
 
@@ -1270,25 +1456,22 @@ MULHSU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     op add ret @counter 1
     jump swap_signedness_rs1 always
-    set result2 rs2
     jump mulh_s_u always
 
 MULHU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set result1 rs1
-    set result2 rs2
     jump mulh_s_u always
 
 DIV:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump end_instruction equal arg3 0
 
-    jump div_by_zero equal arg2 0
+    jump div_by_zero equal rs2 0
 
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
-    op idiv result result1 result2
+    op idiv result rs1 rs2
     op and result result 0xffffffff
 
     write result REGISTERS arg3
@@ -1298,7 +1481,7 @@ DIVU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump end_instruction equal arg3 0
 
-    jump div_by_zero equal arg2 0
+    jump div_by_zero equal rs2 0
 
     op idiv result rs1 rs2
 
@@ -1314,12 +1497,12 @@ REM:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump end_instruction equal arg3 0
 
-    jump rem_by_zero equal arg2 0
+    jump rem_by_zero equal rs2 0
 
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
-    op mod result result1 result2
+    op mod result rs1 rs2
     op and result result 0xffffffff
 
     write result REGISTERS arg3
@@ -1329,7 +1512,7 @@ REMU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump end_instruction equal arg3 0
 
-    jump rem_by_zero equal arg2 0
+    jump rem_by_zero equal rs2 0
 
     op mod result rs1 rs2
 

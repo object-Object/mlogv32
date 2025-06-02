@@ -6,7 +6,7 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ## Architecture
 
-Extensions: `rv32im_Zicsr_Zicntr_Zihintpause`
+Extensions: `rv32ima_Zicsr_Zicntr_Zihintpause`
 
 Memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rw). The third section is an instruction cache, which takes up 4x as much space as the executable portion of memory. The instruction cache is updated at reset and whenever an instruction writes to RAM.
 

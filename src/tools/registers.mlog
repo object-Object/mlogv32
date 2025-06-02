@@ -453,7 +453,7 @@ format_bin__next:
     set @counter ret
 
 format_op_id:
-    jump format_op_id__unknown greaterThan n 46
+    jump format_op_id__unknown greaterThan n 64
     op mul n n 2
     op add @counter @counter n
     format "illegal_instruction"; set @counter ret
@@ -510,6 +510,17 @@ format_op_id:
     format "DIVU"; set @counter ret
     format "REM"; set @counter ret
     format "REMU"; set @counter ret
+    format "AMOADD.W"; set @counter ret
+    format "AMOSWAP.W"; set @counter ret
+    format "LR.W"; set @counter ret
+    format "SC.W"; set @counter ret
+    format "AMOXOR.W"; set @counter ret
+    format "AMOOR.W"; set @counter ret
+    format "AMOAND.W"; set @counter ret
+    format "AMOMIN.W"; set @counter ret
+    format "AMOMAX.W"; set @counter ret
+    format "AMOMINU.W"; set @counter ret
+    format "AMOMAXU.W"; set @counter ret
 format_op_id__unknown:
     format n; set @counter ret
 

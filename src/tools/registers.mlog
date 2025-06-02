@@ -131,6 +131,7 @@ loop:
     read __etext CPU "__etext"
     read decode_time CPU "decode_duration"
     op floor decode_time decode_time
+    read reservation_set CPU "reservation_set"
 
     read MEMORY_X CPU "MEMORY_X"
     read MEMORY_Y CPU "MEMORY_Y"
@@ -352,20 +353,25 @@ loop:
     draw print 7 300 topLeft
     drawflush DISPLAY
 
-    print "@ipt        = {0}\n"
+    print "@ipt            = {0}\n"
     format ipt
 
-    print "state       = {0}\n"
+    print "state           = {0}\n"
     format state
     format ipt
 
-    print "__etext     = {0}\n"
+    print "__etext         = {0}\n"
     set n __etext
     op add ret @counter 1
     jump format_hex always
 
-    print "decode_time = {0} ms\n\n"
+    print "decode_time     = {0} ms\n"
     format decode_time
+
+    print "reservation_set = {0}\n\n"
+    set n reservation_set
+    op add ret @counter 1
+    jump format_hex always
 
     print "pc    = {0}\n"
     set n pc
@@ -393,6 +399,7 @@ loop:
     jump loop always
 
 format_hex:
+    jump format_null strictEqual n null
     op floor n n
     op and n n 0xffffffff # in case we get a negative value
 format_hex__loop:
@@ -437,6 +444,7 @@ format_hex__next:
     set @counter ret
 
 format_bin:
+    jump format_null strictEqual n null
     set i 0
     op floor n n
     op and n n 0xffffffff
@@ -455,6 +463,7 @@ format_bin__next:
     set @counter ret
 
 format_op_id:
+    jump format_null strictEqual n null
     jump format_op_id__unknown lessThan n 0
     jump format_op_id__unknown greaterThan n 64
     op mul n n 2
@@ -526,6 +535,10 @@ format_op_id:
     format "AMOMAXU.W"; set @counter ret
 format_op_id__unknown:
     format n; set @counter ret
+
+format_null:
+    format "null"
+    set @counter ret
 
 # get the variable name in CSRS for the specified CSR
 # csr -> variable

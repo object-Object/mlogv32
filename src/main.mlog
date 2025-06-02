@@ -1417,7 +1417,7 @@ MULH:
 
 mulh_s_u:
     op mul result rs1 rs2
-    op shr result result 32
+    op idiv result result 0x100000000 # shr 32 - we need to use idiv for this because large negative values cause issues when cast to long
     op and result result 0xffffffff
 
     jump end_instruction_with_result always
@@ -1442,8 +1442,10 @@ DIVU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump div_by_zero equal rs2 0
 
-    op idiv result rs1 rs2
-    op and result result 0xffffffff # only necessary for signed
+    # use div instead of idiv and then cast to long so that it rounds towards zero
+    # https://stackoverflow.com/a/8387377
+    op div result rs1 rs2
+    op and result result 0xffffffff
 
     jump end_instruction_with_result always
 

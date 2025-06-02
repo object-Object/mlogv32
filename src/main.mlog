@@ -546,10 +546,10 @@ decode:
     # opcode
     op and opcode instruction 0b1111111
 
-    # also bail out if we're in the big group of illegal instructions between OP-32 and 48b
-    # TODO: we could use this to reduce the code size a bit
+    # also bail out if we're in the big group of illegal instructions between OP-32 and 48b, or at the end after OP-VE
     jump decode__ok lessThan opcode 0b0111011 # OP-32
     jump decode_illegal_instruction lessThanEq opcode 0b1011111 # 48b
+    jump decode_illegal_instruction greaterThanEq opcode 0b1110111 # OP-VE
 decode__ok:
 
     # decode common fields to save space
@@ -579,6 +579,12 @@ decode__ok:
 
     # counter array based on (opcode >> 2), since the low 2 bits don't matter
     op shr jump opcode 2
+
+    # skip the section of illegal instructions that we already handled above
+    jump decode__before_OP-32 lessThan opcode 0b0111011 # OP-32
+    op sub jump jump 10
+decode__before_OP-32:
+
     op add @counter @counter jump
 
     jump decode_LOAD always
@@ -595,24 +601,24 @@ decode__ok:
     jump decode_AMO always
     jump decode_OP always
     jump decode_LUI always
-    jump decode_illegal_instruction always # OP-32
-    jump decode_illegal_instruction always # 64b
-    jump decode_illegal_instruction always # MADD
-    jump decode_illegal_instruction always # MSUB
-    jump decode_illegal_instruction always # NMSUB
-    jump decode_illegal_instruction always # NMADD
-    jump decode_illegal_instruction always # OP-FP
-    jump decode_illegal_instruction always # OP-V
-    jump decode_illegal_instruction always # custom-2/rv128
-    jump decode_illegal_instruction always # 48b
+    # OP-32
+    # 64b
+    # MADD
+    # MSUB
+    # NMSUB
+    # NMADD
+    # OP-FP
+    # OP-V
+    # custom-2/rv128
+    # 48b
     jump decode_BRANCH always
     jump decode_JALR always
     jump decode_illegal_instruction always # reserved
     jump decode_JAL always
     jump decode_SYSTEM always
-    jump decode_illegal_instruction always # OP-VE
-    jump decode_illegal_instruction always # custom-3/rv128
-    jump decode_illegal_instruction always # >=80b
+    # OP-VE
+    # custom-3/rv128
+    # >=80b
 
 decode_LUI:
     set op_id 1 # LUI

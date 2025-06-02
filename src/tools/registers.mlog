@@ -72,6 +72,23 @@ loop:
     set mark_ram_id 0
     draw clear 0 0 0
 
+    read MEMORY_X CPU "MEMORY_X"
+    read MEMORY_Y CPU "MEMORY_Y"
+    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+
+    read ROM_SIZE CPU "ROM_SIZE"
+    read ROM_START CPU "ROM_START"
+    read ROM_END CPU "ROM_END"
+
+    read RAM_START CPU "RAM_START"
+    read RAM_END CPU "RAM_END"
+
+    read MEMORY_END CPU "MEMORY_END"
+
+    op mul ICACHE_SIZE ROM_SIZE 4
+    set ICACHE_START RAM_END
+    op add ICACHE_END ICACHE_START ICACHE_SIZE
+
     read x0_zero REGISTERS 0
     read x1_ra REGISTERS 1
     read x2_sp REGISTERS 2
@@ -128,25 +145,15 @@ loop:
     read arg2 CPU "arg2"
     read arg3 CPU "arg3"
 
+    set address pc
+    op add ret @counter 1
+    jump load_word always
+    set instruction result
+
     read __etext CPU "__etext"
     read decode_time CPU "decode_duration"
     op floor decode_time decode_time
     read reservation_set CPU "reservation_set"
-
-    read MEMORY_X CPU "MEMORY_X"
-    read MEMORY_Y CPU "MEMORY_Y"
-    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
-
-    read ROM_SIZE CPU "ROM_SIZE"
-    read ROM_START CPU "ROM_START"
-    read ROM_END CPU "ROM_END"
-
-    read RAM_START CPU "RAM_START"
-    read RAM_END CPU "RAM_END"
-
-    op mul ICACHE_SIZE ROM_SIZE 4
-    set ICACHE_START RAM_END
-    op add ICACHE_END ICACHE_START ICACHE_SIZE
 
     print "ROM_START\n{0}"
     set address ROM_START
@@ -347,8 +354,13 @@ loop:
     print "time    = {0}\n"
     format time
 
-    print "instret = {0}\n"
+    print "instret = {0}\n\n"
     format instret
+
+    print "instruction = {0}\n"
+    set n instruction
+    op add ret @counter 1
+    jump format_bin always
 
     draw print 7 300 topLeft
     drawflush DISPLAY
@@ -395,7 +407,7 @@ loop:
     draw print 256 508 topLeft
     drawflush DISPLAY
 
-    wait 0.025
+    wait 0.03
     jump loop always
 
 format_hex:
@@ -583,3 +595,83 @@ mark_ram:
 
     op add mark_ram_id mark_ram_id 1
     set @counter mark_ram__ret
+
+# helper function to find the ram proc and variable for a given address
+# address -> ram, variable
+access_ram:
+    # we store 4 bytes in each value
+    op idiv _address address 4
+
+# access_ram_raw:
+    # get the ram proc containing this address
+    op idiv _ram_index _address MEMORY_PROC_SIZE
+
+    op mod _ram_x _ram_index MEMORY_WIDTH
+    op add _ram_x _ram_x MEMORY_X
+
+    op idiv _ram_y _ram_index MEMORY_WIDTH
+    op add _ram_y _ram_y MEMORY_Y
+
+    getblock building ram _ram_x _ram_y
+
+    # get the variable within the ram proc containing this address
+    op mod _address _address MEMORY_PROC_SIZE
+    set lookup_variable__ret access_ram__ret
+
+# given a value 0 <= _address < MEMORY_PROC_SIZE, resolve that variable in the lookup table
+# this must stay directly after access_ram
+# _address -> variable
+# lookup_variable:
+    op idiv _lookup _address LOOKUP_PROC_SIZE
+    op add _lookup _lookup LOOKUP_START
+    getlink _lookup _lookup
+
+    op mod variable _address LOOKUP_PROC_SIZE
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter lookup_variable__ret
+
+# loads the word from memory that contains the specified address
+# address -> result
+load_word:
+    jump inaccessible_load greaterThanEq address MEMORY_END
+
+    # locate and read value from ram
+    op add access_ram__ret @counter 1
+    jump access_ram always
+    read value ram variable
+    # null is coerced to 0 by swap_endianness
+
+    # tail call, swap_endianness will jump to the ret value of load_word's caller
+
+# converts a little endian 32-bit number to big endian, or vice versa
+# https://stackoverflow.com/a/2182184
+# this MUST stay directly after load_word
+# value -> result
+# swap_endianness:
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl _tmp value 8
+    op and _tmp _tmp 0xff0000
+    op or result result _tmp
+
+    # byte 2 -> byte 1
+    op shr _tmp value 8
+    op and _tmp _tmp 0xff00
+    op or result result _tmp
+
+    # byte 0 -> byte 3
+    op shl _tmp value 24
+    op and _tmp _tmp 0xff000000
+    op or result result _tmp
+
+    set @counter ret
+
+inaccessible_load:
+    set result null
+    set @counter ret

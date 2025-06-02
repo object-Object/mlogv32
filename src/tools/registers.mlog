@@ -394,6 +394,7 @@ loop:
 
 format_hex:
     op floor n n
+    op and n n 0xffffffff # in case we get a negative value
 format_hex__loop:
     op mod digit n 16
     op mul skip digit 2
@@ -438,6 +439,7 @@ format_hex__next:
 format_bin:
     set i 0
     op floor n n
+    op and n n 0xffffffff
 format_bin__loop:
     op mod digit n 2
     op mul skip digit 2
@@ -453,6 +455,7 @@ format_bin__next:
     set @counter ret
 
 format_op_id:
+    jump format_op_id__unknown lessThan n 0
     jump format_op_id__unknown greaterThan n 64
     op mul n n 2
     op add @counter @counter n

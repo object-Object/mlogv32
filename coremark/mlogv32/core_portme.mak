@@ -16,7 +16,7 @@
 
 #File : core_portme.mak
 
-RISCV_ARCH = rv32i_zicsr
+RISCV_ARCH = rv32ima_zicsr
 
 # Flag : OUTFLAG
 #	Use this flag to define how to to get an executable (e.g -o)

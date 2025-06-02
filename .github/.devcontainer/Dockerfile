@@ -11,8 +11,11 @@ USER vscode
 
 RUN rustup toolchain install nightly-2024-11-16
 
+# NOTE: add the following to rustflags if using riscv32imac, since we don't support compressed instructions
+# "-C", "target-feature=-c",
 RUN rustup target add riscv32i-unknown-none-elf
-RUN rustup target add riscv32ima-unknown-none-elf
+RUN rustup target add riscv32im-unknown-none-elf
+RUN rustup target add riscv32imac-unknown-none-elf
 
 RUN rustup component add --toolchain nightly-2024-11-16 clippy llvm-tools
 

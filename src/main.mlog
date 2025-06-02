@@ -213,15 +213,15 @@ done_pause_step:
     jump SRLI always
     jump SRAI always
     jump ADD always
-    jump SUB always
     jump SLL always
     jump SLT always
     jump SLTU always
     jump XOR always
     jump SRL always
-    jump SRA always
     jump OR always
     jump AND always
+    jump SUB always
+    jump SRA always
     jump FENCE always
     jump PRIV always
     jump CSRRW always
@@ -230,6 +230,14 @@ done_pause_step:
     jump CSRRWI always
     jump CSRRSI always
     jump CSRRCI always
+    jump MUL always
+    jump MULH always
+    jump MULHSU always
+    jump MULHU always
+    jump DIV always
+    jump DIVU always
+    jump REM always
+    jump REMU always
 
 # we jump here at the start of the main loop if icache_var is null
 access_icache:
@@ -380,19 +388,11 @@ extend_sign:
     set @counter ret
 
 # converts a pair of two's complement unsigned values to signed, or vice versa
-# this converts two values at once because every usage of it needs to convert two values
+# this converts two values at once because most usages of it need to convert two values
 # also, the values are assumed to be in rs1 and rs2
 # rs1, rs2 -> result1, result2
-swap_signedness:
-    # rs1 < 2^31 ? (rs1 + 2^32) % 2^32 : rs1 - 2^32
-    jump swap_signedness__s2u_1 lessThan rs1 0x80000000 # 2^31
-    op sub result1 rs1 0x100000000 # 2^32
-    jump swap_signedness__done_1 always
-swap_signedness__s2u_1:
-    op add result1 rs1 0x100000000
-    op mod result1 result1 0x100000000
-swap_signedness__done_1:
-
+swap_signedness_rs1_rs2:
+    # value < 2^31 ? (value + 2^32) % 2^32 : value - 2^32
     jump swap_signedness__s2u_2 lessThan rs2 0x80000000
     op sub result2 rs2 0x100000000
     jump swap_signedness__done_2 always
@@ -400,6 +400,17 @@ swap_signedness__s2u_2:
     op add result2 rs2 0x100000000
     op mod result2 result2 0x100000000
 swap_signedness__done_2:
+
+# converts a two's complement unsigned value in rs1 to signed, or vice versa
+# rs1 -> result1
+swap_signedness_rs1:
+    jump swap_signedness__s2u_1 lessThan rs1 0x80000000 # 2^31
+    op sub result1 rs1 0x100000000 # 2^32
+    jump swap_signedness__done_1 always
+swap_signedness__s2u_1:
+    op add result1 rs1 0x100000000
+    op mod result1 result1 0x100000000
+swap_signedness__done_1:
 
     set @counter ret
 
@@ -689,11 +700,8 @@ decode_STORE:
 
     jump decode_illegal_instruction greaterThanEq funct3 3
 
-    op add @counter @counter funct3_x2
-
-    set op_id 16; jump end_decode always # SB
-    set op_id 17; jump end_decode always # SH
-    set op_id 18; jump end_decode always # SW
+    op add op_id 16 funct3 # 16 (SB) to 18 (SW)
+    jump end_decode always
 
 decode_OP-IMM:
     op add @counter @counter funct3_x2
@@ -728,28 +736,26 @@ decode_OP:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump decode_OP_0000000 equal funct7 0b0000000
     jump decode_OP_0100000 equal funct7 0b0100000
+    jump decode_OP_0000001 equal funct7 0b0000001
     jump decode_illegal_instruction always
 
 decode_OP_0000000:
-    op add @counter @counter funct3_x2
-
-    set op_id 28; jump end_decode always # ADD
-    set op_id 30; jump end_decode always # SLL
-    set op_id 31; jump end_decode always # SLT
-    set op_id 32; jump end_decode always # SLTU
-    set op_id 33; jump end_decode always # XOR
-    set op_id 34; jump end_decode always # SRL
-    set op_id 36; jump end_decode always # OR
-    set op_id 37; jump end_decode always # AND
+    op add op_id 28 funct3 # 28 (ADD) to 35 (AND)
+    jump end_decode always
 
 decode_OP_0100000:
-    set op_id 29 # SUB
+    set op_id 36 # SUB
     jump end_decode equal funct3 0b000
 
-    set op_id 35 # SRA
+    set op_id 37 # SRA
     jump end_decode equal funct3 0b101
 
     jump decode_illegal_instruction always
+
+# M extension
+decode_OP_0000001:
+    op add op_id 46 funct3 # 46 (MUL) to 53 (REMU)
+    jump end_decode always
 
 decode_MISC-MEM:
     jump decode_illegal_instruction notEqual funct3 0
@@ -898,7 +904,7 @@ BNE:
 BLT:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
-    jump swap_signedness always
+    jump swap_signedness_rs1_rs2 always
 
     jump conditional_branch lessThan result1 result2
     jump end_instruction always
@@ -906,7 +912,7 @@ BLT:
 BGE:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
-    jump swap_signedness always
+    jump swap_signedness_rs1_rs2 always
 
     jump conditional_branch greaterThanEq result1 result2
     jump end_instruction always
@@ -1080,7 +1086,7 @@ SLTI:
 
     set rs2 arg2
     op add ret @counter 1
-    jump swap_signedness always
+    jump swap_signedness_rs1_rs2 always
 
     op lessThan result result1 result2
 
@@ -1214,6 +1220,126 @@ AND:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     set arg2 rs2
     jump ANDI always
+
+MUL:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump end_instruction equal arg3 0
+
+    # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
+
+    op shr rs1_high rs1 16
+    op and rs1_high rs1_high 0xffff
+
+    op and rs1_low rs1 0xffff
+
+    op shr rs2_high rs2 16
+    op and rs2_high rs2_high 0xffff
+
+    op and rs2_low rs2 0xffff
+
+    op mul low_low rs1_low rs2_low
+    op mul high_low rs1_high rs2_low
+    op mul low_high rs1_low rs2_high
+
+    op add result high_low low_high
+    op shl result result 16
+    op add result result low_low
+    op and result result 0xffffffff
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+# MULH[[S]U] can safely be implemented using double multiplication because we only care about the high order bits
+
+MULH:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+
+mulh_s_u:
+    jump end_instruction equal arg3 0
+
+    op mul result result1 result2
+    op shr result result 32
+    op and result result 0xffffffff
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+MULHSU:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op add ret @counter 1
+    jump swap_signedness_rs1 always
+    set result2 rs2
+    jump mulh_s_u always
+
+MULHU:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set result1 rs1
+    set result2 rs2
+    jump mulh_s_u always
+
+DIV:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump end_instruction equal arg3 0
+
+    jump div_by_zero equal arg2 0
+
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+
+    op idiv result result1 result2
+    op and result result 0xffffffff
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+DIVU:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump end_instruction equal arg3 0
+
+    jump div_by_zero equal arg2 0
+
+    op idiv result rs1 rs2
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+div_by_zero:
+    # all bits set
+    write 0xffffffff REGISTERS arg3
+    jump end_instruction always
+
+REM:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump end_instruction equal arg3 0
+
+    jump rem_by_zero equal arg2 0
+
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+
+    op mod result result1 result2
+    op and result result 0xffffffff
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+REMU:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    jump end_instruction equal arg3 0
+
+    jump rem_by_zero equal arg2 0
+
+    op mod result rs1 rs2
+
+    write result REGISTERS arg3
+    jump end_instruction always
+
+rem_by_zero:
+    # dividend
+    write rs1 REGISTERS arg3
+    jump end_instruction always
 
 FENCE:
     # I-type: arg1=rs1, arg2=imm, arg3=rd

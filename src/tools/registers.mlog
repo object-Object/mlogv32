@@ -485,15 +485,15 @@ format_op_id:
     format "SRLI"; set @counter ret
     format "SRAI"; set @counter ret
     format "ADD"; set @counter ret
-    format "SUB"; set @counter ret
     format "SLL"; set @counter ret
     format "SLT"; set @counter ret
     format "SLTU"; set @counter ret
     format "XOR"; set @counter ret
     format "SRL"; set @counter ret
-    format "SRA"; set @counter ret
     format "OR"; set @counter ret
     format "AND"; set @counter ret
+    format "SUB"; set @counter ret
+    format "SRA"; set @counter ret
     format "FENCE"; set @counter ret
     format "PRIV"; set @counter ret
     format "CSRRW"; set @counter ret
@@ -502,6 +502,14 @@ format_op_id:
     format "CSRRWI"; set @counter ret
     format "CSRRSI"; set @counter ret
     format "CSRRCI"; set @counter ret
+    format "MUL"; set @counter ret
+    format "MULH"; set @counter ret
+    format "MULHSU"; set @counter ret
+    format "MULHU"; set @counter ret
+    format "DIV"; set @counter ret
+    format "DIVU"; set @counter ret
+    format "REM"; set @counter ret
+    format "REMU"; set @counter ret
 format_op_id__unknown:
     format n; set @counter ret
 

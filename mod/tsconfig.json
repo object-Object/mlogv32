@@ -16,5 +16,5 @@
         "module": "CommonJS",
         "lib": ["ES5"]
     },
-    "include": ["./scripts", "./types"]
+    "include": ["./assets/scripts", "./types"]
 }

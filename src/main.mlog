@@ -1455,6 +1455,7 @@ REM:
     jump swap_signedness_rs1_rs2 always
     # continue into REMU
 
+# reimu?
 REMU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     jump rem_by_zero equal rs2 0

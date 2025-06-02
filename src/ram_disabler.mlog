@@ -1,10 +1,16 @@
     setrate 1000
 
+reset:
     set CPU processor1
+    jump reset strictEqual CPU null
     
     read MEMORY_X CPU "MEMORY_X"
     read MEMORY_Y CPU "MEMORY_Y"
     read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+    read ROM_PROC_SIZE CPU "ROM_PROC_SIZE"
+    read ROM_END CPU "ROM_END"
+
+    op idiv ROM_END_INDEX ROM_END ROM_PROC_SIZE
 
     set i 0
 loop:
@@ -15,7 +21,9 @@ loop:
     op add y y MEMORY_Y
 
     getblock building ram x y
-    control enabled ram false
+
+    op lessThan enabled i ROM_END_INDEX
+    control enabled ram enabled
 
     op add i i 1
     jump loop lessThan y @thisy

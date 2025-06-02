@@ -4,7 +4,7 @@
     set LOOKUP_START 0
     set LOOKUP_LINKS 16
     set LOOKUP_PROC_SIZE 260
-    set MEMORY_PROC_SIZE 4096
+    set RAM_PROC_SIZE 4096
 
     # wait until ready
 reset:
@@ -13,6 +13,10 @@ reset:
     getlink INCR i
     read type INCR "_type"
     jump reset equal type "lookup" # sanity check
+
+    op div wait LOOKUP_PROC_SIZE 120 # micro proc instructions/sec
+    op ceil wait wait
+    wait wait
 
     # initialize INCR
 
@@ -27,16 +31,16 @@ reset:
 loop:
     set variable null
     op add ret @counter 1
-    jump lookup_variable lessThan address MEMORY_PROC_SIZE
+    jump lookup_variable lessThan address RAM_PROC_SIZE
 
     write variable INCR prev_variable
     set prev_variable variable
     op add address address 1
-    jump loop lessThanEq address MEMORY_PROC_SIZE
+    jump loop lessThanEq address RAM_PROC_SIZE
 
     stop
 
-# given a value 0 <= address < MEMORY_PROC_SIZE, resolve that variable in the lookup table
+# given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # address -> variable
 lookup_variable:
     op idiv _lookup address LOOKUP_PROC_SIZE

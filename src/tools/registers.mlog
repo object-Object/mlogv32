@@ -17,7 +17,9 @@ reset:
     set DISPLAY display1
 
     read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
-    read MEMORY_PROC_SIZE CPU "MEMORY_PROC_SIZE"
+    read ROM_BYTE_OFFSET CPU "ROM_BYTE_OFFSET"
+    read ROM_PROC_SIZE CPU "ROM_PROC_SIZE"
+    read RAM_PROC_SIZE CPU "RAM_PROC_SIZE"
 
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
@@ -25,7 +27,9 @@ reset:
     jump reset strictEqual CSRS null
     jump reset strictEqual DISPLAY null
     jump reset strictEqual LOOKUP_PROC_SIZE null
-    jump reset strictEqual MEMORY_PROC_SIZE null
+    jump reset strictEqual ROM_BYTE_OFFSET null
+    jump reset strictEqual ROM_PROC_SIZE null
+    jump reset strictEqual RAM_PROC_SIZE null
 
     set i -1
 reset__find_lookup_start:
@@ -576,7 +580,7 @@ mark_ram:
     op idiv _address address 4
 
     # get the ram proc containing this address
-    op idiv _ram_index _address MEMORY_PROC_SIZE
+    op idiv _ram_index _address RAM_PROC_SIZE
 
     op mod _ram_x _ram_index MEMORY_WIDTH
     op add _ram_x _ram_x MEMORY_X
@@ -604,7 +608,7 @@ access_ram:
 
 # access_ram_raw:
     # get the ram proc containing this address
-    op idiv _ram_index _address MEMORY_PROC_SIZE
+    op idiv _ram_index _address RAM_PROC_SIZE
 
     op mod _ram_x _ram_index MEMORY_WIDTH
     op add _ram_x _ram_x MEMORY_X
@@ -615,10 +619,10 @@ access_ram:
     getblock building ram _ram_x _ram_y
 
     # get the variable within the ram proc containing this address
-    op mod _address _address MEMORY_PROC_SIZE
+    op mod _address _address RAM_PROC_SIZE
     set lookup_variable__ret access_ram__ret
 
-# given a value 0 <= _address < MEMORY_PROC_SIZE, resolve that variable in the lookup table
+# given a value 0 <= _address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
 # lookup_variable:
@@ -637,6 +641,8 @@ access_ram:
 # address -> result
 load_word:
     jump inaccessible_load greaterThanEq address MEMORY_END
+
+    jump load_rom_word__no_bounds_check lessThan address ROM_END
 
     # locate and read value from ram
     op add access_ram__ret @counter 1
@@ -670,6 +676,45 @@ load_word:
     op and _tmp _tmp 0xff000000
     op or result result _tmp
 
+    set @counter ret
+
+# loads a word from ROM
+# address -> result
+# load_rom_word:
+    jump inaccessible_load greaterThanEq address ROM_END
+load_rom_word__no_bounds_check:
+    # align to 4 bytes
+    op and _address address 0xfffffffc
+
+    # get rom proc data
+    op idiv _rom_index _address ROM_PROC_SIZE
+
+    op mod _rom_x _rom_index MEMORY_WIDTH
+    op add _rom_x _rom_x MEMORY_X
+
+    op idiv _rom_y _rom_index MEMORY_WIDTH
+    op add _rom_y _rom_y MEMORY_Y
+
+    getblock building _rom _rom_x _rom_y
+    read _rom _rom "v"
+
+    # read word and convert to big endian
+    set result 0
+
+    op mod _str_index _address ROM_PROC_SIZE
+    set _shift 0 # leftmost byte in memory becomes rightmost byte in word
+load_rom_word__loop:
+    read _byte _rom _str_index
+    op sub _byte _byte ROM_BYTE_OFFSET
+    op max _byte _byte 0 # if we're reading out of bounds, default to 0
+    op shl _byte _byte _shift
+    op add result result _byte
+
+    op add _str_index _str_index 1
+    op add _shift _shift 8
+    jump load_rom_word__loop lessThan _shift 32 # stop when we've read 4 bytes
+
+    set _rom null # avoid issues with the vars menu and block data size
     set @counter ret
 
 inaccessible_load:

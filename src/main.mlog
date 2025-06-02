@@ -290,6 +290,12 @@ pause_step__loop:
 
     jump done_pause_step always
 
+# most instructions with an output register jump here after completing successfully
+# writes result to register arg3 (rd) if rd is not x0
+end_instruction_with_result:
+    jump end_instruction equal arg3 0
+    write result REGISTERS arg3
+
 # all instructions jump here after completing successfully
 end_instruction:
     # increment instret
@@ -880,19 +886,14 @@ end_decode__no_write_icache:
 
 LUI:
     # U-type: arg1=null, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-    write arg2 REGISTERS arg3
-    jump end_instruction always
+    set result arg2
+    jump end_instruction_with_result always
 
 AUIPC:
     # U-type: arg1=null, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op add result arg2 pc
     op mod result result 0x100000000 # trunc 32
-    write result REGISTERS arg3
-
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 JAL:
     # J-type: arg1=null, arg2=imm, arg3=rd
@@ -904,16 +905,15 @@ unconditional_jump:
     op mod remainder target 4
     jump instruction_address_misaligned notEqual remainder 0
 
-    jump unconditional_jump__no_write equal arg3 0
-
+    # write pc+4 to rd
     op add result pc 4
     op mod result result 0x100000000 # trunc 32
-    write result REGISTERS arg3
 
-unconditional_jump__no_write:
+    # jump to target
     op sub pc target 4 # HACK: end_instruction always increments the pc, so set the new pc to target - 4
     set icache_var null
-    jump end_instruction always
+
+    jump end_instruction_with_result always
 
 JALR:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
@@ -945,7 +945,10 @@ BLT:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
+    # continue into BLTU
 
+BLTU:
+    # B-type: arg1=rs1, arg2=rs2, arg3=imm
     jump conditional_branch lessThan rs1 rs2
     jump end_instruction always
 
@@ -953,14 +956,7 @@ BGE:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
-
-    jump conditional_branch greaterThanEq rs1 rs2
-    jump end_instruction always
-
-BLTU:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
-    jump conditional_branch lessThan rs1 rs2
-    jump end_instruction always
+    # continue into BGEU
 
 BGEU:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
@@ -988,9 +984,6 @@ load_value:
     op add ret @counter 1
     jump load_word always
 
-    # now that we know we don't need to throw an exception, bail out if rd is x0
-    jump end_instruction equal arg3 0
-
     # right shift by (address % 4) bits
     op mod _shift address 4
     op mul _shift _shift 8
@@ -1006,9 +999,8 @@ load_value:
     op add ret @counter 1
     jump extend_sign equal is_signed true
 
-    # write value to rd
-    write result REGISTERS arg3
-    jump end_instruction always
+    # write result to rd
+    jump end_instruction_with_result always
 
 LH:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
@@ -1125,9 +1117,7 @@ LR.W:
     # TODO: implement Za64rs?
     set reservation_set rs1
 
-    jump end_instruction equal arg3 0
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 SC.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
@@ -1198,14 +1188,26 @@ amo__no_write_rd:
     # modify
     op add @counter @counter amo_op
 
-    set result rs2; jump amo__done_modify always # swap
-    op add result result rs2; jump amo__done_modify always # add
-    op and result result rs2; jump amo__done_modify always # and
-    op or result result rs2; jump amo__done_modify always # or
-    op xor result result rs2; jump amo__done_modify always # xor
-    op min result result rs2; jump amo__done_modify always # min
-    op max result result rs2 # max
-
+    # swap
+    set result rs2
+    jump amo__done_modify always
+    # add
+    op add result result rs2
+    jump amo__done_modify always
+    # and
+    op and result result rs2
+    jump amo__done_modify always
+    # or
+    op or result result rs2
+    jump amo__done_modify always
+    # xor
+    op xor result result rs2
+    jump amo__done_modify always
+    # min
+    op min result result rs2
+    jump amo__done_modify always
+    # max
+    op max result result rs2
 amo__done_modify:
 
     # write
@@ -1236,6 +1238,10 @@ AMOMIN.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
+    # continue into AMOMINU.W
+
+AMOMINU.W:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
     set amo_op 10 # min
     jump amo always
 
@@ -1243,82 +1249,89 @@ AMOMAX.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
-    set amo_op 12 # max
-    jump amo always
-
-AMOMINU.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set amo_op 10 # min
-    jump amo always
+    # continue into AMOMAXU.W
 
 AMOMAXU.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     set amo_op 12 # max
     jump amo always
 
+# most of the register-register instructions are identical to their register-immediate counterparts
+# so just set imm to rs2 and reuse the existing logic, placing them directly before to save space
+
+ADD:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into ADDI
+
 ADDI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op add result rs1 arg2
     op mod result result 0x100000000 # 2^32 (trunc 32)
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+SLT:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into SLTI
 
 SLTI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     set rs2 arg2
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
 
     op lessThan result rs1 rs2
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
+
+SLTU:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into SLTIU
 
 SLTIU:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op lessThan result rs1 arg2
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+XOR:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into XORI
 
 XORI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op xor result rs1 arg2
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+OR:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into ORI
 
 ORI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op or result rs1 arg2
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+AND:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set arg2 rs2
+    # continue into ANDI
 
 ANDI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op and result rs1 arg2
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+SLL:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # continue into SLLI
 
 SLLI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     # truncate before shifting to avoid overflowing 52 integer bits in double
     op sub length 32 arg2
     op pow divisor 2 length
@@ -1326,90 +1339,42 @@ SLLI:
     op mod result rs1 divisor
     op shl result result arg2
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
+
+SRL:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # continue into SRLI
 
 SRLI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op shr result rs1 arg2
+    jump end_instruction_with_result always
 
-    write result REGISTERS arg3
-    jump end_instruction always
+SRA:
+    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # continue into SRAI
 
 SRAI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump end_instruction equal arg3 0
-
     op shr value rs1 arg2
 
     op sub length 32 arg2
     op add ret @counter 1
     jump extend_sign always
 
-    write result REGISTERS arg3
-    jump end_instruction always
-
-# most of the register-register instructions are identical to their register-immediate counterparts
-# so just set imm to rs2 and reuse the existing logic
-
-ADD:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump ADDI always
+    jump end_instruction_with_result always
 
 SUB:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     # apply two's complement to negate the value in rs2 and put it into imm
     op sub arg2 0x100000000 rs2
     op mod arg2 arg2 0x100000000
-
     jump ADDI always
-
-SLL:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
-    jump SLLI always
-
-SLT:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump SLTI always
-
-SLTU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump SLTIU always
-
-XOR:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump XORI always
-
-SRL:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
-    jump SRLI always
-
-SRA:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
-    jump SRAI always
-
-OR:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump ORI always
-
-AND:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    jump ANDI always
 
 MUL:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump end_instruction equal arg3 0
 
     # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
 
@@ -1432,8 +1397,7 @@ MUL:
     op add result result low_low
     op and result result 0xffffffff
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 # MULH[[S]U] can safely be implemented using double multiplication because we only care about the high order bits
 
@@ -1443,14 +1407,11 @@ MULH:
     jump swap_signedness_rs1_rs2 always
 
 mulh_s_u:
-    jump end_instruction equal arg3 0
-
     op mul result rs1 rs2
     op shr result result 32
     op and result result 0xffffffff
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 MULHSU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
@@ -1464,65 +1425,43 @@ MULHU:
 
 DIV:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump end_instruction equal arg3 0
-
-    jump div_by_zero equal rs2 0
-
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
-
-    op idiv result rs1 rs2
-    op and result result 0xffffffff
-
-    write result REGISTERS arg3
-    jump end_instruction always
+    # continue into DIVU
 
 DIVU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump end_instruction equal arg3 0
-
     jump div_by_zero equal rs2 0
 
     op idiv result rs1 rs2
+    op and result result 0xffffffff # only necessary for signed
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 div_by_zero:
     # all bits set
-    write 0xffffffff REGISTERS arg3
-    jump end_instruction always
+    set result 0xffffffff
+    jump end_instruction_with_result always
 
 REM:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump end_instruction equal arg3 0
-
-    jump rem_by_zero equal rs2 0
-
     op add ret @counter 1
     jump swap_signedness_rs1_rs2 always
-
-    op mod result rs1 rs2
-    op and result result 0xffffffff
-
-    write result REGISTERS arg3
-    jump end_instruction always
+    # continue into REMU
 
 REMU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump end_instruction equal arg3 0
-
     jump rem_by_zero equal rs2 0
 
     op mod result rs1 rs2
+    op and result result 0xffffffff # only necessary for signed
 
-    write result REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always
 
 rem_by_zero:
     # dividend
-    write rs1 REGISTERS arg3
-    jump end_instruction always
+    set result rs1
+    jump end_instruction_with_result always
 
 FENCE:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
@@ -1753,34 +1692,30 @@ read_modify_write_csr:
 
     # read
 
-    read value CSRS variable
+    read result CSRS variable
 
     # modify
 
     op add @counter @counter csr_op
 
     # read/write (always write)
-    set result value
+    set new_value result
     jump read_modify_write_csr__always_write always
     # read and set bits (conditional write)
-    op or result rs1 value
+    op or new_value rs1 result
     jump read_modify_write_csr__conditional_write always
     # read and clear bits (conditional write)
-    op not result rs1
-    op and result result value
+    op not new_value rs1
+    op and new_value new_value result
 
     # write
 
 read_modify_write_csr__conditional_write:
-    jump read_modify_write_csr__skip_write equal arg1 0
+    jump end_instruction_with_result equal arg1 0
+
 read_modify_write_csr__always_write:
     jump illegal_instruction equal readonly true
 
-    write result CSRS variable
+    write new_value CSRS variable
 
-    # write initial CSR value to rd
-
-read_modify_write_csr__skip_write:
-    jump end_instruction equal arg3 0
-    write value REGISTERS arg3
-    jump end_instruction always
+    jump end_instruction_with_result always

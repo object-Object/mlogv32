@@ -18,6 +18,8 @@ reset:
     set PAUSE_SWITCH switch2
     set SINGLE_STEP_SWITCH switch3
 
+    set KBCONV_DATA cell2
+
     set DISPLAY display1
 
     # load config
@@ -58,6 +60,8 @@ reset:
 
     draw clear 0 0 0
     drawflush DISPLAY
+
+    read kbconv_rptr KBCONV_DATA 63
 
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
@@ -1646,7 +1650,7 @@ read_modify_write_csr__always_write:
 
 MLOGSYS:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump illegal_instruction greaterThanEq arg2 4
+    jump illegal_instruction greaterThanEq arg2 5
     
     op mul jump arg2 2
     op add @counter @counter jump
@@ -1666,6 +1670,24 @@ MLOGSYS:
     # drawflush
     drawflush DISPLAY
     jump end_instruction always
+
+    # read sortKB
+    # NOTE: if we add more instructions to MLOGSYS, this needs to move to its own label
+
+    # check the current ptr and return 0 if we've already reached it
+    # NOTE: this will fail if the user has typed 63 characters since we last checked
+    set result 0
+    read ptr KBCONV_DATA 63
+    jump end_instruction_with_result equal kbconv_rptr ptr
+
+    # read the char at the current ptr
+    read result KBCONV_DATA kbconv_rptr
+
+    # increment rptr
+    op add kbconv_rptr kbconv_rptr 1
+    op mod kbconv_rptr kbconv_rptr 63
+
+    jump end_instruction_with_result always
 
 MLOGDRAW:
     # I-type: arg1=rs1, arg2=imm, arg3=rd

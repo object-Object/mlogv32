@@ -27,6 +27,7 @@ build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
 
 build/rust/%.bin: FORCE | build/rust
 	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
+	cd rust/$* && cargo objdump --release -- --disassemble > ../../build/rust/$*.dump
 
 build/%.bin: build/%.out
 	riscv32-unknown-elf-objcopy --output-target binary build/$*.out build/$*.bin

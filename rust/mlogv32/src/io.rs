@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::{arch::asm, error::Error, fmt::Display};
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
@@ -45,5 +45,43 @@ pub fn print_flush() {
             ".insn i CUSTOM_0, 0, zero, zero, 2",
             options(nomem, preserves_flags, nostack),
         );
+    }
+}
+
+#[derive(Debug)]
+pub struct ReadCharError {
+    pub value: u32,
+}
+
+impl Display for ReadCharError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        #[cfg(feature = "alloc")]
+        {
+            write!(f, "received invalid char from kbconv: {}", self.value)
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
+            write!(f, "received invalid char from kbconv")
+        }
+    }
+}
+
+impl Error for ReadCharError {}
+
+pub fn read_char() -> Option<Result<char, ReadCharError>> {
+    let value: u32;
+
+    unsafe {
+        asm!(
+            ".insn i CUSTOM_0, 0, {}, zero, 4",
+            out(reg) value,
+            options(nomem, preserves_flags, nostack),
+        );
+    };
+
+    if value == 0 {
+        None
+    } else {
+        Some(char::from_u32(value).ok_or(ReadCharError { value }))
     }
 }

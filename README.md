@@ -39,13 +39,13 @@ The MLOG instructions are encoded with an I-type instruction format using the _c
 
 The MLOGSYS instruction is used for simple system controls, including halt, `printchar`, `printflush`, `drawflush`, and sortKB/kbconv integration.
 
-| funct12 | rs1     | rd                      | name                       |
-| ------- | ------- | ----------------------- | -------------------------- |
-| 0       | `00000` | `00000`                 | Halt                       |
-| 1       | char    | `00000`                 | `printchar`                |
-| 2       | `00000` | `00000`                 | `printflush`               |
-| 3       | `00000` | `00000`                 | `drawflush`                |
-| 4       | `00000` | char (0 if no new data) | Read next char from sortKB |
+| funct12 | rd                      | rs1     | name                       |
+| ------- | ----------------------- | ------- | -------------------------- |
+| 0       | `00000`                 | `00000` | Halt                       |
+| 1       | `00000`                 | char    | `printchar`                |
+| 2       | `00000`                 | `00000` | `printflush`               |
+| 3       | `00000`                 | `00000` | `drawflush`                |
+| 4       | char (0 if no new data) | `00000` | Read next char from sortKB |
 
 The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers a0 to a5 as necessary, and any return value is placed in _rd_. If _rd_ is specified as `00000` in the below table, no value will be written to `rd` in any case.
 

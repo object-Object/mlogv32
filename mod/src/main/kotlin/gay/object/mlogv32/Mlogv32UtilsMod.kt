@@ -29,7 +29,7 @@ class Mlogv32UtilsMod : Mod() {
 
             val bytes = try {
                 processor.flashRom(file)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 Log.err("Failed to flash file.", e)
                 return@register
             }
@@ -77,7 +77,7 @@ class Mlogv32UtilsMod : Mod() {
 
             try {
                 processor.dumpRam(file, startAddress, bytes)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 Log.err("Failed to dump RAM.", e)
                 return@register
             }

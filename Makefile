@@ -23,7 +23,7 @@ $(RUST_PROGRAMS): %: build/rust/%.bin
 # see https://stackoverflow.com/a/61960833
 build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
 	-rm -f build/$*-[0-9].mlog build/$*-[0-9][0-9].mlog
-	python scripts/bin_to_mlog.py build/$*.bin
+	python -m mlogv32.scripts.bin_to_mlog build/$*.bin
 
 build/rust/%.bin: FORCE | build/rust
 	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin

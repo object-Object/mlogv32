@@ -24,7 +24,7 @@ def main(
         amount = ByteUtils.pop_int(data, 2, True)
         output[f"@{ctype}Count"] = amount
 
-        for i in range(0, amount):
+        for _ in range(0, amount):
             name = ByteUtils.pop_UTF(data)
             output[ctype].append(name)
 
@@ -37,12 +37,12 @@ class ByteUtils:
     @staticmethod
     def pop_bytes(data: bytearray, byte_count: int):
         out_bytes = bytearray()
-        for i in range(byte_count):
+        for _ in range(byte_count):
             out_bytes.append(data.pop(0))
         return out_bytes
 
     @staticmethod
-    def pop_int(data: bytearray, byte_count: int, signed=False):
+    def pop_int(data: bytearray, byte_count: int, signed: bool = False):
         return int.from_bytes(ByteUtils.pop_bytes(data, byte_count), signed=signed)
 
     @staticmethod

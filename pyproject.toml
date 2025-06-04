@@ -1,9 +1,120 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "mlogv32"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "pydantic>=2.11.5",
     "pymsch>=0.0.11",
     "pyperclip>=1.9.0",
+    "riscof",
+    "riscv-isac",
     "typer>=0.15.4",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.12",
+]
+
+[tool.uv.sources]
+riscof = { git = "https://github.com/riscv/riscof", rev = "9fe3597d75" }
+riscv-isac = { git = "https://github.com/riscv-software-src/riscv-isac", rev = "777d2b4762" }
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "python/src/mlogv32",
+]
+
+[tool.ruff]
+extend-exclude = [
+    "**/venv",
+    "**/.*",
+    "**/node_modules",
+    "**/__pycache__",
+]
+
+[tool.ruff.lint]
+extend-select = [
+    "I", # import sorting
+    "RUF022", # __all__ sorting
+]
+extend-ignore = [
+    # covered by Pyright
+    "F821", # undefined variable
+    "F401", # imported but unused
+    "F841", # unused variable
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.pyright]
+pythonVersion = "3.12"
+pythonPlatform = "All"
+
+extraPaths = [
+    "python/src",
+]
+include = [
+    "python/*",
+]
+exclude = [
+    "**/venv",
+    "**/.*",
+    "**/node_modules",
+    "**/__pycache__",
+]
+
+typeCheckingMode = "basic"
+
+strictDictionaryInference = true
+strictListInference = true
+strictSetInference = true
+
+reportAssertAlwaysTrue = "error"
+reportConstantRedefinition = "error"
+reportDeprecated = "error"
+reportFunctionMemberAccess = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+reportIncompleteStub = "error"
+reportInconsistentConstructor = "error"
+reportInvalidStringEscapeSequence = "error"
+reportInvalidStubStatement = "error"
+reportInvalidTypeVarUse = "error"
+reportMatchNotExhaustive = "error"
+reportMissingParameterType = "error"
+reportOverlappingOverload = "error"
+reportSelfClsParameterName = "error"
+reportTypeCommentUsage = "error"
+reportUnknownParameterType = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryContains = "error"
+reportUnsupportedDunderAll = "error"
+reportUntypedBaseClass = "error"
+reportUntypedClassDecorator = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedNamedTuple = "error"
+reportWildcardImportFromLibrary = "error"
+
+reportMissingTypeArgument = "warning"
+reportPrivateUsage = "warning"
+reportUnknownLambdaType = "warning"
+reportUnknownMemberType = "warning"
+reportUnnecessaryComparison = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportUnusedClass = "warning"
+reportUnusedExpression = "warning"
+reportUnusedFunction = "warning"
+reportUnusedImport = "warning"
+reportUnusedVariable = "warning"
+
+reportUnknownArgumentType = "information"
+reportUnknownVariableType = "information"
+
+reportMissingTypeStubs = "none"
+reportDuplicateImport = "none"

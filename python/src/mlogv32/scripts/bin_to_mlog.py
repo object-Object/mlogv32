@@ -74,7 +74,7 @@ def main():
         # we didn't break the loop, so flush the rest of the output
         flush_output(is_done=True)
 
-    print(f"Generated {output_index} mlog file{'' if output_index == 1 else 's'}.")
+    print(f"Generated {output_index} mlog file{'' if output_index == 1 else 's'}.")  # pyright: ignore[reportUnnecessaryComparison]
 
 
 if __name__ == "__main__":

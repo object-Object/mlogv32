@@ -19,10 +19,10 @@ class ProcessorAccess:
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def socket_connect(self):
+    def connect(self):
         self.socket.connect((self.hostname, self.port))
 
-    def socket_close(self):
+    def disconnect(self):
         self.socket.close()
 
     def flash(self, path: str | Path):
@@ -59,11 +59,11 @@ class ProcessorAccess:
         return response_ta.validate_json(line)
 
     def __enter__(self):
-        self.socket_connect()
+        self.connect()
         return self
 
     def __exit__(self, *_: Any):
-        self.socket_close()
+        self.disconnect()
         return False  # propagate exceptions
 
 

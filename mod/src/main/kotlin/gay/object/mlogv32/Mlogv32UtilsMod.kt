@@ -1,14 +1,25 @@
 package gay.`object`.mlogv32
 
 import arc.Core
+import arc.Events
 import arc.util.CommandHandler
 import arc.util.Log
 import mindustry.Vars
+import mindustry.core.GameState
+import mindustry.game.EventType
 import mindustry.mod.Mod
 import mindustry.world.blocks.logic.LogicBlock.LogicBuild
 
 @Suppress("unused")
 class Mlogv32UtilsMod : Mod() {
+    override fun init() {
+        Events.on(EventType.StateChangeEvent::class.java) { event ->
+            if (event.to == GameState.State.menu) {
+                ProcessorAccess.stopServer()
+            }
+        }
+    }
+
     override fun registerServerCommands(handler: CommandHandler) {
         handler.register(
             "mlogv32.flash",

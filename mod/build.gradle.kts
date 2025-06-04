@@ -3,7 +3,8 @@ import com.xpdustry.toxopid.spec.ModMetadata
 import com.xpdustry.toxopid.spec.ModPlatform
 
 plugins {
-    alias(libs.plugins.kotlin)
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.indra.common)
     alias(libs.plugins.shadow)
     alias(libs.plugins.toxopid)
@@ -28,7 +29,10 @@ dependencies {
     compileOnly(toxopid.dependencies.arcCore)
     compileOnly(toxopid.dependencies.mindustryCore)
 
-    implementation(kotlin("stdlib-jdk8"))
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlinx.coroutines)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.ktor.network)
 }
 
 indra {

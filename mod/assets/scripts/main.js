@@ -53,6 +53,20 @@ global.override.block(LogicBlock, {
                 })
                 .tooltip("Dump mlogv32 RAM")
                 .size(40);
+
+            buttons
+                .button(Icon.host, Styles.clearTogglei, () => {
+                    if (processor.isServerRunning()) {
+                        processor.stopServer();
+                        Vars.ui.hudfrag.showToast("Stopped socket server.");
+                    } else {
+                        processor.startServer("localhost", 5000);
+                        Vars.ui.hudfrag.showToast("Started socket server at localhost:5000.");
+                    }
+                })
+                .tooltip("Start/stop mlogv32 socket server")
+                .checked(processor.isServerRunning())
+                .size(40);
         }
     },
 });

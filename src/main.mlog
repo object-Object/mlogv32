@@ -976,6 +976,7 @@ unconditional_jump:
 JALR:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     op add target rs1 arg2
+    op and target target 0xfffffffe # clear LSB
     jump unconditional_jump always
 
 BEQ:

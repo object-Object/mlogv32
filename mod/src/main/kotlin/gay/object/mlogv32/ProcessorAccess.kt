@@ -323,7 +323,7 @@ data class StartRequest(val wait: Boolean) : Request() {
         }
 
         while (true) {
-            delay(500)
+            delay(1000/60) // 1 tick
             val stopped = runOnMainThread { processor.resetSwitch.enabled }
             if (stopped) {
                 return SuccessResponse("Processor started and finished executing.")

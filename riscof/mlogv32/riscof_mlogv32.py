@@ -118,7 +118,7 @@ class mlogv32(pluginTemplate):
         with ProcessorAccess(
             "host.docker.internal",
             5000,
-            log_level=logging.INFO,
+            log_level=logging.DEBUG,
         ) as processor:
             # we will iterate over each entry in the testlist. Each entry node will be refered to by the
             # variable testname.
@@ -182,15 +182,15 @@ class mlogv32(pluginTemplate):
                     dump=dump,
                 )
 
-                logger.info(f"Compile command: {compile_cmd}")
+                logger.debug(f"Compile command: {compile_cmd}")
                 if utils.shellCommand(compile_cmd).run(cwd=test_dir) != 0:
                     raise RuntimeError("Compile failed!")
 
-                logger.info(f"Objcopy command: {objcopy_cmd}")
+                logger.debug(f"Objcopy command: {objcopy_cmd}")
                 if utils.shellCommand(objcopy_cmd).run(cwd=test_dir) != 0:
                     raise RuntimeError("Objcopy failed!")
 
-                # logger.info(f"Objdump command: {objdump_cmd}")
+                # logger.debug(f"Objdump command: {objdump_cmd}")
                 # if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
                 #     raise RuntimeError("Objdump failed!")
 
@@ -208,7 +208,7 @@ class mlogv32(pluginTemplate):
                     symbol="end_signature",
                 )
                 signature_length = end_signature - begin_signature
-                logger.info(
+                logger.debug(
                     f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}"
                 )
 
@@ -232,7 +232,7 @@ class mlogv32(pluginTemplate):
                     logger.error(f"Processor execution failed: {msg}")
                     # raise RuntimeError(f"Processor execution failed: {msg}")
 
-                logger.info(f"Finished test: {testname}")
+                logger.debug(f"Finished test: {testname}")
 
         # if target runs are not required then we simply exit as this point after running all
         # the makefile targets.

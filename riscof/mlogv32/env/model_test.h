@@ -11,6 +11,7 @@
   .insn i CUSTOM_0, 0, zero, zero, 0;
 
 #define RVMODEL_BOOT \
+  .option norelax; \
   .word __etext; \
   la t0, __sidata; \
   la t1, __sdata; \

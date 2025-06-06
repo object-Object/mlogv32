@@ -7,7 +7,7 @@
 
     "mounts": ["type=volume,target=/workspaces/mlogv32/.venv"],
 
-    "postAttachCommand": "sudo chown -R vscode /workspaces",
+    "postAttachCommand": ".devcontainer/postAttachCommand.sh",
 
     "customizations": {
         "vscode": {

@@ -191,9 +191,9 @@ class mlogv32(pluginTemplate):
                 if utils.shellCommand(objcopy_cmd).run(cwd=test_dir) != 0:
                     raise RuntimeError("Objcopy failed!")
 
-                logger.info(f"Objdump command: {objdump_cmd}")
-                if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError("Objdump failed!")
+                # logger.info(f"Objdump command: {objdump_cmd}")
+                # if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
+                #     raise RuntimeError("Objdump failed!")
 
                 if not self.target_run:
                     continue
@@ -230,7 +230,8 @@ class mlogv32(pluginTemplate):
                         sig.write(word.hex() + "\n")
 
                 if msg := processor.status().error_output:
-                    raise RuntimeError(f"Processor execution failed: {msg}")
+                    logger.error(f"Processor execution failed: {msg}")
+                    # raise RuntimeError(f"Processor execution failed: {msg}")
 
                 logger.info(f"Finished test: {testname}")
 

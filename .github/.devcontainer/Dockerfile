@@ -2,9 +2,11 @@ FROM mcr.microsoft.com/devcontainers/rust:bookworm
 
 COPY --from=ghcr.io/astral-sh/uv:0.7.6 /uv /uvx /bin/
 
-ENV PATH=$PATH:/opt/riscv/bin
+ENV PATH=$PATH:/opt/riscv/bin:/opt/sail-riscv
 
 COPY --from=ghcr.io/object-object/mlogv32-riscv-gnu-toolchain:rv32ima-ilp32 /opt/riscv /opt/riscv
+
+COPY --from=registry.gitlab.com/incoresemi/docker-images/compliance /usr/bin/riscv_sim_RV32 /opt/sail-riscv/
 
 # avoid permission issues with cargo if cargo install runs as root
 USER vscode

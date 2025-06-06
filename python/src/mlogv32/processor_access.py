@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import socket
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -12,11 +13,20 @@ from pydantic import (
     alias_generators,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ProcessorAccess:
-    def __init__(self, hostname: str, port: int):
+    def __init__(
+        self,
+        hostname: str,
+        port: int,
+        *,
+        log_level: int = logging.DEBUG,
+    ):
         self.hostname = hostname
         self.port = port
+        self.log_level = log_level
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def connect(self):
@@ -31,32 +41,47 @@ class ProcessorAccess:
             raise ValueError("Path must be absolute.")
 
         self._send_request(FlashRequest(path=path))
-        return self._recv_response()
+        return self._recv_response(SuccessResponse)
 
-    def dump(self, path: str | Path):
+    def dump(
+        self,
+        path: str | Path,
+        address: int | None = None,
+        bytes: int | None = None,
+    ):
         path = Path(path)
         if not path.is_absolute():
             raise ValueError("Path must be absolute.")
 
-        self._send_request(DumpRequest(path=path))
-        return self._recv_response()
+        self._send_request(DumpRequest(path=path, address=address, bytes=bytes))
+        return self._recv_response(SuccessResponse)
 
     def start(self, wait: bool):
         self._send_request(StartRequest(wait=wait))
-        return self._recv_response()
+        return self._recv_response(SuccessResponse)
 
     def stop(self):
         self._send_request(StopRequest())
-        return self._recv_response()
+        return self._recv_response(SuccessResponse)
+
+    def status(self):
+        self._send_request(StatusRequest())
+        return self._recv_response(StatusResponse)
 
     def _send_request(self, request: Request) -> None:
         message = request.model_dump_json() + "\n"
+        logger.log(self.log_level, f"Sending request: {message.rstrip()}")
         self.socket.sendall(message.encode("utf-8"))
 
-    def _recv_response(self) -> Response:
+    def _recv_response[T](self, response_type: type[T]) -> T:
         with self.socket.makefile("r", encoding="utf-8") as f:
             line = f.readline()
-        return response_ta.validate_json(line)
+        logger.log(self.log_level, f"Received response: {line.rstrip()}")
+        match TypeAdapter(response_type | ErrorResponse).validate_json(line):
+            case ErrorResponse() as e:
+                raise ProcessorError(e)
+            case response:
+                return response
 
     def __enter__(self):
         self.connect()
@@ -81,6 +106,8 @@ class FlashRequest(BaseModel):
 class DumpRequest(BaseModel):
     type: Literal["dump"] = "dump"
     path: Path
+    address: int | None
+    bytes: int | None
 
 
 class StartRequest(BaseModel):
@@ -92,8 +119,12 @@ class StopRequest(BaseModel):
     type: Literal["stop"] = "stop"
 
 
+class StatusRequest(BaseModel):
+    type: Literal["status"] = "status"
+
+
 type Request = Annotated[
-    FlashRequest | DumpRequest | StartRequest | StopRequest,
+    FlashRequest | DumpRequest | StartRequest | StopRequest | StatusRequest,
     Field(discriminator="type"),
 ]
 
@@ -103,14 +134,25 @@ class SuccessResponse(BaseModel):
     message: str
 
 
+class StatusResponse(BaseModel):
+    type: Literal["status"]
+    running: bool
+    pc: int | None
+    error_output: str
+
+
 class ErrorResponse(BaseModel):
     type: Literal["error"]
     message: str
 
 
 type Response = Annotated[
-    SuccessResponse | ErrorResponse,
+    SuccessResponse | StatusResponse | ErrorResponse,
     Field(discriminator="type"),
 ]
 
-response_ta = TypeAdapter[Response](Response)
+
+class ProcessorError(RuntimeError):
+    def __init__(self, response: ErrorResponse):
+        super().__init__(response.message)
+        self.response = response

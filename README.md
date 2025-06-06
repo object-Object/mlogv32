@@ -14,17 +14,20 @@ Code begins executing at address `0x4`. Address `0x0` must contain the size of t
 
 ## Extensions
 
-`rv32ima_Zicsr_Zicntr_Zihintpause`
+`RV32IMAZicntr_Zicsr_Zifencei_Zihintpause`
 
 | Extension   | Version |
 | ----------- | ------- |
 | I           | 2.1     |
 | M           | 2.0     |
 | A           | 2.1     |
-| Zicsr       | 2.0     |
 | Zicntr      | 2.0     |
+| Zicsr       | 2.0     |
+| Zifencei\*  | 2.0     |
 | Zihintpause | 2.0     |
 | Xmlogsys    | N/A     |
+
+\* Zifencei is currently just a stub - the instruction cache is already updated on every write to memory.
 
 ### Xmlogsys
 

@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import mindustry.Vars
 import mindustry.gen.Building
 import mindustry.world.blocks.logic.LogicBlock.LogicBuild
+import mindustry.world.blocks.logic.MessageBlock.MessageBuild
 import mindustry.world.blocks.logic.SwitchBlock.SwitchBuild
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
@@ -32,6 +33,7 @@ class ProcessorAccess(
     val ramStart: Int,
     val ramEnd: Int,
     val resetSwitch: SwitchBuild,
+    val errorOutput: MessageBuild,
 ) {
     val romSize = romEnd - romStart
     val ramSize = ramEnd - ramStart
@@ -228,6 +230,7 @@ class ProcessorAccess(
                 ramStart = nonNegativeIntVar(build, "RAM_START") ?: return null,
                 ramEnd = nonNegativeIntVar(build, "RAM_END") ?: return null,
                 resetSwitch = buildVar<SwitchBuild>(build, "RESET_SWITCH") ?: return null,
+                errorOutput = buildVar<MessageBuild>(build, "ERROR_OUTPUT") ?: return null,
             )
         }
 
@@ -291,12 +294,19 @@ data class FlashRequest(val path: String) : Request() {
 
 @Serializable
 @SerialName("dump")
-data class DumpRequest(val path: String) : Request() {
+data class DumpRequest(
+    val path: String,
+    val address: Int?,
+    val bytes: Int?,
+) : Request() {
     override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
         val file = Core.files.absolute(path)
         file.parent().mkdirs()
 
-        val bytes = processor.dumpRam(file)
+        val address = address ?: processor.ramStart
+        val bytes = bytes ?: (processor.ramEnd - address)
+
+        processor.dumpRam(file, address, bytes)
         SuccessResponse("Successfully dumped $bytes bytes from RAM to $file.")
     }
 }
@@ -316,7 +326,7 @@ data class StartRequest(val wait: Boolean) : Request() {
             delay(500)
             val stopped = runOnMainThread { processor.resetSwitch.enabled }
             if (stopped) {
-                return SuccessResponse("Processor has halted.")
+                return SuccessResponse("Processor started and finished executing.")
             }
         }
     }
@@ -332,11 +342,31 @@ data object StopRequest : Request() {
 }
 
 @Serializable
+@SerialName("status")
+data object StatusRequest : Request() {
+    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+        StatusResponse(
+            running = !processor.resetSwitch.enabled,
+            pc = processor.build.executor.optionalVar("pc")?.numi(),
+            errorOutput = processor.errorOutput.message?.toString() ?: "",
+        )
+    }
+}
+
+@Serializable
 sealed class Response
 
 @Serializable
 @SerialName("success")
 data class SuccessResponse(val message: String) : Response()
+
+@Serializable
+@SerialName("status")
+data class StatusResponse(
+    val running: Boolean,
+    val pc: Int?,
+    val errorOutput: String,
+) : Response()
 
 @Serializable
 @SerialName("error")

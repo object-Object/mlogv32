@@ -1,4 +1,4 @@
-    setrate 1000
+    setrate 2000
 
     draw reset
     draw color 255 255 255 255
@@ -361,12 +361,15 @@ loop:
     print "instret = {0}\n\n"
     format instret
 
+    draw print 7 300 topLeft
+    drawflush DISPLAY
+
     print "instruction = {0}\n"
     set n instruction
     op add ret @counter 1
     jump format_bin always
 
-    draw print 7 300 topLeft
+    draw print 7 26 topLeft
     drawflush DISPLAY
 
     print "@ipt            = {0}\n"

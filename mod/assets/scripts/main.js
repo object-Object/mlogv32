@@ -7,6 +7,9 @@ const loader = Vars.mods.getMod("mlogv32-utils").loader;
 const ProcessorAccess = loader.loadClass("gay.object.mlogv32.ProcessorAccess");
 const ProcessorAccess_Companion = ProcessorAccess.getField("Companion").get(null);
 
+let serverAddress = "localhost";
+let serverPort = 5000;
+
 global.override.block(LogicBlock, {
     /**
      * @param {Table} table
@@ -60,8 +63,41 @@ global.override.block(LogicBlock, {
                         processor.stopServer();
                         Vars.ui.hudfrag.showToast("Stopped socket server.");
                     } else {
-                        processor.startServer("localhost", 5000);
-                        Vars.ui.hudfrag.showToast("Started socket server at localhost:5000.");
+                        const dialog = new BaseDialog("Server address");
+                        dialog.addCloseButton();
+                        dialog.cont
+                            .field(serverAddress, (address) => {
+                                serverAddress = address;
+                            })
+                            .tooltip("Address");
+                        dialog.cont.row();
+                        dialog.cont
+                            .field(
+                                serverPort.toString(),
+                                TextField.TextFieldFilter.digitsOnly,
+                                (portStr) => {
+                                    const port = parseInt(portStr);
+                                    if (!isNaN(port)) {
+                                        serverPort = port;
+                                    }
+                                }
+                            )
+                            .tooltip("Port");
+                        dialog.cont.row();
+                        dialog.cont
+                            .button("Confirm", Styles.defaultt, () => {
+                                dialog.hide();
+                                processor.startServer(serverAddress, serverPort);
+                                Vars.ui.hudfrag.showToast(
+                                    "Started socket server at " +
+                                        serverAddress +
+                                        ":" +
+                                        serverPort +
+                                        "."
+                                );
+                            })
+                            .width(100);
+                        dialog.show();
                     }
                 })
                 .tooltip("Start/stop mlogv32 socket server")

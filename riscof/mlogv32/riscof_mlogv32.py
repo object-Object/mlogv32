@@ -16,8 +16,7 @@ class mlogv32(pluginTemplate):
 
     __model__ = "mlogv32"
 
-    # TODO: please update the below to indicate family, version, etc of your DUT.
-    __version__ = "XXX"
+    __version__ = "0.1.0"
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)

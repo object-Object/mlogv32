@@ -1,7 +1,7 @@
 # https://riscv-config.readthedocs.io/en/stable/yaml-specs.html
 hart_ids: [0]
 hart0:
-  ISA: RV32IMZicntr_Zicsr_Zifencei_Zihintpause
+  ISA: RV32IMAZicntr_Zicsr_Zifencei_Zihintpause
   physical_addr_sz: 32
   User_Spec_Version: '2.3' # TODO: correct value? the PDF says 20240411, the template said 2.3
   supported_xlen: [32]

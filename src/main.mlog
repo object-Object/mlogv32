@@ -1248,6 +1248,7 @@ amo:
 amo__no_write_rd:
 
     # modify
+    set rs1 result # hack
     op add @counter @counter amo_op
 
     # swap
@@ -1266,10 +1267,18 @@ amo__no_write_rd:
     op xor result result rs2
     jump amo__done_modify always
     # min
-    op min result result rs2
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+    # continue into minu
+    # minu
+    op min result rs1 rs2
     jump amo__done_modify always
     # max
-    op max result result rs2
+    op add ret @counter 1
+    jump swap_signedness_rs1_rs2 always
+    # continue into maxu
+    # maxu
+    op max result rs1 rs2
 amo__done_modify:
 
     # write
@@ -1298,24 +1307,22 @@ AMOXOR.W:
 
 AMOMIN.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
-    # continue into AMOMINU.W
+    set amo_op 10 # min
+    jump amo always
 
 AMOMINU.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set amo_op 10 # min
+    set amo_op 12 # minu
     jump amo always
 
 AMOMAX.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
-    # continue into AMOMAXU.W
+    set amo_op 14 # max
+    jump amo always
 
 AMOMAXU.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set amo_op 12 # max
+    set amo_op 16 # maxu
     jump amo always
 
 # most of the register-register instructions are identical to their register-immediate counterparts

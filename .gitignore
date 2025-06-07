@@ -5,6 +5,7 @@
 *.hex
 /build/
 /out/
+/src/main.mlog
 
 node_modules/
 

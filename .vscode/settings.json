@@ -1,6 +1,7 @@
 {
     "files.associations": {
-        "*.s": "riscv"
+        "*.s": "riscv",
+        "*.mlog.jinja": "mlog"
     },
     "[markdown]": {
         "editor.formatOnSave": true,

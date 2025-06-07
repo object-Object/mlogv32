@@ -1,4 +1,29 @@
+#%# hack: use extends so we don't need to individually import all of the constants
+#% extends 'main.constants.jinja'
+#% block contents
+
+    #%# disable mlogls warnings
+    #% if false
+    # preprocessor variable definitions
+    set {{REGISTERS}} null
+    set {{CSRS}} null
+    set {{INCR}} null
+    set {{CONFIG}} null
+    set {{ERROR_OUTPUT}} null
+    set {{RESET_SWITCH}} null
+    set {{PAUSE_SWITCH}} null
+    set {{SINGLE_STEP_SWITCH}} null
+    set {{KBCONV_DATA}} null
+    set {{DISPLAY}} null
+    # unused variables
+    set STATE STATE
+    set IPT IPT
+    set RESET_SWITCH RESET_SWITCH
+    set ERROR_OUTPUT ERROR_OUTPUT
+    #% endif
+
     # constants
+    # these need to be actual variables so other processors can reference them
     set LOOKUP_PROC_SIZE 260 # number of variables per lookup proc
     set ROM_BYTE_OFFSET 174 # start character for ROM string byte data
     set ROM_PROC_SIZE 16384 # number of bytes per ROM proc
@@ -8,27 +33,17 @@ reset:
     set STATE "reset" # for debug output
 
     # linked buildings
-    set REGISTERS cell1
-    set CSRS processor17
-    set INCR processor18
-    set CONFIG processor19
-
-    set ERROR_OUTPUT message1
-    set RESET_SWITCH switch1
-    set PAUSE_SWITCH switch2
-    set SINGLE_STEP_SWITCH switch3
-
-    set KBCONV_DATA cell2
-
-    set DISPLAY display1
+    # mlogv32-utils needs these to be variables :(
+    set RESET_SWITCH {{RESET_SWITCH}}
+    set ERROR_OUTPUT {{ERROR_OUTPUT}}
 
     # load config
-    read TARGET_IPT CONFIG "IPT"
-    read MEMORY_X_OFFSET CONFIG "MEMORY_X_OFFSET"
-    read MEMORY_Y_OFFSET CONFIG "MEMORY_Y_OFFSET"
-    read MEMORY_WIDTH CONFIG "MEMORY_WIDTH"
-    read ROM_SIZE CONFIG "ROM_SIZE"
-    read RAM_SIZE CONFIG "RAM_SIZE"
+    read TARGET_IPT {{CONFIG}} "IPT"
+    read MEMORY_X_OFFSET {{CONFIG}} "MEMORY_X_OFFSET"
+    read MEMORY_Y_OFFSET {{CONFIG}} "MEMORY_Y_OFFSET"
+    read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
+    read ROM_SIZE {{CONFIG}} "ROM_SIZE"
+    read RAM_SIZE {{CONFIG}} "RAM_SIZE"
 
     op add MEMORY_X MEMORY_X_OFFSET @thisx
     op add MEMORY_Y MEMORY_Y_OFFSET @thisy
@@ -43,8 +58,8 @@ reset:
     op idiv MEMORY_END_INDEX MEMORY_END 4
 
     # loop until the reset switch is linked and disabled
-    jump reset strictEqual RESET_SWITCH null
-    sensor enabled RESET_SWITCH @enabled
+    jump reset strictEqual {{RESET_SWITCH}} null
+    sensor enabled {{RESET_SWITCH}} @enabled
     jump reset equal enabled true
 
     # initialization
@@ -54,14 +69,14 @@ reset:
     set IPT @ipt # for debug output
 
     # initialize peripherals
-    control enabled PAUSE_SWITCH false
+    control enabled {{PAUSE_SWITCH}} false
 
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
 
     draw clear 0 0 0
-    drawflush DISPLAY
+    drawflush {{DISPLAY}}
 
-    read kbconv_rptr KBCONV_DATA 63
+    read kbconv_rptr {{KBCONV_DATA}} 63
 
     # find the index of the first linked lookup proc
     # NOTE: the lookup procs must be linked in a contiguous group
@@ -77,15 +92,6 @@ reset__find_lookup_start:
     jump reset__find_lookup_start notEqual type_var "lookup"
 
     set LOOKUP_START i
-
-    # commonly used CSRs
-    # NOTE: we need to manually update these if we change the RAM proc variables
-    set CSR_CYCLE "WN" # 0xc00
-    set CSR_TIME "WO" # 0xc01
-    set CSR_INSTRET "WP" # 0xc02
-    set CSR_CYCLEH "Y%" # 0xc80
-    set CSR_TIMEH "Y&" # 0xc81
-    set CSR_INSTRETH "Y(" # 0xc82
 
     # read __etext from address 0, or default to ROM_SIZE if __etext is 0
     set address 0
@@ -124,8 +130,8 @@ reset__decode:
     set icache_var null
 
     # reset instret
-    write 0 CSRS CSR_INSTRET
-    write 0 CSRS CSR_INSTRETH
+    write 0 {{CSRS}} "{{ 'instret'|csr }}"
+    write 0 {{CSRS}} "{{ 'instreth'|csr }}"
     set instret 0
 
     # start cycle timer
@@ -147,21 +153,21 @@ done_access_icache:
 
     # load instruction and arguments
     read op_id icache_ram icache_var
-    read icache_var INCR icache_var
+    read icache_var {{INCR}} icache_var
     read arg1 icache_ram icache_var
-    read icache_var INCR icache_var
+    read icache_var {{INCR}} icache_var
     read arg2 icache_ram icache_var
-    read icache_var INCR icache_var
+    read icache_var {{INCR}} icache_var
     read arg3 icache_ram icache_var
-    read icache_var INCR icache_var
+    read icache_var {{INCR}} icache_var
 
     # read rs1 and rs2
     # this wastes 1 cycle for I-type and 2 cycles for U-type and J-type, but it saves a huge amount of space
-    read rs1 REGISTERS arg1
-    read rs2 REGISTERS arg2
+    read rs1 {{REGISTERS}} arg1
+    read rs2 {{REGISTERS}} arg2
     
     # pause if in single-stepping mode
-    sensor enabled SINGLE_STEP_SWITCH @enabled
+    sensor enabled {{SINGLE_STEP_SWITCH}} @enabled
     jump pause_step equal enabled true
 done_pause_step:
 
@@ -255,13 +261,13 @@ pause_step:
     op add ret @counter 1
     jump update_time_and_cycle always
 
-    control enabled PAUSE_SWITCH true
+    control enabled {{PAUSE_SWITCH}} true
     set pause_step_tick @tick
 
 pause_step__loop:
-    sensor enabled RESET_SWITCH @enabled
+    sensor enabled {{RESET_SWITCH}} @enabled
     jump halt equal reset_enabled true
-    sensor enabled PAUSE_SWITCH @enabled
+    sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause_step__loop equal enabled true
 
     # move RESET_TICK forward by the amount of time we were paused for
@@ -278,7 +284,7 @@ pause_step__loop:
 # writes result to register arg3 (rd) if rd is not x0
 end_instruction_with_result:
     jump end_instruction equal arg3 0
-    write result REGISTERS arg3
+    write result {{REGISTERS}} arg3
 
 # all instructions jump here after completing successfully
 end_instruction:
@@ -288,18 +294,18 @@ end_instruction:
 
     set instret 0
 
-    read high CSRS CSR_INSTRETH
+    read high {{CSRS}} "{{ 'instreth'|csr }}"
     op add high high 1
-    write high CSRS CSR_INSTRETH
+    write high {{CSRS}} "{{ 'instreth'|csr }}"
 
 end_instruction__no_overflow:
-    write instret CSRS CSR_INSTRET
+    write instret {{CSRS}} "{{ 'instret'|csr }}"
 
 end_instruction_preserve_instret:
     op add pc pc 4
 
     # halt if the reset switch was manually enabled
-    sensor enabled RESET_SWITCH @enabled
+    sensor enabled {{RESET_SWITCH}} @enabled
     jump main notEqual enabled true
 
 # enable the reset switch, wait until it's disabled, then reset the processor
@@ -308,39 +314,39 @@ halt:
     op add ret @counter 1
     jump update_time_and_cycle always
 
-    control enabled RESET_SWITCH true
+    control enabled {{RESET_SWITCH}} true
     jump reset always
 
 # exceptions
 
 illegal_instruction:
     print "Illegal instruction!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 instruction_address_misaligned:
     print "Instruction address misaligned!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 misaligned_load:
     print "Attempted misaligned load!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 misaligned_store:
     print "Attempted misaligned store!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 inaccessible_load:
     print "Attempted to load from an inaccessible address!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 inaccessible_store:
     print "Attempted to store to an inaccessible address!"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 # helper functions
@@ -355,8 +361,8 @@ update_time_and_cycle:
     op mod low time 0x100000000
     op shr high time 32
 
-    write low CSRS CSR_TIME
-    write high CSRS CSR_TIMEH
+    write low {{CSRS}} "{{ 'time'|csr }}"
+    write high {{CSRS}} "{{ 'timeh'|csr }}"
 
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
@@ -368,8 +374,8 @@ update_time_and_cycle:
     op mod low cycle 0x100000000
     op shr high cycle 32
 
-    write low CSRS CSR_CYCLE
-    write high CSRS CSR_CYCLEH
+    write low {{CSRS}} "{{ 'cycle'|csr }}"
+    write high {{CSRS}} "{{ 'cycleh'|csr }}"
 
     set @counter ret
 
@@ -893,13 +899,13 @@ end_decode__decode_var_valid:
 
     # write to the icache
     write op_id decode_ram decode_var
-    read decode_var INCR decode_var
+    read decode_var {{INCR}} decode_var
     write arg1 decode_ram decode_var
-    read decode_var INCR decode_var
+    read decode_var {{INCR}} decode_var
     write arg2 decode_ram decode_var
-    read decode_var INCR decode_var
+    read decode_var {{INCR}} decode_var
     write arg3 decode_ram decode_var
-    read decode_var INCR decode_var
+    read decode_var {{INCR}} decode_var
 
 end_decode__no_write_icache:
     set @counter decode_ret
@@ -1169,7 +1175,7 @@ SC.W:
     # write 0 to rd if successful, else write 1
     jump SC.W__no_write_rd equal arg3 0
     op notEqual result success true
-    write result REGISTERS arg3
+    write result {{REGISTERS}} arg3
 SC.W__no_write_rd:
 
     # conditionally write value
@@ -1208,7 +1214,7 @@ amo:
     
     # put value in rd
     jump amo__no_write_rd equal arg3 0
-    write result REGISTERS arg3
+    write result {{REGISTERS}} arg3
 amo__no_write_rd:
 
     # modify
@@ -1549,16 +1555,16 @@ EBREAK:
     op add ret @counter 1
     jump update_time_and_cycle always
 
-    control enabled PAUSE_SWITCH true
+    control enabled {{PAUSE_SWITCH}} true
     print "Paused on EBREAK, disable pause switch to continue"
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
 
     set pause_tick @tick
 
 EBREAK__loop:
-    sensor reset_enabled RESET_SWITCH @enabled
+    sensor reset_enabled {{RESET_SWITCH}} @enabled
     jump halt equal reset_enabled true
-    sensor pause_enabled PAUSE_SWITCH @enabled
+    sensor pause_enabled {{PAUSE_SWITCH}} @enabled
     jump EBREAK__loop equal pause_enabled true
 
     # move RESET_TICK forward by the amount of time we were paused for
@@ -1569,7 +1575,7 @@ EBREAK__loop:
     op add ret @counter 1
     jump update_time_and_cycle always
 
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump end_instruction_preserve_instret always
 
 CSRRW:
@@ -1611,7 +1617,7 @@ read_modify_write_csr:
 
     # read
 
-    read result CSRS variable
+    read result {{CSRS}} variable
 
     # modify
 
@@ -1635,7 +1641,7 @@ read_modify_write_csr__conditional_write:
 read_modify_write_csr__always_write:
     jump illegal_instruction equal readonly true
 
-    write new_value CSRS variable
+    write new_value {{CSRS}} variable
 
     jump end_instruction_with_result always
 
@@ -1655,11 +1661,11 @@ MLOGSYS:
     jump end_instruction always
 
     # printflush
-    printflush ERROR_OUTPUT
+    printflush {{ERROR_OUTPUT}}
     jump end_instruction always
 
     # drawflush
-    drawflush DISPLAY
+    drawflush {{DISPLAY}}
     jump end_instruction always
 
     # read sortKB
@@ -1668,11 +1674,11 @@ MLOGSYS:
     # check the current ptr and return 0 if we've already reached it
     # NOTE: this will fail if the user has typed 63 characters since we last checked
     set result 0
-    read ptr KBCONV_DATA 63
+    read ptr {{KBCONV_DATA}} 63
     jump end_instruction_with_result equal kbconv_rptr ptr
 
     # read the char at the current ptr
-    read result KBCONV_DATA kbconv_rptr
+    read result {{KBCONV_DATA}} kbconv_rptr
 
     # increment rptr
     op add kbconv_rptr kbconv_rptr 1
@@ -1684,12 +1690,12 @@ MLOGDRAW:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     jump illegal_instruction greaterThanEq arg2 16
 
-    read a0 REGISTERS 10
-    read a1 REGISTERS 11
-    read a2 REGISTERS 12
-    read a3 REGISTERS 13
-    read a4 REGISTERS 14
-    read a5 REGISTERS 15
+    read a0 {{REGISTERS}} 10
+    read a1 {{REGISTERS}} 11
+    read a2 {{REGISTERS}} 12
+    read a3 {{REGISTERS}} 13
+    read a4 {{REGISTERS}} 14
+    read a5 {{REGISTERS}} 15
 
     op mul jump arg2 2
     op add @counter @counter jump
@@ -1800,3 +1806,5 @@ MLOGDRAW_draw_print:
     draw print a0 a1 top; jump end_instruction always
     draw print a0 a1 topLeft; jump end_instruction always
     draw print a0 a1 topRight; jump end_instruction always
+
+#% endblock contents

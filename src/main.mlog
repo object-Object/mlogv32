@@ -78,36 +78,14 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    # look up commonly used CSRs
-    set csr 0xc00
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_CYCLE variable
-    
-    set csr 0xc01
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_TIME variable
-
-    set csr 0xc02
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_INSTRET variable
-
-    set csr 0xc80
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_CYCLEH variable
-    
-    set csr 0xc81
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_TIMEH variable
-
-    set csr 0xc82
-    op add ret @counter 1
-    jump access_csr always
-    set CSR_INSTRETH variable
+    # commonly used CSRs
+    # NOTE: we need to manually update these if we change the RAM proc variables
+    set CSR_CYCLE "WN" # 0xc00
+    set CSR_TIME "WO" # 0xc01
+    set CSR_INSTRET "WP" # 0xc02
+    set CSR_CYCLEH "Y%" # 0xc80
+    set CSR_TIMEH "Y&" # 0xc81
+    set CSR_INSTRETH "Y(" # 0xc82
 
     # read __etext from address 0, or default to ROM_SIZE if __etext is 0
     set address 0
@@ -121,8 +99,6 @@ reset__nonzero_etext:
 
     # decode .text
     set STATE "decoding"
-    set decode_start_time @time
-    set decode_duration null # for debug output
     set decode_address 4
     set decode_var null
 
@@ -138,7 +114,6 @@ reset__decode:
     op add decode_address decode_address 4
     jump reset__decode lessThan decode_address __etext
 
-    op sub decode_duration @time decode_start_time
     set STATE "running"
 
     # clear LR/SC reservation set

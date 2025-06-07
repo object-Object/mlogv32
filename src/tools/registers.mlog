@@ -155,8 +155,6 @@ loop:
     set instruction result
 
     read __etext CPU "__etext"
-    read decode_time CPU "decode_duration"
-    op floor decode_time decode_time
     read reservation_set CPU "reservation_set"
 
     print "ROM_START\n{0}"
@@ -383,9 +381,6 @@ loop:
     set n __etext
     op add ret @counter 1
     jump format_hex always
-
-    print "decode_time     = {0} ms\n"
-    format decode_time
 
     print "reservation_set = {0}\n\n"
     set n reservation_set

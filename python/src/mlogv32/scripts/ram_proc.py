@@ -331,8 +331,26 @@ def lookup(
     variable = variable_format.get_variable(variable_index)
 
     print(
-        f"Address {hex(address)} is at processor {ram_index} ({ram_x}, {ram_y}) in variable {variable}."
+        f'Address {hex(address)} is at processor {ram_index} ({ram_x}, {ram_y}) in variable "{variable}".'
     )
+
+
+@app.command()
+def variables(
+    indices: list[str],
+    ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
+    variable_format: Annotated[
+        VariableFormat,
+        Option("-f", "--format"),
+    ] = VariableFormat.minimized,
+):
+    for index_str in indices:
+        index = int(index_str, base=0)
+        if index >= ram_size:
+            variable = "(out of range)"
+        else:
+            variable = variable_format.get_variable(index)
+        print(f"{index_str} -> {variable}")
 
 
 @app.command()

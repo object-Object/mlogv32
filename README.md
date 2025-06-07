@@ -6,8 +6,6 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ## Architecture
 
-Extensions: `rv32ima_Zicsr_Zicntr_Zihintpause`
-
 Memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rw). The third section is an instruction cache, which takes up 4x as much space as the executable portion of memory. The instruction cache is updated at reset and whenever an instruction writes to RAM.
 
 Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM; alternatively, it can be `0` to decode the entire ROM.
@@ -104,39 +102,6 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 | topLeft     | 7     |
 | topRight    | 8     |
 
-## Building
-
-### Dev containers
-
-- Open this folder with Dev Containers in VSCode.
-- Set up the Python environment: `uv sync`
-- Build everything: `make`
-
-### Assembly
-
-Assumes Ubuntu WSL on Windows.
-
-- Install `uv`, `gcc-riscv64-unknown-elf`, and `binutils-riscv64-unknown-elf`.
-- Set up the Python environment:
-  - `uv venv .venv-wsl`
-  - `source .venv-wsl/bin/activate`
-  - `uv sync --active`
-- Build all source files in `asm/`: `make asm`
-
-### Rust
-
-Assumes Powershell on Windows.
-
-- Install `uv`, Rust, and `cargo-binutils`.
-- Set up the Python environment:
-  - `uv sync`
-  - `.venv\Scripts\activate.ps1`
-- Build all Rust projects in `rust/`: `make rust`
-
-## Attribution
-
-- SortKB: https://github.com/BasedUser/mPC
-
 ## riscv-arch-test
 
 mlogv32 currently passes all compliance tests for the `RV32IMA` ISA.
@@ -200,3 +165,36 @@ TEST NAME                                                                       
 /workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/rem-01.S            : -           : Passed
 /workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/remu-01.S           : -           : Passed
 ```
+
+## Building
+
+### Dev containers
+
+- Open this folder with Dev Containers in VSCode.
+- Set up the Python environment: `uv sync`
+- Build everything: `make`
+
+### Assembly
+
+Assumes Ubuntu WSL on Windows.
+
+- Install `uv`, `gcc-riscv64-unknown-elf`, and `binutils-riscv64-unknown-elf`.
+- Set up the Python environment:
+  - `uv venv .venv-wsl`
+  - `source .venv-wsl/bin/activate`
+  - `uv sync --active`
+- Build all source files in `asm/`: `make asm`
+
+### Rust
+
+Assumes Powershell on Windows.
+
+- Install `uv`, Rust, and `cargo-binutils`.
+- Set up the Python environment:
+  - `uv sync`
+  - `.venv\Scripts\activate.ps1`
+- Build all Rust projects in `rust/`: `make rust`
+
+## Attribution
+
+- SortKB: https://github.com/BasedUser/mPC

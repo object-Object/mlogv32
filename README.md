@@ -10,6 +10,8 @@ Memory consists of three sections. Two are directly accessible by code: ROM (rx)
 
 Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM; alternatively, it can be `0` to decode the entire ROM.
 
+The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
+
 ## Extensions
 
 `RV32IMAZicntr_Zicsr_Zifencei_Zihintpause`

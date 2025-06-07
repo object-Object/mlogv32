@@ -5,9 +5,16 @@
 
     "image": "ghcr.io/object-object/mlogv32-devcontainer:latest",
 
-    "mounts": ["type=volume,target=/workspaces/mlogv32/.venv"],
+    "mounts": [
+        "type=volume,target=/workspaces/mlogv32/.venv",
+        "type=volume,target=/commandhistory"
+    ],
 
-    "postAttachCommand": ".devcontainer/postAttachCommand.sh",
+    "postAttachCommand": {
+        "Fix workspaces permissions": "sudo chown -R vscode /workspaces",
+        "Fix commandhistory permissions": "sudo chown -R vscode: /commandhistory",
+        "uv sync": "uv sync"
+    },
 
     "customizations": {
         "vscode": {

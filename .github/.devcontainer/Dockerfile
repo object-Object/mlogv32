@@ -8,8 +8,17 @@ COPY --from=ghcr.io/object-object/mlogv32-riscv-gnu-toolchain:rv32ima-ilp32 /opt
 
 COPY --from=registry.gitlab.com/incoresemi/docker-images/compliance /usr/bin/riscv_sim_RV32 /opt/sail-riscv/
 
+# https://code.visualstudio.com/remote/advancedcontainers/persist-bash-history
+ARG USERNAME=vscode
+
+RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    && mkdir /commandhistory \
+    && touch /commandhistory/.bash_history \
+    && chown -R $USERNAME /commandhistory \
+    && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
+
 # avoid permission issues with cargo if cargo install runs as root
-USER vscode
+USER ${USERNAME}
 
 RUN rustup toolchain install nightly-2024-11-16
 

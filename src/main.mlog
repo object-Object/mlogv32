@@ -411,27 +411,19 @@ extend_sign:
 
     set @counter ret
 
-# converts a pair of two's complement unsigned values to signed in-place, or vice versa
+# converts a pair of two's complement unsigned values to signed in-place
 # this converts two values at once because most usages of it need to convert two values
 # also, the values are assumed to be in rs1 and rs2
 # rs1, rs2 -> rs1, rs2
-swap_signedness_rs1_rs2:
-    # value < 2^31 ? (value + 2^32) % 2^32 : value - 2^32
-    jump swap_signedness__s2u_2 lessThan rs2 0x80000000
-    op sub rs2 rs2 0x100000000
-    jump swap_signedness__done_2 always
-swap_signedness__s2u_2:
-    op add rs2 rs2 0x100000000
-    op mod rs2 rs2 0x100000000
-swap_signedness__done_2:
-
-    jump swap_signedness__s2u_1 lessThan rs1 0x80000000 # 2^31
+unsigned_to_signed_rs1_rs2:
+    # value < 2^31 ? value : value - 2^32
+    jump unsigned_to_signed__done_1 lessThan rs1 0x80000000 # 2^31
     op sub rs1 rs1 0x100000000 # 2^32
-    jump swap_signedness__done_1 always
-swap_signedness__s2u_1:
-    op add rs1 rs1 0x100000000
-    op mod rs1 rs1 0x100000000
-swap_signedness__done_1:
+unsigned_to_signed__done_1:
+
+    jump unsigned_to_signed__done_2 lessThan rs2 0x80000000
+    op sub rs2 rs2 0x100000000
+unsigned_to_signed__done_2:
 
     set @counter ret
 
@@ -1000,7 +992,7 @@ BNE:
 BLT:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into BLTU
 
 BLTU:
@@ -1011,7 +1003,7 @@ BLTU:
 BGE:
     # B-type: arg1=rs1, arg2=rs2, arg3=imm
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into BGEU
 
 BGEU:
@@ -1265,14 +1257,14 @@ amo__no_write_rd:
     jump amo__done_modify always
     # min
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into minu
     # minu
     op min result rs1 rs2
     jump amo__done_modify always
     # max
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into maxu
     # maxu
     op max result rs1 rs2
@@ -1345,7 +1337,7 @@ SLTI:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     set rs2 arg2
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
 
     op lessThan result rs1 rs2
 
@@ -1511,7 +1503,7 @@ MULHU:
 DIV:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into DIVU
 
 DIVU:
@@ -1533,7 +1525,7 @@ div_by_zero:
 REM:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
     op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    jump unsigned_to_signed_rs1_rs2 always
     # continue into REMU
 
 # reimu?

@@ -43,5 +43,12 @@ _start:
     mulhu a2, a0, a1
     mulhsu a2, a0, a1
 
+    ebreak
+
+    li a0, 0x66666667
+    li a1, 0xaaaaaaa9
+
+    mulhu a2, a0, a1
+
 loop:
     j loop

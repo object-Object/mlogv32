@@ -425,9 +425,6 @@ swap_signedness__s2u_2:
     op mod rs2 rs2 0x100000000
 swap_signedness__done_2:
 
-# converts a two's complement unsigned value in rs1 to signed in-place, or vice versa
-# rs1 -> rs1
-swap_signedness_rs1:
     jump swap_signedness__s2u_1 lessThan rs1 0x80000000 # 2^31
     op sub rs1 rs1 0x100000000 # 2^32
     jump swap_signedness__done_1 always
@@ -1444,52 +1441,71 @@ SUB:
 
 MUL:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-
-    # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
-
-    op shr rs1_high rs1 16
-    op and rs1_high rs1_high 0xffff
-
-    op and rs1_low rs1 0xffff
-
-    op shr rs2_high rs2 16
-    op and rs2_high rs2_high 0xffff
-
-    op and rs2_low rs2 0xffff
-
-    op mul low_low rs1_low rs2_low
-    op mul high_low rs1_high rs2_low
-    op mul low_high rs1_low rs2_high
+    op add ret @counter 1
+    jump mul_decomp always
 
     op add result high_low low_high
     op shl result result 16
     op add result result low_low
+
     op and result result 0xffffffff
 
     jump end_instruction_with_result always
 
-# MULH[[S]U] can safely be implemented using double multiplication because we only care about the high order bits
+mul_decomp:
+    # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
+
+    op shr rs1_high rs1 16 # no truncate necessary, rs1 is already 32 bits
+    op and rs1_low rs1 0xffff
+    op shr rs2_high rs2 16
+    op and rs2_low rs2 0xffff
+
+    op mul high_high rs1_high rs2_high
+    op mul high_low rs1_high rs2_low
+    op mul low_high rs1_low rs2_high
+    op mul low_low rs1_low rs2_low
+
+    set @counter ret
 
 MULH:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op add ret @counter 1
-    jump swap_signedness_rs1_rs2 always
+    op greaterThanEq rs1_negative rs1 0x80000000 # check if the sign bit is set
+    op greaterThanEq rs2_negative rs2 0x80000000
 
 mulh_s_u:
-    op mul result rs1 rs2
-    op idiv result result 0x100000000 # shr 32 - we need to use idiv for this because large negative values cause issues when cast to long
+    op add ret @counter 1
+    jump mul_decomp always
+
+    # https://github.com/scala-js/scala-js/blob/7e9dbfcd5c9a9eb3fe065db568c4c96ef4e19a81/linker-private-library/src/main/scala/org/scalajs/linker/runtime/RuntimeLong.scala#L422
+    op shr result low_low 16
+    op add result result low_high
+    op add result result high_low
+    op shr result result 16
+    op add result result high_high
+
+    # https://stackoverflow.com/a/22847373
+    jump mulh_s_u__rs1_positive notEqual rs1_negative true
+    op sub result result rs2
+mulh_s_u__rs1_positive:
+
+    jump mulh_s_u__rs2_positive notEqual rs2_negative true
+    op sub result result rs1
+mulh_s_u__rs2_positive:
+
     op and result result 0xffffffff
 
     jump end_instruction_with_result always
 
 MULHSU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op add ret @counter 1
-    jump swap_signedness_rs1 always
+    op greaterThanEq rs1_negative rs1 0x80000000
+    set rs2_negative false
     jump mulh_s_u always
 
 MULHU:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    set rs1_negative false
+    set rs2_negative false
     jump mulh_s_u always
 
 DIV:

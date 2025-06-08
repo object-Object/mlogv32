@@ -1,26 +1,8 @@
+#% from 'macros/bits.jinja' import set_bits, clear_bits
+
 #%# hack: use extends so we don't need to individually import all of the constants
 #% extends 'main.constants.jinja'
 #% block contents
-
-    #%# disable mlogls warnings
-    #% if false
-    # preprocessor variable definitions
-    set {{REGISTERS}} null
-    set {{CSRS}} null
-    set {{INCR}} null
-    set {{CONFIG}} null
-    set {{ERROR_OUTPUT}} null
-    set {{RESET_SWITCH}} null
-    set {{PAUSE_SWITCH}} null
-    set {{SINGLE_STEP_SWITCH}} null
-    set {{KBCONV_DATA}} null
-    set {{DISPLAY}} null
-    # unused variables
-    set STATE STATE
-    set IPT IPT
-    set RESET_SWITCH RESET_SWITCH
-    set ERROR_OUTPUT ERROR_OUTPUT
-    #% endif
 
     # constants
     # these need to be actual variables so other processors can reference them
@@ -129,15 +111,12 @@ reset__decode:
     set pc 4
     set icache_var null
 
-    # reset instret
-    write 0 {{CSRS}} "{{ 'instret'|csr }}"
-    write 0 {{CSRS}} "{{ 'instreth'|csr }}"
-    set instret 0
+    # read instret
+    read minstret {{CSRS}} "{{ 'minstret'|csr }}"
+    read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
     # start cycle timer
     set next_time_update @time
-    set RESET_TIME @time
-    set RESET_TICK @tick
 
 main:
     # update time/cycle
@@ -258,22 +237,11 @@ access_icache:
 
 # we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
-    op add ret @counter 1
-    jump update_time_and_cycle always
-
     control enabled {{PAUSE_SWITCH}} true
-    set pause_step_tick @tick
 
 pause_step__loop:
-    sensor enabled {{RESET_SWITCH}} @enabled
-    jump halt equal reset_enabled true
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause_step__loop equal enabled true
-
-    # move RESET_TICK forward by the amount of time we were paused for
-    # this should have the effect of pausing cycle while paused here
-    op sub delta @tick pause_step_tick
-    op add RESET_TICK RESET_TICK delta
 
     op add ret @counter 1
     jump update_time_and_cycle always
@@ -289,17 +257,18 @@ end_instruction_with_result:
 # all instructions jump here after completing successfully
 end_instruction:
     # increment instret
-    op add instret instret 1
-    jump end_instruction__no_overflow lessThan instret 0x100000000
+    op add minstret minstret 1
+    jump end_instruction__no_overflow lessThan minstret 0x100000000
 
-    set instret 0
+    set minstret 0
 
-    read high {{CSRS}} "{{ 'instreth'|csr }}"
-    op add high high 1
-    write high {{CSRS}} "{{ 'instreth'|csr }}"
+    op add minstreth minstreth 1
+    write minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
+    write minstreth {{CSRS}} "{{ 'instreth'|csr }}"
 
 end_instruction__no_overflow:
-    write instret {{CSRS}} "{{ 'instret'|csr }}"
+    write minstret {{CSRS}} "{{ 'minstret'|csr }}"
+    write minstret {{CSRS}} "{{ 'instret'|csr }}"
 
 end_instruction_preserve_instret:
     op add pc pc 4
@@ -351,30 +320,31 @@ inaccessible_store:
 
 # helper functions
 
-# update the time/timeh and cycle/cycleh CSRs
-# TODO: we could theoretically only update these when they're actually being read, but that would look weird on a debugger
+# update the (m)time/(m)timeh and (m)cycle/(m)cycleh CSRs
 update_time_and_cycle:
     # update time
-    op sub time @time RESET_TIME
+    op sub time @time mtime_initial_value
     op floor time time
 
-    op mod low time 0x100000000
-    op shr high time 32
+    op mod mtime time 0x100000000
+    op shr mtimeh time 32
 
-    write low {{CSRS}} "{{ 'time'|csr }}"
-    write high {{CSRS}} "{{ 'timeh'|csr }}"
+    write mtime {{CSRS}} "{{ 'time'|csr }}"
+    write mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
 
     # update cycle
     # we define the number of cycles as "@ipt * ticks since reset"
     # this should be a decent estimation of the number of mlog instructions executed since reset
-    op sub cycle @tick RESET_TICK
+    op sub cycle @tick mcycle_initial_value
     op mul cycle cycle @ipt
     op floor cycle cycle
 
     op mod low cycle 0x100000000
     op shr high cycle 32
 
+    write low {{CSRS}} "{{ 'mcycle'|csr }}"
     write low {{CSRS}} "{{ 'cycle'|csr }}"
+    write high {{CSRS}} "{{ 'mcycleh'|csr }}"
     write high {{CSRS}} "{{ 'cycleh'|csr }}"
 
     set @counter ret
@@ -459,6 +429,8 @@ lookup_variable:
 # loads the word from memory that contains the specified address
 # address -> result
 load_word:
+    jump load_mmio_word greaterThanEq address {{MMIO_START}}
+
     jump inaccessible_load greaterThanEq address MEMORY_END
 
     jump load_rom_word__no_bounds_check lessThan address ROM_END
@@ -535,6 +507,19 @@ load_rom_word__loop:
 
     set _rom null # avoid issues with the vars menu and block data size
     set @counter ret
+
+load_mmio_word:
+    op sub _jump address {{MMIO_START}}
+    op idiv _jump _jump 4
+    jump inaccessible_load greaterThanEq _jump 4
+
+    op mul _jump _jump 2
+    op add @counter @counter _jump
+
+    set result mtime; set @counter ret
+    set result mtimeh; set @counter ret
+    set result mtimecmp; set @counter ret
+    set result mtimecmph; set @counter ret
 
 # instruction decoder
 
@@ -1067,58 +1052,82 @@ store_value:
     op add address rs1 arg3
     op mod address address 0x100000000 # 2^32 (trunc 32)
     jump inaccessible_store lessThan address RAM_START
+    jump store_value__not_inaccessible greaterThanEq address {{MMIO_START}}
     jump inaccessible_store greaterThanEq address RAM_END
+store_value__not_inaccessible:
 
     # check alignment
     op idiv _bytes length 8
     op mod _alignment address _bytes
     jump misaligned_store notEqual _alignment 0
 
-    # take the low n bits of the value to store, and shift it to line up with the zeros in the mask (big endian)
-    # also get decode_address (word-aligned) for later
+    # create a bitmask with 0 in the section we want to replace and 1 everywhere else
     op mod _shift address 4
-    op sub decode_address address _shift
     op mul _shift _shift 8
 
     op pow _length_squared 2 length
-    op mod value rs2 _length_squared
-    op shl value value _shift
-
-    # convert the value to little endian
-    op add ret @counter 1
-    jump swap_endianness always
-
-    # create a bitmask with 0 in the section we want to replace and 1 everywhere else (little endian)
-    op sub _shift 24 _shift
-    op idiv _shift _shift length
-    op mul _shift _shift length
-
     op sub _bitmask _length_squared 1
     op shl _bitmask _bitmask _shift
     op sub _bitmask 0xffffffff _bitmask
 
+    # take the low n bits of the value to store, and shift it to line up with the zeros in the mask
+    op mod _value rs2 _length_squared
+    op shl _value _value _shift
+
     # load the word containing the address
-    op add access_ram__ret @counter 1
-    jump access_ram always
-    read _word ram variable
+    op add ret @counter 1
+    jump load_word always
 
     # insert the value into the word
-    op and _word _word _bitmask
-    op add value result _word
+    op and result result _bitmask
+    op add value _value result
 
-    # store the new value
-    write value ram variable
+    # if it's in the MMIO range, handle it separately
+    jump store_value__mmio greaterThanEq address {{MMIO_START}}
 
-    # decode the new value and update the icache to allow executing from RAM and self-modifying code
-    # TODO: add a way for the CPU to temporarily disable this for performance?
+    # otherwise, store the new value
     op add ret @counter 1
     jump swap_endianness always
 
-    set instruction result
+    write result ram variable
+
+    # decode the new value and update the icache to allow executing from RAM and self-modifying code
+    # TODO: add a way for the CPU to temporarily disable this for performance?
+    set instruction value
+    op and decode_address address 0xfffffffc # word-aligned
     set decode_var null
     op add decode_ret @counter 1
     jump decode always
 
+    jump end_instruction always
+
+store_value__mmio:
+    # trigger a time update
+    set next_time_update @time
+
+    # hack
+    op shl value_shl value 32
+
+    # if we get to this point, the MMIO address must be valid, so don't do a bounds check
+    op sub _jump address {{MMIO_START}}
+    op idiv _jump _jump 4
+    op mul _jump _jump 3
+    op add @counter @counter _jump
+
+    # mtime
+    op and mtime_initial_value mtime_initial_value 0xffffffff00000000
+    op add mtime_initial_value mtime_initial_value value
+    jump end_instruction always
+    # mtimeh
+    op and mtime_initial_value mtime_initial_value 0xffffffff
+    op add mtime_initial_value mtime_initial_value value_shl
+    jump end_instruction always
+    # mtimecmp
+    set mtimecmp value
+    jump end_instruction always
+    stop
+    # mtimecmph
+    set mtimecmph value
     jump end_instruction always
 
 SH:
@@ -1559,21 +1568,9 @@ EBREAK:
     print "Paused on EBREAK, disable pause switch to continue"
     printflush {{ERROR_OUTPUT}}
 
-    set pause_tick @tick
-
 EBREAK__loop:
-    sensor reset_enabled {{RESET_SWITCH}} @enabled
-    jump halt equal reset_enabled true
-    sensor pause_enabled {{PAUSE_SWITCH}} @enabled
-    jump EBREAK__loop equal pause_enabled true
-
-    # move RESET_TICK forward by the amount of time we were paused for
-    # this should have the effect of pausing cycle while paused here
-    op sub delta @tick pause_tick
-    op add RESET_TICK RESET_TICK delta
-
-    op add ret @counter 1
-    jump update_time_and_cycle always
+    sensor enabled {{PAUSE_SWITCH}} @enabled
+    jump EBREAK__loop equal enabled true
 
     printflush {{ERROR_OUTPUT}}
     jump end_instruction_preserve_instret always
@@ -1641,8 +1638,91 @@ read_modify_write_csr__conditional_write:
 read_modify_write_csr__always_write:
     jump illegal_instruction equal readonly true
 
-    write new_value {{CSRS}} variable
+    # handlers for specific CSRs
+    # misa is WARL, so it should be fine to just ignore all writes
+    jump end_instruction_with_result equal variable "{{ 'misa'|csr }}"
+    jump read_modify_write_csr__mstatus equal variable "{{ 'mstatus'|csr }}"
+    jump read_modify_write_csr__mip equal variable "{{ 'mip'|csr }}"
+    jump read_modify_write_csr__mie equal variable "{{ 'mie'|csr }}"
+    jump read_modify_write_csr__mepc equal variable "{{ 'mepc'|csr }}"
+    jump read_modify_write_csr__mcycle equal variable "{{ 'mcycle'|csr }}"
+    jump read_modify_write_csr__mcycleh equal variable "{{ 'mcycleh'|csr }}"
+    jump read_modify_write_csr__minstret equal variable "{{ 'minstret'|csr }}"
+    jump read_modify_write_csr__minstreth equal variable "{{ 'minstreth'|csr }}"
+read_modify_write_csr__end_handler:
 
+    write new_value {{CSRS}} variable
+    jump end_instruction_with_result always
+
+read_modify_write_csr__mstatus:
+    # clear WPRI and read-only zero fields
+    # SD/XS/FS/VS                -              ----  --
+    # WPRI                        --------                  - - -
+    # S-mode                              - ---         -  -   -
+    # UBE                                                 -
+    op and new_value new_value 0b00000000001000100001100010001000
+
+    # if MPP was set to 10 (reserved) or 01 (S), set it to 0
+    op and mpp new_value {{# set_bits(12, 11) }}
+    jump read_modify_write_csr__mstatus__mpp_m equal mpp {{# set_bits(12, 11) }}
+    op and new_value new_value {{# clear_bits(12, 11) }}
+read_modify_write_csr__mstatus__mpp_m:
+
+    jump read_modify_write_csr__end_handler always
+
+read_modify_write_csr__mip:
+    # clear read-only fields
+    # 0                                          -- - - - - - - -
+    # LCOFIP                                       -
+    # read-only                                      -   -
+    # S-mode                                           -   -   -
+    # MSIP                                                   -
+    op and new_value new_value 0b11111111111111110000100010000000
+
+    # enforce read-only non-zero fields
+    # MEIP                                  -
+    # MTIP                                      -
+    op and tmp result 0b00000000000000000000100010000000
+    op or new_value new_value tmp
+
+    jump read_modify_write_csr__end_handler always
+
+read_modify_write_csr__mie:
+    # clear read-only zero fields
+    # 0                                          -- - - - - - - -
+    # LCOFIE                                       -
+    # S-mode                                           -   -   -
+    # MSIE                                                   -
+    op and new_value new_value 0b11111111111111110000100010000000
+    jump read_modify_write_csr__end_handler always
+
+read_modify_write_csr__mepc:
+    # IALIGN=32, so the two low bits of mepc are always zero
+    op and new_value new_value 0xfffffffc
+    jump read_modify_write_csr__end_handler always
+
+read_modify_write_csr__mcycle:
+    # update the mtime reference point and trigger an update on the next loop
+    # TODO: does this cause precision issues?
+    op and mcycle_initial_value mcycle_initial_value 0xffffffff00000000
+    op add mcycle_initial_value mcycle_initial_value new_value
+    set next_time_update @time
+    jump end_instruction_with_result always
+
+read_modify_write_csr__mcycleh:
+    op and mcycle_initial_value mcycle_initial_value 0xffffffff
+    op shl new_value new_value 32
+    op add mcycle_initial_value mcycle_initial_value new_value
+    set next_time_update @time
+    jump end_instruction_with_result always
+
+read_modify_write_csr__minstret:
+    # a value written to instret by one instruction should be the value read by the following instruction
+    op sub minstret new_value 1
+    jump end_instruction_with_result always
+
+read_modify_write_csr__minstreth:
+    op sub minstreth new_value 1
     jump end_instruction_with_result always
 
 MLOGSYS:
@@ -1808,3 +1888,28 @@ MLOGDRAW_draw_print:
     draw print a0 a1 topRight; jump end_instruction always
 
 #% endblock contents
+
+# disable mlogls warnings
+# put this at the end of the file so it's not included in the output
+# and so that if we go over the 1000 instruction limit, we can ignore the errors below this line
+# {% raw %}
+# preprocessor variable definitions
+set {{ null
+set {{REGISTERS}} null
+set {{CSRS}} null
+set {{INCR}} null
+set {{CONFIG}} null
+set {{ERROR_OUTPUT}} null
+set {{RESET_SWITCH}} null
+set {{PAUSE_SWITCH}} null
+set {{SINGLE_STEP_SWITCH}} null
+set {{KBCONV_DATA}} null
+set {{DISPLAY}} null
+set {{MMIO_START}} null
+# unused variables
+set {{ {{
+set STATE STATE
+set IPT IPT
+set RESET_SWITCH RESET_SWITCH
+set ERROR_OUTPUT ERROR_OUTPUT
+# {% endraw %}

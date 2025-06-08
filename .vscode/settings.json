@@ -25,5 +25,6 @@
     "ruff.organizeImports": true,
     "ruff.lint.ignore": ["I"],
     "python.languageServer": "Pylance",
-    "python.analysis.diagnosticMode": "workspace"
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.packageIndexDepths": [{ "name": "jinja2", "depth": 2 }]
 }

@@ -1,5 +1,5 @@
 {
     "watch": ["src", "python"],
     "ext": "jinja,py",
-    "exec": "python -m mlogv32.preprocessor src/main.mlog.jinja -o src/main.mlog"
+    "exec": "python -m mlogv32.preprocessor src/main.mlog.jinja -o src/main.mlog && python -m mlogv32.preprocessor src/init.mlog.jinja -o src/init.mlog"
 }

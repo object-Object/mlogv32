@@ -12,12 +12,26 @@ Code begins executing at address `0x4`. Address `0x0` must contain the size of t
 
 The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
 
-## Extensions
+### MMIO
+
+Addresses `0xf0000000` - `0xffffffff` are reserved for MMIO.
+
+| Address      | Value       |
+| ------------ | ----------- |
+| `0xf0000000` | `mtime`     |
+| `0xf0000004` | `mtimeh`    |
+| `0xf0000008` | `mtimecmp`  |
+| `0xf000000c` | `mtimecmph` |
+
+## ISA
 
 `RV32IMAZicntr_Zicsr_Zifencei_Zihintpause`
 
+Supported privilege levels: M, U
+
 | Extension   | Version |
 | ----------- | ------- |
+| M-mode      | 1.13    |
 | I           | 2.1     |
 | M           | 2.0     |
 | A           | 2.1     |

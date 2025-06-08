@@ -4,9 +4,13 @@ from typing import Annotated
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from typer import Option, Typer
 
+from mlogv32.preprocessor.extensions import CommentStatement
+
 from . import filters
 
-app = Typer()
+app = Typer(
+    pretty_exceptions_show_locals=False,
+)
 
 
 @app.command()
@@ -24,6 +28,9 @@ def main(
         lstrip_blocks=True,
         trim_blocks=True,
         undefined=StrictUndefined,
+        extensions=[
+            CommentStatement,
+        ],
     )
     env.filters |= {  # pyright: ignore[reportAttributeAccessIssue]
         "ram_variable": filters.ram_variable,

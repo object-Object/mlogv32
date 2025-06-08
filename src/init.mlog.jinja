@@ -1,18 +1,20 @@
-# this processor initializes INCR using a lookup table
-# the lookup table must be linked first, and INCR must be linked last
+# this processor initializes INCR using a lookup table, and sets readonly CSR values
+# the lookup table must be linked first
 
     set LOOKUP_START 0
-    set LOOKUP_LINKS 16
+    set EXPECTED_LINKS 17
     set LOOKUP_PROC_SIZE 260
     set RAM_PROC_SIZE 4096
 
     # wait until ready
 reset:
-    jump reset lessThanEq @links LOOKUP_LINKS # 16 lookup procs + 1 incr proc
-    op sub i @links 1
-    getlink INCR i
+    jump reset lessThan @links EXPECTED_LINKS
+    
+    set INCR processor17
     read type INCR "_type"
     jump reset equal type "lookup" # sanity check
+
+    set CSRS processor18
 
     op div wait LOOKUP_PROC_SIZE 120 # micro proc instructions/sec
     op ceil wait wait
@@ -37,6 +39,28 @@ loop:
     set prev_variable variable
     op add address address 1
     jump loop lessThanEq address RAM_PROC_SIZE
+
+    # initialize CSRS
+
+    # misa
+    # XLEN=32    --
+    # 0            ----
+    # IMAX             ZYXWVUTSRQPONMLKJIHGFEDCBA
+    write 0b01000000100000000001000100000001 CSRS "{{ 'misa'|csr }}"
+
+    # mstatush
+    # WPRI  --------------------------  ----
+    # MBE                             -
+    # SBE                              -
+    write 0b00000000000000000000000000000000 CSRS "{{ 'mstatush'|csr }}"
+
+    # mlogv32 only has one hart, so mhartid is required to be zero
+    write 0 CSRS "{{ 'mhartid'|csr }}"
+
+    # unimplemented fields
+    write 0 CSRS "{{ 'mvendorid'|csr }}"
+    write 0 CSRS "{{ 'marchid'|csr }}"
+    write 0 CSRS "{{ 'mimpid'|csr }}"
 
     stop
 

@@ -43,10 +43,10 @@ loop:
     # initialize CSRS
 
     # misa
-    # XLEN=32    --
-    # 0            ----
-    # IMAX             ZYXWVUTSRQPONMLKJIHGFEDCBA
-    write 0b01000000100000000001000100000001 CSRS "{{ 'misa'|csr }}"
+    # XLEN=32 --
+    # 0         ----
+    # ISA           ZYXWVUTSRQPONMLKJIHGFEDCBA
+    write   0b01000000100100000001000100000001 CSRS "{{ 'misa'|csr }}"
 
     # mstatush
     # WPRI  --------------------------  ----

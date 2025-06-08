@@ -1645,6 +1645,7 @@ read_modify_write_csr__always_write:
     jump read_modify_write_csr__mip equal variable "{{ 'mip'|csr }}"
     jump read_modify_write_csr__mie equal variable "{{ 'mie'|csr }}"
     jump read_modify_write_csr__mepc equal variable "{{ 'mepc'|csr }}"
+    jump read_modify_write_csr__mtvec equal variable "{{ 'mtvec'|csr }}"
     jump read_modify_write_csr__mcycle equal variable "{{ 'mcycle'|csr }}"
     jump read_modify_write_csr__mcycleh equal variable "{{ 'mcycleh'|csr }}"
     jump read_modify_write_csr__minstret equal variable "{{ 'minstret'|csr }}"
@@ -1698,6 +1699,11 @@ read_modify_write_csr__mie:
 
 read_modify_write_csr__mepc:
     # IALIGN=32, so the two low bits of mepc are always zero
+    op and new_value new_value 0xfffffffc
+    jump read_modify_write_csr__end_handler always
+
+read_modify_write_csr__mtvec:
+    # only allow direct mode
     op and new_value new_value 0xfffffffc
     jump read_modify_write_csr__end_handler always
 

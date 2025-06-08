@@ -26,7 +26,7 @@ def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable
 
 @make_jinja_exceptions_suck_a_bit_less
 def ram_variable(index: int):
-    return VariableFormat.minimized.get_variable(index)
+    return VariableFormat.min.get_variable(index)
 
 
 @make_jinja_exceptions_suck_a_bit_less

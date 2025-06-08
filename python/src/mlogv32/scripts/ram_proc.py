@@ -274,20 +274,20 @@ BLOCK_IDS = [
 
 
 class VariableFormat(StrEnum):
-    minimized = "minimized"
-    decimal = "decimal"
+    min = "min"
+    dec = "dec"
     hex = "hex"
 
     def iter_variables(self):
         match self:
-            case VariableFormat.minimized:
+            case VariableFormat.min:
                 for c1 in VARIABLE_NAME_CHARS:
                     for c2 in VARIABLE_NAME_CHARS:
                         yield c1 + c2
 
-            case VariableFormat.decimal:
+            case VariableFormat.dec:
                 for i in itertools.count():
-                    yield f"_{i}"
+                    yield f"v{i}"
 
             case VariableFormat.hex:
                 # only prepend an underscore if we need to
@@ -312,12 +312,12 @@ app = Typer()
 @app.command()
 def lookup(
     address_str: str,
-    ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
+    ram_size: Annotated[int, Option(min=1)] = 4096,
     ram_width: int = 128,
     variable_format: Annotated[
         VariableFormat,
         Option("-f", "--format"),
-    ] = VariableFormat.minimized,
+    ] = VariableFormat.min,
 ):
     address = int(address_str, base=0)
 
@@ -338,11 +338,11 @@ def lookup(
 @app.command()
 def variables(
     indices: list[str],
-    ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
+    ram_size: Annotated[int, Option(min=1)] = 4096,
     variable_format: Annotated[
         VariableFormat,
         Option("-f", "--format"),
-    ] = VariableFormat.minimized,
+    ] = VariableFormat.min,
 ):
     for index_str in indices:
         index = int(index_str, base=0)
@@ -355,14 +355,17 @@ def variables(
 
 @app.command()
 def build(
-    ram_size: Annotated[int, Option(min=1, max=726 * 6)] = 4096,
+    ram_size: Annotated[int, Option(min=1)] = 4096,
     lookup_width: Annotated[int, Option(min=1)] = 4,
     variable_format: Annotated[
         VariableFormat,
         Option("-f", "--format"),
-    ] = VariableFormat.minimized,
+    ] = VariableFormat.min,
     out: Path = Path("schematics"),
 ):
+    if ram_size > 726 * 6:
+        print(f"WARNING: RAM proc sizes over {726 * 6} may fail to save!")
+
     lookup_procs, ram_proc = generate_code(ram_size, variable_format)
 
     out.mkdir(parents=True, exist_ok=True)

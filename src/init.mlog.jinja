@@ -62,6 +62,12 @@ loop:
     write 0 CSRS "{{ 'marchid'|csr }}"
     write 0 CSRS "{{ 'mimpid'|csr }}"
 
+    # default values for writable CSRs
+    write 0 CSRS "{{ 'mtvec'|csr }}"
+    write 0 CSRS "{{ 'mepc'|csr }}"
+    write 0 CSRS "{{ 'mscratch'|csr }}"
+    write 0 CSRS "{{ 'mie'|csr }}"
+
     stop
 
 # given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table

@@ -7,7 +7,7 @@
    #{{'\n'}}    draw rect {{ 8 + col * 7 }} {{ 508 - row * 13 - 3 }} {{ width * 7 }} {{ height * -13 }}
 #% endmacro
     
-    setrate 2000
+    setrate 5000
 
     set LOOKUP_PROC_SIZE 260
     set ROM_BYTE_OFFSET 174
@@ -302,14 +302,29 @@ loop:
 
     #{{'\n'}} {{ print(14, 0) }}
 
-    print "cycle   = {0}\n"
-    format cycle
+    print "pc          = {0}\n"
+    set n pc
+    op add ret @counter 1
+    jump format_hex always
 
-    print "time    = {0}\n"
-    format time
+    print "op_id       = {0}\n"
+    set n op_id
+    op add ret @counter 1
+    jump format_op_id always
 
-    print "instret = {0}\n\n"
-    format instret
+    print "arg1        = {0}\n"
+    format arg1
+
+    print "arg2        = {0}\n"
+    format arg2
+
+    print "arg3        = {0}\n\n"
+    format arg3
+
+    print "instruction = {0}\n\n"
+    set n instruction
+    op add ret @counter 1
+    jump format_bin always
 
     print "mtvec    = {0}\n"
     set n mtvec
@@ -346,29 +361,14 @@ loop:
     op add ret @counter 1
     jump format_bin always
 
-    print "pc          = {0}\n"
-    set n pc
-    op add ret @counter 1
-    jump format_hex always
+    print "cycle   = {0}\n"
+    format cycle
 
-    print "op_id       = {0}\n"
-    set n op_id
-    op add ret @counter 1
-    jump format_op_id always
+    print "time    = {0}\n"
+    format time
 
-    print "arg1        = {0}\n"
-    format arg1
-
-    print "arg2        = {0}\n"
-    format arg2
-
-    print "arg3        = {0}\n\n"
-    format arg3
-
-    print "instruction = {0}\n"
-    set n instruction
-    op add ret @counter 1
-    jump format_bin always
+    print "instret = {0}\n\n"
+    format instret
 
     #{{'\n'}} {{ print(0, 17) }}
 
@@ -484,7 +484,7 @@ done_privilege_mode:
 
     #{{'\n'}} {{ print(36, 17) }}
 
-    wait 0.02
+    wait 0.00001
     jump loop always
 
 format_hex:
@@ -596,7 +596,7 @@ format_op_id:
     format "SUB"; set @counter ret
     format "SRA"; set @counter ret
     format "FENCE"; set @counter ret
-    format "PRIV"; set @counter ret
+    jump format_op_id__priv always; stop
     format "CSRRW"; set @counter ret
     format "CSRRS"; set @counter ret
     format "CSRRC"; set @counter ret
@@ -624,8 +624,23 @@ format_op_id:
     format "AMOMAXU.W"; set @counter ret
     format "MLOGSYS"; set @counter ret
     format "MLOGDRAW"; set @counter ret
+
 format_op_id__unknown:
     format n; set @counter ret
+
+format_op_id__priv:
+    set name "ECALL"
+    jump format_op_id__priv__ok equal arg2 0
+    set name "EBREAK"
+    jump format_op_id__priv__ok equal arg2 1
+    set name "MRET"
+    jump format_op_id__priv__ok equal arg2 0b001100000010
+    set name "WFI"
+    jump format_op_id__priv__ok equal arg2 0b000100000101
+    jump format_op_id__unknown always
+format_op_id__priv__ok:
+    format name
+    set @counter ret
 
 format_null:
     format "null"

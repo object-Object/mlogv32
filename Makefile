@@ -46,7 +46,7 @@ build/%.out: build/%.o
 	riscv32-unknown-elf-ld --script=rust/mlogv32/link.x -o build/$*.out build/$*.o
 
 build/%.o: asm/%.s | build
-	riscv32-unknown-elf-gcc --compile -o build/$*.o asm/$*.s
+	riscv32-unknown-elf-gcc --compile -march=rv32ima_zicsr -o build/$*.o asm/$*.s
 
 src/%.mlog: src/%.mlog.jinja
 	python -m mlogv32.preprocessor -o src/$*.mlog src/$*.mlog.jinja

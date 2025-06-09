@@ -263,9 +263,6 @@ loop:
     op add ret @counter 1
     jump format_hex always
 
-    draw print 7 508 topLeft
-    drawflush DISPLAY
-
     print "x16_a6   = {0}\n"
     set n x16_a6    
     op add ret @counter 1
@@ -275,6 +272,9 @@ loop:
     set n x17_a7
     op add ret @counter 1
     jump format_hex always
+
+    draw print 7 508 topLeft
+    drawflush DISPLAY
 
     print "x18_s2   = {0}\n"
     set n x18_s2
@@ -355,7 +355,7 @@ loop:
     print "instret = {0}\n\n"
     format instret
 
-    draw print 7 300 topLeft
+    draw print 7 274 topLeft
     drawflush DISPLAY
 
     print "instruction = {0}\n"

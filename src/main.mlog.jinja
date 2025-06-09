@@ -1597,7 +1597,7 @@ PRIV:
 ECALL:
     # 0b1000 (8) = ecall from U-mode
     # 0b1011 (11) = ecall from S-mode
-    op and mcause 0b1000 privilege_mode
+    op or mcause 0b1000 privilege_mode
     set mtval 0
     jump trap always
 

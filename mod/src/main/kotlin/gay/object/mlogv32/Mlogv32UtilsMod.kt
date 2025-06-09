@@ -65,14 +65,14 @@ class Mlogv32UtilsMod : Mod() {
             file.parent().mkdirs()
 
             val startAddress = if (args.size >= 4) {
-                val result = args[3].toIntOrNull()
+                val result = args[3].toUIntOrNull()
                 if (result == null) {
                     Log.err("Failed to parse start address.")
                     return@register
                 }
                 result
             } else {
-                processor.ramStart
+                ProcessorAccess.RAM_START
             }
 
             val bytes = if (args.size >= 5) {
@@ -83,7 +83,7 @@ class Mlogv32UtilsMod : Mod() {
                 }
                 result
             } else {
-                processor.ramEnd - startAddress
+                (processor.ramEnd - startAddress).toInt()
             }
 
             try {

@@ -2,8 +2,9 @@ OUTPUT_ARCH( "riscv" )
 ENTRY(rvtest_entry_point)
 
 MEMORY {
-    ROM (rx) : ORIGIN = 0, LENGTH = 0x200000
-    RAM (rw) : ORIGIN = 0x200000, LENGTH = 0x200000
+    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 0x200000
+    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 0x200000
+    MMIO (rw)  : ORIGIN = 0xf0000000, LENGTH = 16
 }
 
 SECTIONS

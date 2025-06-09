@@ -25,33 +25,30 @@ class ProcessorAccess(
     val memoryX: Int,
     val memoryY: Int,
     val memoryWidth: Int,
-    val romByteOffset: Int,
-    val romProcSize: Int,
-    val romStart: Int,
-    val romEnd: Int,
-    val ramProcSize: Int,
-    val ramStart: Int,
-    val ramEnd: Int,
-    val resetSwitch: SwitchBuild,
+    val romSize: Int,
+    val ramSize: Int,
     val errorOutput: MessageBuild,
+    val resetSwitch: SwitchBuild,
 ) {
-    val romSize = romEnd - romStart
-    val ramSize = ramEnd - ramStart
+    val romEnd = ROM_START + romSize.toUInt()
+    val ramEnd = RAM_START + ramSize.toUInt()
+
+    val ramStartProc = (romEnd / ROM_PROC_BYTES.toUInt()).toInt()
 
     fun flashRom(file: Fi): Int {
         val data = file.readBytes()
         require(data.size.mod(4) == 0) { "Data length must be a multiple of 4 bytes." }
         require(data.size <= romSize) { "Data is too large to fit into the processor's ROM." }
 
-        var address = romStart
+        var address = ROM_START
         val bytes = mutableListOf<Byte>()
         for (byte in data) {
             bytes.add(byte)
 
-            if (bytes.size == romProcSize) {
+            if (bytes.size == ROM_PROC_BYTES) {
                 flashRomProc(address, bytes)
                 bytes.clear()
-                address += romProcSize
+                address += ROM_PROC_BYTES.toUInt()
             }
         }
 
@@ -64,11 +61,11 @@ class ProcessorAccess(
     }
 
     fun dumpRam(file: Fi): Int {
-        dumpRam(file, ramStart, ramSize)
+        dumpRam(file, RAM_START, ramSize)
         return ramSize
     }
 
-    fun dumpRam(file: Fi, startAddress: Int, bytes: Int) {
+    fun dumpRam(file: Fi, startAddress: UInt, bytes: Int) {
         require(bytes > 0) { "Bytes must be positive." }
         require(bytes <= ramSize) { "Bytes must not be greater than the RAM size." }
         require(bytes.mod(4) == 0) { "Bytes must be aligned to 4 bytes." }
@@ -119,25 +116,24 @@ class ProcessorAccess(
         ProcessorAccess.stopServer()
     }
 
-    private fun ramWordsSequence(startAddress: Int = 0) = sequence {
-        require(startAddress in ramStart..<ramEnd) { "Start address must be within RAM." }
-        require(startAddress.mod(4) == 0) { "Start address must be aligned to 4 bytes." }
+    private fun ramWordsSequence(startAddress: UInt) = sequence {
+        require(startAddress in RAM_START..<ramEnd) { "Start address must be within RAM." }
+        require(startAddress.mod(4u) == 0u) { "Start address must be aligned to 4 bytes." }
 
         var address = startAddress
         while (address < ramEnd) {
-            val proc = getRamProc(address) ?: break
-            val startIndex = (address / 4).mod(ramProcSize) + 1
-            for (i in startIndex..ramProcSize) {
-                yield(proc.executor.vars[i]!! to address)
-                address += 4
+            val (proc, startIndex) = getRamProc(address) ?: break
+            for (i in startIndex..<RAM_PROC_VARS) {
+                yield(proc.executor.vars[i + 1]!! to address)
+                address += 4u
             }
         }
     }
 
-    private fun getRomProc(address: Int): LogicBuild? {
-        if (address !in romStart..<romEnd) return null
+    private fun getRomProc(address: UInt): LogicBuild? {
+        if (address !in ROM_START..<romEnd) return null
 
-        val index = address / romProcSize
+        val index = (address / ROM_PROC_BYTES.toUInt()).toInt()
         val x = memoryX + index.mod(memoryWidth)
         val y = memoryY + index / memoryWidth
 
@@ -148,11 +144,11 @@ class ProcessorAccess(
         return proc
     }
 
-    private fun flashRomProc(address: Int, data: Iterable<Byte>) {
+    private fun flashRomProc(address: UInt, data: Iterable<Byte>) {
         val code = buildString {
             append("set v \"")
             for (byte in data) {
-                val char = (byte.toInt() and 0xff) + romByteOffset
+                val char = (byte.toInt() and 0xff) + ROM_BYTE_OFFSET
                 append(char.toChar())
             }
             append("\"\nstop")
@@ -164,22 +160,25 @@ class ProcessorAccess(
         proc.updateCode(code)
     }
 
-    private fun getRamProc(address: Int): LogicBuild? {
-        if (address !in ramStart..<ramEnd) return null
+    private fun getRamProc(address: UInt): Pair<LogicBuild, Int>? {
+        if (address !in RAM_START..<ramEnd) return null
+
+        val ramAddress = address - RAM_START
+        val ramVariable = (ramAddress / 4u).toInt()
 
         // each ROM and RAM proc currently holds the same amount of data, so this doesn't matter too much
-        val index = address / 4 / ramProcSize
+        val index = ramStartProc + ramVariable / RAM_PROC_VARS
         val x = memoryX + index.mod(memoryWidth)
         val y = memoryY + index / memoryWidth
 
         val proc = Vars.world.build(x, y) as? LogicBuild ?: return null
 
         if (
-            proc.executor.vars.size != ramProcSize + 1
+            proc.executor.vars.size != RAM_PROC_VARS + 1
             || proc.executor.vars[1].name != "!!"
         ) return null
 
-        return proc
+        return proc to ramVariable.mod(RAM_PROC_VARS)
     }
 
     private suspend fun runServer(serverSocket: ServerSocket) {
@@ -212,6 +211,13 @@ class ProcessorAccess(
     }
 
     companion object {
+        const val ROM_BYTE_OFFSET = 174
+        const val ROM_PROC_BYTES = 16384
+        const val RAM_PROC_VARS = 4096
+
+        const val ROM_START = 0x00000000u
+        const val RAM_START = 0x80000000u
+
         private var serverThread: Thread? = null
         private var serverJob: Job? = null
         private var serverBuildId: Int? = null
@@ -222,15 +228,10 @@ class ProcessorAccess(
                 memoryX = nonZeroIntVar(build, "MEMORY_X") ?: return null,
                 memoryY = nonZeroIntVar(build, "MEMORY_Y") ?: return null,
                 memoryWidth = positiveIntVar(build, "MEMORY_WIDTH") ?: return null,
-                romByteOffset = nonNegativeIntVar(build, "ROM_BYTE_OFFSET") ?: return null,
-                romProcSize = positiveIntVar(build, "ROM_PROC_SIZE") ?: return null,
-                romStart = nonNegativeIntVar(build, "ROM_START") ?: return null,
-                romEnd = nonNegativeIntVar(build, "ROM_END") ?: return null,
-                ramProcSize = positiveIntVar(build, "RAM_PROC_SIZE") ?: return null,
-                ramStart = nonNegativeIntVar(build, "RAM_START") ?: return null,
-                ramEnd = nonNegativeIntVar(build, "RAM_END") ?: return null,
-                resetSwitch = buildVar<SwitchBuild>(build, "RESET_SWITCH") ?: return null,
-                errorOutput = buildVar<MessageBuild>(build, "ERROR_OUTPUT") ?: return null,
+                romSize = positiveIntVar(build, "ROM_SIZE") ?: return null,
+                ramSize = positiveIntVar(build, "RAM_SIZE") ?: return null,
+                errorOutput = buildVar<MessageBuild>(build, "message1") ?: return null,
+                resetSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
             )
         }
 
@@ -250,18 +251,18 @@ private fun nonZeroIntVar(build: LogicBuild, name: String): Int? =
         ?.numi()
         ?.takeIf { it != 0 }
 
-private fun nonNegativeIntVar(build: LogicBuild, name: String): Int? =
-    build.executor.optionalVar(name)
-        ?.takeIf { !it.isobj }
-        ?.numi()
-        ?.takeIf { it >= 0 }
-
 private fun positiveIntVar(build: LogicBuild, name: String): Int? =
     nonZeroIntVar(build, name)
         ?.takeIf { it > 0 }
 
 private inline fun <reified T : Building> buildVar(build: LogicBuild, name: String): T? =
-    build.executor.optionalVar(name)?.obj() as? T
+    (build.executor.optionalVar(name)?.obj() ?: linkedBuild(build, name)) as? T
+
+// why
+private fun linkedBuild(build: LogicBuild, name: String) =
+    build.links
+        .firstOrNull { it.active && it.valid && it.name == name }
+        ?.let { Vars.world.build(it.x, it.y) }
 
 @Serializable
 sealed class Request {
@@ -296,15 +297,15 @@ data class FlashRequest(val path: String) : Request() {
 @SerialName("dump")
 data class DumpRequest(
     val path: String,
-    val address: Int?,
+    val address: UInt?,
     val bytes: Int?,
 ) : Request() {
     override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
         val file = Core.files.absolute(path)
         file.parent().mkdirs()
 
-        val address = address ?: processor.ramStart
-        val bytes = bytes ?: (processor.ramEnd - address)
+        val address = address ?: ProcessorAccess.RAM_START
+        val bytes = bytes ?: (processor.ramEnd - address).toInt()
 
         processor.dumpRam(file, address, bytes)
         SuccessResponse("Successfully dumped $bytes bytes from RAM to $file.")

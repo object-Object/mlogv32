@@ -4,40 +4,23 @@
 #% extends 'main.constants.jinja'
 #% block contents
 
-    # constants
-    # these need to be actual variables so other processors can reference them
-    set LOOKUP_PROC_SIZE 260 # number of variables per lookup proc
-    set ROM_BYTE_OFFSET 174 # start character for ROM string byte data
-    set ROM_PROC_SIZE 16384 # number of bytes per ROM proc
-    set RAM_PROC_SIZE 4096 # number of variables (not bytes) per RAM proc
-    
 reset:
     set STATE "reset" # for debug output
 
-    # linked buildings
-    # mlogv32-utils needs these to be variables :(
-    set RESET_SWITCH {{RESET_SWITCH}}
-    set ERROR_OUTPUT {{ERROR_OUTPUT}}
-
     # load config
-    read TARGET_IPT {{CONFIG}} "IPT"
-    read MEMORY_X_OFFSET {{CONFIG}} "MEMORY_X_OFFSET"
-    read MEMORY_Y_OFFSET {{CONFIG}} "MEMORY_Y_OFFSET"
+    read TARGET_IPT {{CONFIG}} "TARGET_IPT"
+    read MEMORY_X {{CONFIG}} "MEMORY_X"
+    read MEMORY_Y {{CONFIG}} "MEMORY_Y"
     read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
     read ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read RAM_SIZE {{CONFIG}} "RAM_SIZE"
+    read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
 
-    op add MEMORY_X MEMORY_X_OFFSET @thisx
-    op add MEMORY_Y MEMORY_Y_OFFSET @thisy
+    op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
 
-    set ROM_START 0x0  # inclusive
-    op add ROM_END ROM_START ROM_SIZE  # exclusive
+    op add RAM_END {{RAM_START}} RAM_SIZE
 
-    set RAM_START ROM_END  # inclusive
-    op add RAM_END RAM_START RAM_SIZE  # exclusive
-
-    set MEMORY_END RAM_END
-    op idiv MEMORY_END_INDEX MEMORY_END 4
+    op idiv ICACHE_START_VAR RAM_SIZE 4
 
     # loop until the reset switch is linked and disabled
     jump reset strictEqual {{RESET_SWITCH}} null
@@ -78,12 +61,14 @@ reset__find_lookup_start:
     # read __etext from address 0, or default to ROM_SIZE if __etext is 0
     set address 0
     op add ret @counter 1
-    jump load_word always
+    jump load_rom_word_unchecked always
     set __etext result
 
-    jump reset__nonzero_etext notEqual __etext 0
-    set __etext ROM_SIZE
-reset__nonzero_etext:
+    jump reset__valid_etext lessThanEq __etext ROM_SIZE
+    print "Invalid __etext found at address 0x0, must be <={0}"
+    format ROM_SIZE
+    jump halt always
+reset__valid_etext:
 
     # decode .text
     set STATE "decoding"
@@ -93,7 +78,7 @@ reset__nonzero_etext:
 reset__decode:
     set address decode_address
     op add ret @counter 1
-    jump load_rom_word always
+    jump load_rom_word_unchecked always
     set instruction result
 
     op add decode_ret @counter 1
@@ -111,26 +96,91 @@ reset__decode:
     set pc 4
     set icache_var null
 
-    # read instret
+    # read initial CSR values
+    read mtime {{CSRS}} "{{ 'time'|csr }}"
+    read mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
+    read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     read minstret {{CSRS}} "{{ 'minstret'|csr }}"
     read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
-    # start cycle timer
+    # schedule time update
+    set last_time_update @time
+    set last_cycle_update @tick
     set next_time_update @time
 
 main:
-    # update time/cycle
     jump main__skip_time_update lessThan @time next_time_update
+
+    # update time
+    op sub delta_ms @time last_time_update
+
+    op add mtime mtime delta_ms
+    op floor mtime mtime
+
+    op shr mtime_overflow mtime 32
+    op add mtimeh mtimeh mtime_overflow
+
+    op mod mtime mtime 0x100000000
+
+    write mtime {{CSRS}} "{{ 'time'|csr }}"
+    write mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
+
+    # update cycle
+    # we define the rate of increase of cycle as "@ipt * ticks"
+    # this should be a decent estimation of the number of mlog instructions executed
+    op sub delta_cycles @tick last_cycle_update
+    op mul delta_cycles delta_cycles @ipt
+
+    op add mcycle mcycle delta_cycles
+    op floor mcycle mcycle
+
+    op shr mcycle_overflow mcycle 32
+    op add mcycleh mcycleh mcycle_overflow
+
+    op mod mcycle mcycle 0x100000000
+
+    write mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    write mcycle {{CSRS}} "{{ 'cycle'|csr }}"
+    write mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
+    write mcycleh {{CSRS}} "{{ 'cycleh'|csr }}"
+
+    set last_time_update @time
+    set last_cycle_update @tick
     op add next_time_update @time 1
-    op add ret @counter 1
-    jump update_time_and_cycle always
 main__skip_time_update:
 
     # get the current instruction cache processor and variable
-    jump access_icache strictEqual icache_var null
-done_access_icache:
+    jump main__read_icache notEqual icache_var null
 
+    # fall back to slow instruction fetch/decode if not in valid icache range
+    jump main__access_icache lessThan pc __etext
+    jump main__slow_instruction_fetch lessThan pc ROM_SIZE
+    jump main__access_icache lessThan pc ICACHE_SIZE
+
+main__slow_instruction_fetch:
+    set mcause 1 # instruction access fault
+    jump trap greaterThanEq pc RAM_END # prevent executing from MMIO
+
+    set address pc
+    op add ret @counter 1
+    jump load_word always
+
+    set instruction result
+    set decode_address null
+    
+    # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
+    op add decode_ret @counter 14
+    jump decode always
+
+main__access_icache:
+    op add _address ICACHE_START_VAR pc
+    op add access_ram__ret @counter 1
+    jump access_ram_raw always
+    set icache_ram ram
+    set icache_var variable
     # load instruction and arguments
+main__read_icache:
     read op_id icache_ram icache_var
     read icache_var {{INCR}} icache_var
     read arg1 icache_ram icache_var
@@ -222,19 +272,6 @@ done_pause_step:
     jump MLOGSYS always
     jump MLOGDRAW always
 
-# we jump here at the start of the main loop if icache_var is null
-access_icache:
-    jump inaccessible_load greaterThanEq pc ROM_SIZE
-
-    op add _address MEMORY_END_INDEX pc
-    op add access_ram__ret @counter 1
-    jump access_ram_raw always
-
-    set icache_ram ram
-    set icache_var variable
-
-    jump done_access_icache always
-
 # we jump here after instruction fetch if the single-step switch is enabled
 pause_step:
     control enabled {{PAUSE_SWITCH}} true
@@ -242,9 +279,6 @@ pause_step:
 pause_step__loop:
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause_step__loop equal enabled true
-
-    op add ret @counter 1
-    jump update_time_and_cycle always
 
     jump done_pause_step always
 
@@ -280,74 +314,22 @@ end_instruction_preserve_instret:
 # enable the reset switch, wait until it's disabled, then reset the processor
 # this must stay directly after end_instruction
 halt:
-    op add ret @counter 1
-    jump update_time_and_cycle always
-
+    printflush {{ERROR_OUTPUT}}
     control enabled {{RESET_SWITCH}} true
     jump reset always
 
 # exceptions
 
 illegal_instruction:
-    print "Illegal instruction!"
-    printflush {{ERROR_OUTPUT}}
-    jump halt always
+    set mcause 2
+    # continue into trap
 
-instruction_address_misaligned:
-    print "Instruction address misaligned!"
-    printflush {{ERROR_OUTPUT}}
-    jump halt always
-
-misaligned_load:
-    print "Attempted misaligned load!"
-    printflush {{ERROR_OUTPUT}}
-    jump halt always
-
-misaligned_store:
-    print "Attempted misaligned store!"
-    printflush {{ERROR_OUTPUT}}
-    jump halt always
-
-inaccessible_load:
-    print "Attempted to load from an inaccessible address!"
-    printflush {{ERROR_OUTPUT}}
-    jump halt always
-
-inaccessible_store:
-    print "Attempted to store to an inaccessible address!"
-    printflush {{ERROR_OUTPUT}}
+trap:
+    print "Unhandled trap: "
+    print mcause
     jump halt always
 
 # helper functions
-
-# update the (m)time/(m)timeh and (m)cycle/(m)cycleh CSRs
-update_time_and_cycle:
-    # update time
-    op sub time @time mtime_initial_value
-    op floor time time
-
-    op mod mtime time 0x100000000
-    op shr mtimeh time 32
-
-    write mtime {{CSRS}} "{{ 'time'|csr }}"
-    write mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
-
-    # update cycle
-    # we define the number of cycles as "@ipt * ticks since reset"
-    # this should be a decent estimation of the number of mlog instructions executed since reset
-    op sub cycle @tick mcycle_initial_value
-    op mul cycle cycle @ipt
-    op floor cycle cycle
-
-    op mod low cycle 0x100000000
-    op shr high cycle 32
-
-    write low {{CSRS}} "{{ 'mcycle'|csr }}"
-    write low {{CSRS}} "{{ 'cycle'|csr }}"
-    write high {{CSRS}} "{{ 'mcycleh'|csr }}"
-    write high {{CSRS}} "{{ 'cycleh'|csr }}"
-
-    set @counter ret
 
 # sign extension function
 # value, length -> result
@@ -392,12 +374,15 @@ access_csr:
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 access_ram:
+    op sub _address address {{RAM_START}}
+
     # we store 4 bytes in each value
-    op idiv _address address 4
+    op idiv _address _address 4
 
 access_ram_raw:
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_SIZE
+    op idiv _ram_index _address {{RAM_PROC_VARS}}
+    op add _ram_index _ram_index RAM_START_PROC
 
     op mod _ram_x _ram_index MEMORY_WIDTH
     op add _ram_x _ram_x MEMORY_X
@@ -408,18 +393,18 @@ access_ram_raw:
     getblock building ram _ram_x _ram_y
 
     # get the variable within the ram proc containing this address
-    op mod _address _address RAM_PROC_SIZE
+    op mod _address _address {{RAM_PROC_VARS}}
     set lookup_variable__ret access_ram__ret
 
-# given a value 0 <= _address < RAM_PROC_SIZE, resolve that variable in the lookup table
+# given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
 lookup_variable:
-    op idiv _lookup _address LOOKUP_PROC_SIZE
+    op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
     op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
 
-    op mod variable _address LOOKUP_PROC_SIZE
+    op mod variable _address {{LOOKUP_PROC_SIZE}}
     lookup block variable variable
     sensor variable variable @name
     read variable _lookup variable
@@ -427,14 +412,18 @@ lookup_variable:
     set @counter lookup_variable__ret
 
 # loads the word from memory that contains the specified address
-# address -> result
+# mcause is required in order to raise the correct exception in case of access fault
+# address, mcause -> result
 load_word:
+    jump load_rom_word_unchecked lessThan address ROM_SIZE
+
+load_ram_or_mmio_word:
     jump load_mmio_word greaterThanEq address {{MMIO_START}}
 
-    jump inaccessible_load greaterThanEq address MEMORY_END
+    jump trap lessThan address {{RAM_START}}
+    jump trap greaterThanEq address RAM_END
 
-    jump load_rom_word__no_bounds_check lessThan address ROM_END
-
+load_ram_word_unchecked:
     # locate and read value from ram
     op add access_ram__ret @counter 1
     jump access_ram always
@@ -471,14 +460,12 @@ swap_endianness:
 
 # loads a word from ROM
 # address -> result
-load_rom_word:
-    jump inaccessible_load greaterThanEq address ROM_END
-load_rom_word__no_bounds_check:
+load_rom_word_unchecked:
     # align to 4 bytes
     op and _address address 0xfffffffc
 
     # get rom proc data
-    op idiv _rom_index _address ROM_PROC_SIZE
+    op idiv _rom_index _address {{ROM_PROC_BYTES}}
 
     op mod _rom_x _rom_index MEMORY_WIDTH
     op add _rom_x _rom_x MEMORY_X
@@ -492,11 +479,11 @@ load_rom_word__no_bounds_check:
     # read word and convert to big endian
     set result 0
 
-    op mod _str_index _address ROM_PROC_SIZE
+    op mod _str_index _address {{ROM_PROC_BYTES}}
     set _shift 0 # leftmost byte in memory becomes rightmost byte in word
 load_rom_word__loop:
     read _byte _rom _str_index
-    op sub _byte _byte ROM_BYTE_OFFSET
+    op sub _byte _byte {{ROM_BYTE_OFFSET}}
     op max _byte _byte 0 # if we're reading out of bounds, default to 0
     op shl _byte _byte _shift
     op add result result _byte
@@ -508,10 +495,11 @@ load_rom_word__loop:
     set _rom null # avoid issues with the vars menu and block data size
     set @counter ret
 
+# address, mcause -> result
 load_mmio_word:
     op sub _jump address {{MMIO_START}}
     op idiv _jump _jump 4
-    jump inaccessible_load greaterThanEq _jump 4
+    jump trap greaterThanEq _jump 4
 
     op mul _jump _jump 2
     op add @counter @counter _jump
@@ -875,7 +863,7 @@ end_decode:
 
     # get the current instruction cache processor and variable
     jump end_decode__decode_var_valid notEqual decode_var null
-    op add _address MEMORY_END_INDEX decode_address
+    op add _address ICACHE_START_VAR decode_address
     op add access_ram__ret @counter 1
     jump access_ram_raw always
     set decode_ram ram
@@ -916,7 +904,8 @@ unconditional_jump:
     op mod target target 0x100000000 # trunc 32
 
     op mod remainder target 4
-    jump instruction_address_misaligned notEqual remainder 0
+    set mcause 0 # instruction address misaligned
+    jump trap notEqual remainder 0
 
     # write pc+4 to rd
     op add result pc 4
@@ -944,7 +933,8 @@ conditional_branch:
     op mod target target 0x100000000 # trunc 32
 
     op mod remainder target 4
-    jump instruction_address_misaligned notEqual remainder 0
+    set mcause 0 # instruction address misaligned
+    jump trap notEqual remainder 0
 
     op sub pc target 4 # HACK: end_instruction always increments the pc, so set the new pc to target - 4
     set icache_var null
@@ -992,9 +982,11 @@ load_value:
     # check alignment
     op idiv _bytes length 8
     op mod _alignment address _bytes
-    jump misaligned_load notEqual _alignment 0
+    set mcause 4 # load address misaligned
+    jump trap notEqual _alignment 0
 
     # load the word containing the address
+    set mcause 5 # load access fault
     op add ret @counter 1
     jump load_word always
 
@@ -1051,15 +1043,12 @@ SB:
 store_value:
     op add address rs1 arg3
     op mod address address 0x100000000 # 2^32 (trunc 32)
-    jump inaccessible_store lessThan address RAM_START
-    jump store_value__not_inaccessible greaterThanEq address {{MMIO_START}}
-    jump inaccessible_store greaterThanEq address RAM_END
-store_value__not_inaccessible:
 
     # check alignment
     op idiv _bytes length 8
     op mod _alignment address _bytes
-    jump misaligned_store notEqual _alignment 0
+    set mcause 6 # store/AMO address misaligned
+    jump trap notEqual _alignment 0
 
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
     op mod _shift address 4
@@ -1075,16 +1064,18 @@ store_value__not_inaccessible:
     op shl _value _value _shift
 
     # load the word containing the address
+    set mcause 7 # store/AMO access fault
     op add ret @counter 1
-    jump load_word always
+    jump load_ram_or_mmio_word always
 
     # insert the value into the word
     op and result result _bitmask
     op add value _value result
 
     # if it's in the MMIO range, handle it separately
-    jump store_value__mmio greaterThanEq address {{MMIO_START}}
+    jump store_mmio_word_unchecked greaterThanEq address {{MMIO_START}}
 
+store_ram_word_unchecked:
     # otherwise, store the new value
     op add ret @counter 1
     jump swap_endianness always
@@ -1096,17 +1087,16 @@ store_value__not_inaccessible:
     set instruction value
     op and decode_address address 0xfffffffc # word-aligned
     set decode_var null
+
+    # only decode if we're in icache range
     op add decode_ret @counter 1
-    jump decode always
+    jump decode lessThan decode_address ICACHE_SIZE
 
     jump end_instruction always
 
-store_value__mmio:
+store_mmio_word_unchecked:
     # trigger a time update
     set next_time_update @time
-
-    # hack
-    op shl value_shl value 32
 
     # if we get to this point, the MMIO address must be valid, so don't do a bounds check
     op sub _jump address {{MMIO_START}}
@@ -1115,12 +1105,12 @@ store_value__mmio:
     op add @counter @counter _jump
 
     # mtime
-    op and mtime_initial_value mtime_initial_value 0xffffffff00000000
-    op add mtime_initial_value mtime_initial_value value
+    set mtime value
+    set last_time_update @time
     jump end_instruction always
     # mtimeh
-    op and mtime_initial_value mtime_initial_value 0xffffffff
-    op add mtime_initial_value mtime_initial_value value_shl
+    set mtimeh value
+    set last_time_update @time
     jump end_instruction always
     # mtimecmp
     set mtimecmp value
@@ -1149,7 +1139,7 @@ LR.W:
 
     # load value
     op add ret @counter 1
-    jump load_word always
+    jump load_ram_word_unchecked always
 
     # register reservation set
     # TODO: implement Za64rs?
@@ -1161,10 +1151,12 @@ atomic_validate_address:
     set address rs1
 
     op mod alignment address 4
-    jump misaligned_load notEqual alignment 0
+    set mcause 6 # store/AMO address misaligned
+    jump trap notEqual alignment 0
 
-    jump inaccessible_store lessThan address RAM_START
-    jump inaccessible_store greaterThanEq address RAM_END
+    set mcause 7 # store/AMO access fault
+    jump trap lessThan address {{RAM_START}}
+    jump trap greaterThanEq address RAM_END
 
     set @counter ret
 
@@ -1194,19 +1186,7 @@ SC.W__no_write_rd:
     jump access_ram always
 
     set value rs2
-
-atomic_store_word:
-    op add ret @counter 1
-    jump swap_endianness always
-    
-    write result ram variable
-
-    set instruction value
-    set decode_var null
-    op add decode_ret @counter 1
-    jump decode always
-
-    jump end_instruction always
+    jump store_ram_word_unchecked always
 
 AMOSWAP.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
@@ -1219,7 +1199,7 @@ amo:
 
     # read
     op add ret @counter 1
-    jump load_word always
+    jump load_ram_word_unchecked always
     
     # put value in rd
     jump amo__no_write_rd equal arg3 0
@@ -1262,7 +1242,7 @@ amo__done_modify:
 
     # write
     op and value result 0xffffffff
-    jump atomic_store_word always
+    jump store_ram_word_unchecked always
 
 AMOADD.W:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
@@ -1561,9 +1541,6 @@ ECALL:
     jump end_instruction always
 
 EBREAK:
-    op add ret @counter 1
-    jump update_time_and_cycle always
-
     control enabled {{PAUSE_SWITCH}} true
     print "Paused on EBREAK, disable pause switch to continue"
     printflush {{ERROR_OUTPUT}}
@@ -1621,7 +1598,7 @@ read_modify_write_csr:
     op add @counter @counter csr_op
 
     # read/write (always write)
-    set new_value result
+    set new_value rs1
     jump read_modify_write_csr__always_write always
     # read and set bits (conditional write)
     op or new_value rs1 result
@@ -1708,17 +1685,13 @@ read_modify_write_csr__mtvec:
     jump read_modify_write_csr__end_handler always
 
 read_modify_write_csr__mcycle:
-    # update the mtime reference point and trigger an update on the next loop
-    # TODO: does this cause precision issues?
-    op and mcycle_initial_value mcycle_initial_value 0xffffffff00000000
-    op add mcycle_initial_value mcycle_initial_value new_value
+    set mcycle new_value
+    set last_cycle_update @tick
     set next_time_update @time
     jump end_instruction_with_result always
 
 read_modify_write_csr__mcycleh:
-    op and mcycle_initial_value mcycle_initial_value 0xffffffff
-    op shl new_value new_value 32
-    op add mcycle_initial_value mcycle_initial_value new_value
+    set mcycleh new_value
     set next_time_update @time
     jump end_instruction_with_result always
 
@@ -1728,7 +1701,14 @@ read_modify_write_csr__minstret:
     jump end_instruction_with_result always
 
 read_modify_write_csr__minstreth:
-    op sub minstreth new_value 1
+    # if minstret is going to overflow on this increment, minstreth should be new_value - 1 so that it has the expected value for the next instruction
+    op equal is_minstret_overflowing minstret 0xffffffff
+    op sub minstreth new_value is_minstret_overflowing
+
+    # we need to write this in case minstreth doesn't update this tick
+    write minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
+    write minstreth {{CSRS}} "{{ 'instreth'|csr }}"
+    
     jump end_instruction_with_result always
 
 MLOGSYS:
@@ -1911,11 +1891,14 @@ set {{PAUSE_SWITCH}} null
 set {{SINGLE_STEP_SWITCH}} null
 set {{KBCONV_DATA}} null
 set {{DISPLAY}} null
+set {{LOOKUP_PROC_SIZE}} null
+set {{ROM_BYTE_OFFSET}} null
+set {{ROM_PROC_BYTES}} null
+set {{RAM_PROC_VARS}} null
+set {{RAM_START}} null
 set {{MMIO_START}} null
 # unused variables
 set {{ {{
 set STATE STATE
 set IPT IPT
-set RESET_SWITCH RESET_SWITCH
-set ERROR_OUTPUT ERROR_OUTPUT
 # {% endraw %}

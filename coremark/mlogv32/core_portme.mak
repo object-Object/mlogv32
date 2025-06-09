@@ -43,7 +43,7 @@ SEPARATE_COMPILE=1
 # You must also define below how to create an object file, and how to link.
 OBJOUT 	= -o
 LFLAGS 	= -T$(PORT_DIR)/../../rust/mlogv32/link.x
-ASFLAGS = --compile
+ASFLAGS = --compile -march=$(RISCV_ARCH)
 OFLAG 	= -o
 COUT 	= -c
 

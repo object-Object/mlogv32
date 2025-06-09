@@ -1,5 +1,13 @@
     setrate 2000
 
+    set LOOKUP_PROC_SIZE 260
+    set ROM_BYTE_OFFSET 174
+    set ROM_PROC_BYTES 16384
+    set RAM_PROC_VARS 4096
+
+    set ROM_START 0x00000000
+    set RAM_START 0x80000000
+
     draw reset
     draw color 255 255 255 255
 
@@ -16,20 +24,11 @@ reset:
 
     set DISPLAY display1
 
-    read LOOKUP_PROC_SIZE CPU "LOOKUP_PROC_SIZE"
-    read ROM_BYTE_OFFSET CPU "ROM_BYTE_OFFSET"
-    read ROM_PROC_SIZE CPU "ROM_PROC_SIZE"
-    read RAM_PROC_SIZE CPU "RAM_PROC_SIZE"
-
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
     jump reset strictEqual REGISTERS null
     jump reset strictEqual CSRS null
     jump reset strictEqual DISPLAY null
-    jump reset strictEqual LOOKUP_PROC_SIZE null
-    jump reset strictEqual ROM_BYTE_OFFSET null
-    jump reset strictEqual ROM_PROC_SIZE null
-    jump reset strictEqual RAM_PROC_SIZE null
 
     set i -1
 reset__find_lookup_start:
@@ -73,7 +72,7 @@ reset__find_lookup_start:
     set CSR_INSTRETH variable
 
 loop:
-    set mark_ram_id 0
+    set mark_memory_id 0
     draw clear 0 0 0
 
     read MEMORY_X CPU "MEMORY_X"
@@ -81,16 +80,13 @@ loop:
     read MEMORY_WIDTH CPU "MEMORY_WIDTH"
 
     read ROM_SIZE CPU "ROM_SIZE"
-    read ROM_START CPU "ROM_START"
-    read ROM_END CPU "ROM_END"
+    read ICACHE_SIZE CPU "ICACHE_SIZE"
 
-    read RAM_START CPU "RAM_START"
+    read RAM_START_PROC CPU "RAM_START_PROC"
     read RAM_END CPU "RAM_END"
 
-    read MEMORY_END CPU "MEMORY_END"
-
-    op mul ICACHE_SIZE ROM_SIZE 4
     set ICACHE_START RAM_END
+    op mul ICACHE_SIZE ICACHE_SIZE 4
     op add ICACHE_END ICACHE_START ICACHE_SIZE
 
     read x0_zero REGISTERS 0
@@ -160,32 +156,32 @@ loop:
     print "ROM_START\n{0}"
     set address ROM_START
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "ROM_END\n{0}"
-    op sub address ROM_END 1
+    op sub address ROM_SIZE 1
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "RAM_START\n{0}"
     set address RAM_START
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "RAM_END\n{0}"
     op sub address RAM_END 1
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "ICACHE_START\n{0}"
     set address ICACHE_START
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "ICACHE_END\n{0}"
     op sub address ICACHE_END 1
     op add ret @counter 1
-    jump mark_ram always
+    jump mark_memory always
 
     print "x0_zero  = {0}\n"
     set n x0_zero
@@ -573,42 +569,62 @@ access_csr:
 # creates a marker on the ram proc containing a given address
 # the caller should print a format string with a placeholder for the address
 # address ->
-mark_ram:
-    set mark_ram__ret ret
+mark_memory:
+    set mark_memory__ret ret
+
+    jump mark_memory__rom lessThan address RAM_START
+
+    op sub _address address RAM_START
 
     # we store 4 bytes in each value
-    op idiv _address address 4
+    op idiv _address _address 4
 
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_SIZE
+    op idiv _ram_index _address RAM_PROC_VARS
+    op add _ram_index _ram_index RAM_START_PROC
 
-    op mod _ram_x _ram_index MEMORY_WIDTH
-    op add _ram_x _ram_x MEMORY_X
+    op mod x _ram_index MEMORY_WIDTH
+    op add x x MEMORY_X
 
-    op idiv _ram_y _ram_index MEMORY_WIDTH
-    op add _ram_y _ram_y MEMORY_Y
+    op idiv y _ram_index MEMORY_WIDTH
+    op add y y MEMORY_Y
 
+    jump mark_memory__found always
+
+mark_memory__rom:
+    # get rom proc data
+    op idiv _rom_index address ROM_PROC_BYTES
+
+    op mod x _rom_index MEMORY_WIDTH
+    op add x x MEMORY_X
+
+    op idiv y _rom_index MEMORY_WIDTH
+    op add y y MEMORY_Y
+
+mark_memory__found:
     set n address
     op add ret @counter 1
     jump format_hex always
 
-    setmarker remove mark_ram_id
-    makemarker shapeText mark_ram_id _ram_x _ram_y false
+    setmarker remove mark_memory_id
+    makemarker shapeText mark_memory_id x y false
     setmarker shape 0 4 0 0
-    setmarker flushText mark_ram_id false
+    setmarker flushText mark_memory_id false
 
-    op add mark_ram_id mark_ram_id 1
-    set @counter mark_ram__ret
+    op add mark_memory_id mark_memory_id 1
+    set @counter mark_memory__ret
 
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 access_ram:
-    # we store 4 bytes in each value
-    op idiv _address address 4
+    op sub _address address RAM_START
 
-# access_ram_raw:
+    # we store 4 bytes in each value
+    op idiv _address _address 4
+
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_SIZE
+    op idiv _ram_index _address RAM_PROC_VARS
+    op add _ram_index _ram_index RAM_START_PROC
 
     op mod _ram_x _ram_index MEMORY_WIDTH
     op add _ram_x _ram_x MEMORY_X
@@ -619,13 +635,12 @@ access_ram:
     getblock building ram _ram_x _ram_y
 
     # get the variable within the ram proc containing this address
-    op mod _address _address RAM_PROC_SIZE
+    op mod _address _address RAM_PROC_VARS
     set lookup_variable__ret access_ram__ret
 
-# given a value 0 <= _address < RAM_PROC_SIZE, resolve that variable in the lookup table
+# given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
-# lookup_variable:
     op idiv _lookup _address LOOKUP_PROC_SIZE
     op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
@@ -638,11 +653,13 @@ access_ram:
     set @counter lookup_variable__ret
 
 # loads the word from memory that contains the specified address
-# address -> result
+# mcause is required in order to raise the correct exception in case of access fault
+# address, mcause -> result
 load_word:
-    jump inaccessible_load greaterThanEq address MEMORY_END
+    jump load_rom_word_unchecked lessThan address ROM_SIZE
 
-    jump load_rom_word__no_bounds_check lessThan address ROM_END
+    jump inaccessible_load lessThan address RAM_START
+    jump inaccessible_load greaterThanEq address RAM_END
 
     # locate and read value from ram
     op add access_ram__ret @counter 1
@@ -680,14 +697,12 @@ load_word:
 
 # loads a word from ROM
 # address -> result
-# load_rom_word:
-    jump inaccessible_load greaterThanEq address ROM_END
-load_rom_word__no_bounds_check:
+load_rom_word_unchecked:
     # align to 4 bytes
     op and _address address 0xfffffffc
 
     # get rom proc data
-    op idiv _rom_index _address ROM_PROC_SIZE
+    op idiv _rom_index _address ROM_PROC_BYTES
 
     op mod _rom_x _rom_index MEMORY_WIDTH
     op add _rom_x _rom_x MEMORY_X
@@ -701,7 +716,7 @@ load_rom_word__no_bounds_check:
     # read word and convert to big endian
     set result 0
 
-    op mod _str_index _address ROM_PROC_SIZE
+    op mod _str_index _address ROM_PROC_BYTES
     set _shift 0 # leftmost byte in memory becomes rightmost byte in word
 load_rom_word__loop:
     read _byte _rom _str_index

@@ -14,6 +14,13 @@
 {% set KBCONV_DATA = 'cell2' %}
 {% set DISPLAY = 'display1' %}
 
+{% set LOOKUP_PROC_SIZE = 260 %} {#- number of variables per lookup proc -#}
+{% set ROM_BYTE_OFFSET = 174 %} {#- start character for ROM string byte data -#}
+{% set ROM_PROC_BYTES = 16384 %} {#- number of bytes per ROM proc -#}
+{% set RAM_PROC_VARS = 4096 %} {#- number of variables per RAM proc -#}
+
+{#- ROM starts at 0x00000000, so we don't need a variable for it -#}
+{% set RAM_START  = '0x80000000' %}
 {% set MMIO_START = '0xf0000000' %}
 
 {% block contents %}{% endblock %}

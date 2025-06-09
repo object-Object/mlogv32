@@ -2,6 +2,17 @@
 
 .global _start
 _start:
+    # reset mtime/mcycle/minstret
+    li t0, 0xf0000000 # mtime
+    sw zero, 4(t0)
+    sw zero, 0(t0)
+
+    csrw mcycleh, zero
+    csrw mcycle, zero
+
+    csrw minstreth, zero
+    csrw minstret, zero
+
     la t1, _stack_start
     andi sp, t1, -16
     add s0, sp, zero

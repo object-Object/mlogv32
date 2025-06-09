@@ -6,13 +6,19 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ## Architecture
 
-Memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rw). The third section is an instruction cache, which takes up 4x as much space as the executable portion of memory. The instruction cache is updated at reset and whenever an instruction writes to RAM.
+Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache which is 4x less dense than main memory. The instruction cache is updated at reset, and whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
 
-Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM; alternatively, it can be `0` to decode the entire ROM.
+Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM. If this value is `0`, no ROM data will be decoded.
 
 The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
 
-### MMIO
+## Memory
+
+| Address      | Value |
+| ------------ | ----- |
+| `0x00000000` | ROM   |
+| `0x80000000` | RAM   |
+| `0xf0000000` | MMIO  |
 
 Addresses `0xf0000000` - `0xffffffff` are reserved for MMIO.
 

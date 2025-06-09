@@ -1,5 +1,7 @@
     setrate 1000
 
+    set ROM_PROC_BYTES 16384
+
 reset:
     set CPU processor1
     jump reset strictEqual CPU null
@@ -7,10 +9,9 @@ reset:
     read MEMORY_X CPU "MEMORY_X"
     read MEMORY_Y CPU "MEMORY_Y"
     read MEMORY_WIDTH CPU "MEMORY_WIDTH"
-    read ROM_PROC_SIZE CPU "ROM_PROC_SIZE"
-    read ROM_END CPU "ROM_END"
+    read ROM_SIZE CPU "ROM_SIZE"
 
-    op idiv ROM_END_INDEX ROM_END ROM_PROC_SIZE
+    op idiv RAM_START_PROC ROM_SIZE ROM_PROC_BYTES
 
     set i 0
 loop:
@@ -22,7 +23,7 @@ loop:
 
     getblock building ram x y
 
-    op lessThan enabled i ROM_END_INDEX
+    op lessThan enabled i RAM_START_PROC
     control enabled ram enabled
 
     op add i i 1

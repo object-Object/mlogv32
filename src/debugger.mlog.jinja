@@ -160,6 +160,7 @@ loop:
     read mscratch CSRS "{{ 'mscratch'|csr }}"
     read mepc CSRS "{{ 'mepc'|csr }}"
     read mcause CSRS "{{ 'mcause'|csr }}"
+    read mtval CSRS "{{ 'mtval'|csr }}"
 
     read ipt CPU "IPT"
     read state CPU "STATE"
@@ -332,6 +333,11 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_bin always
 
+    print "mscratch = {0}\n"
+    set n mscratch
+    op add ret @counter 1
+    jump format_hex always
+
     print "mtvec    = {0}\n"
     set n mtvec
     op add ret @counter 1
@@ -347,8 +353,8 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    print "mscratch = {0}\n"
-    set n mscratch
+    print "mtval    = {0}\n"
+    set n mtval
     op add ret @counter 1
     jump format_hex always
 
@@ -378,7 +384,7 @@ loop__no_mark_icache:
     print "instret = {0}\n\n"
     format instret
 
-    #{{'\n'}} {{ print(0, 33) }}
+    #{{'\n'}} {{ print(0, 34) }}
 
     # column 2
 
@@ -492,7 +498,7 @@ done_privilege_mode:
 
     #{{'\n'}} {{ print(36, 17) }}
 
-    wait 0.00001
+    wait 0.02
     jump loop always
 
 format_hex:

@@ -8,11 +8,12 @@ hart0:
   hw_data_misaligned_support: false
   pmp_granularity: 0
   supported_xlen: [32]
-  mtval_update: 0
+  # enabled: address misaligned, access fault, breakpoint
+  # disabled: illegal instruction
+  mtval_update: 0b11111011
   misa:
     # X bit is disabled because riscv-config doesn't seem to like it
-    # 0b01000000000100000001000100000001
-    reset-val: 0x40101101
+    reset-val: 0b01000000000100000001000100000001
     rv32:
       accessible: true
       extensions:
@@ -20,7 +21,7 @@ hart0:
         type:
           warl:
             legal:
-              - extensions[25:0] in [0x0101101]
+              - extensions[25:0] in [0b00000100000001000100000001]
             wr_illegal:
               - unchanged
   cycle:

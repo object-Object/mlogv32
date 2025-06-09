@@ -40,10 +40,6 @@ reset:
     read kbconv_rptr {{KBCONV_DATA}} 63
 
     # read initial CSR values
-    read mtime {{CSRS}} "{{ 'time'|csr }}"
-    read mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
-    read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
-    read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     read minstret {{CSRS}} "{{ 'minstret'|csr }}"
     read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
@@ -147,9 +143,12 @@ main:
     read mie {{CSRS}} "{{ 'mie'|csr }}"
     op and mtie mie mtip
     set mcause 0x80000007 # machine timer interrupt
+    set mtval 0
     jump trap notEqual mtie 0
 
 main__skip_time_update:
+
+    set mtval pc
 
     # get the current instruction cache processor and variable
     jump main__read_icache notEqual icache_var null
@@ -335,6 +334,7 @@ default_mtvec_handler:
 
 illegal_instruction:
     set mcause 2
+    set mtval 0 # TODO: return faulting instruction bits?
     # continue into trap
 
 trap:
@@ -347,11 +347,13 @@ trap:
     op and mstatus mstatus 0b11111111111111111110011101110111
     op or mstatus mstatus mpie
     op or mstatus mstatus mpp
+    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
 
     # set mcause
     write mcause {{CSRS}} "{{ 'mcause'|csr }}"
 
-    # TODO: set mtval?
+    # set mtval
+    write mtval {{CSRS}} "{{ 'mtval'|csr }}"
 
     # set mepc to pc
     write pc {{CSRS}} "{{ 'mepc'|csr }}"
@@ -459,7 +461,7 @@ lookup_variable:
 
 # loads the word from memory that contains the specified address
 # mcause is required in order to raise the correct exception in case of access fault
-# address, mcause -> result
+# address, mcause, mtval -> result
 load_word:
     jump load_rom_word_unchecked lessThan address ROM_SIZE
 
@@ -541,7 +543,7 @@ load_rom_word__loop:
     set _rom null # avoid issues with the vars menu and block data size
     set @counter ret
 
-# address, mcause -> result
+# address, mcause, mtval -> result
 load_mmio_word:
     op sub _jump address {{MMIO_START}}
     op idiv _jump _jump 4
@@ -1002,6 +1004,7 @@ unconditional_jump:
 
     op mod remainder target 4
     set mcause 0 # instruction address misaligned
+    set mtval target
     jump trap notEqual remainder 0
 
     # write pc+4 to rd
@@ -1030,6 +1033,7 @@ load_value:
     op idiv _bytes length 8
     op mod _alignment address _bytes
     set mcause 4 # load address misaligned
+    set mtval address
     jump trap notEqual _alignment 0
 
     # load the word containing the address
@@ -1095,6 +1099,7 @@ store_value:
     op idiv _bytes length 8
     op mod _alignment address _bytes
     set mcause 6 # store/AMO address misaligned
+    set mtval address
     jump trap notEqual _alignment 0
 
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
@@ -1197,6 +1202,7 @@ LR.W:
 
 atomic_validate_address:
     set address rs1
+    set mtval address
 
     op mod alignment address 4
     jump trap notEqual alignment 0
@@ -1592,10 +1598,12 @@ ECALL:
     # 0b1000 (8) = ecall from U-mode
     # 0b1011 (11) = ecall from S-mode
     op and mcause 0b1000 privilege_mode
+    set mtval 0
     jump trap always
 
 EBREAK:
     set mcause 3 # breakpoint
+    # mtval is set to pc by main
     jump trap always
 
 MRET:
@@ -1611,6 +1619,7 @@ MRET:
     op and mstatus mstatus 0b11111111111111111110011111110111
     op or mstatus mstatus mie
     op or mstatus mstatus 0b10000000 # MPIE
+    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
 
     # set pc to MEPC
     read pc {{CSRS}} "{{ 'mepc'|csr }}"
@@ -1621,37 +1630,35 @@ MRET:
 
     jump end_instruction always
 
-CSRRW:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
-    set csr_op 0 # read/write
-    jump read_modify_write_csr always
-
-CSRRS:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
-    set csr_op 2 # read and set bits
-    jump read_modify_write_csr always
-
-CSRRC:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
-    set csr_op 4 # read and clear bits
-    jump read_modify_write_csr always
-
 CSRRWI:
     # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
     set rs1 arg1
+    # continue into CSRRW
+
+CSRRW:
+    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
     set csr_op 0 # read/write
     jump read_modify_write_csr always
 
 CSRRSI:
     # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
     set rs1 arg1
+    # continue into CSRRS
+
+CSRRS:
+    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
     set csr_op 2 # read and set bits
     jump read_modify_write_csr always
 
 CSRRCI:
     # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
     set rs1 arg1
+    # continue into CSRRC
+
+CSRRC:
+    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
     set csr_op 4 # read and clear bits
+    # continue into read_modify_write_csr
 
 read_modify_write_csr:
     set csr arg2
@@ -1691,7 +1698,6 @@ read_modify_write_csr__always_write:
     jump read_modify_write_csr__mie equal variable "{{ 'mie'|csr }}"
     jump read_modify_write_csr__mepc equal variable "{{ 'mepc'|csr }}"
     jump read_modify_write_csr__mtvec equal variable "{{ 'mtvec'|csr }}"
-    jump end_instruction_with_result equal variable "{{ 'mtval'|csr }}" # read-only zero
     jump read_modify_write_csr__mcycle equal variable "{{ 'mcycle'|csr }}"
     jump read_modify_write_csr__mcycleh equal variable "{{ 'mcycleh'|csr }}"
     jump read_modify_write_csr__minstret equal variable "{{ 'minstret'|csr }}"

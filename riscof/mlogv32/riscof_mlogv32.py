@@ -81,7 +81,7 @@ class mlogv32(pluginTemplate):
         )
 
         self.objdump_cmd = (
-            "riscv{xlen}-unknown-elf-objdump --disassemble {elf} > {dump}"
+            "riscv{xlen}-unknown-elf-objdump --disassemble-all {elf} > {dump}"
         )
 
         # add more utility snippets here

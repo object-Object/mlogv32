@@ -132,67 +132,82 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 
 ## riscv-arch-test
 
-mlogv32 currently passes all compliance tests for the `RV32IMA` ISA.
+mlogv32 currently passes all compliance tests for the `RV32IMAUZicsr_Zifencei` ISA.
 
-```
-TEST NAME                                                                                     : COMMIT ID   : STATUS
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoadd.w-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoand.w-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomax.w-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomaxu.w-01.S      : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomin.w-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amominu.w-01.S      : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoor.w-01.S        : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoswap.w-01.S      : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoxor.w-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/add-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/addi-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/and-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/andi-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/auipc-01.S          : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/beq-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bge-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bgeu-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/blt-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bltu-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bne-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/fence-01.S          : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/jal-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/jalr-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lb-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lbu-align-01.S      : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lh-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lhu-align-01.S      : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lui-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lw-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/misalign1-jalr-01.S : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/or-01.S             : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/ori-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sb-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sh-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sll-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slli-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slt-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slti-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sltiu-01.S          : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sltu-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sra-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srai-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srl-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srli-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sub-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sw-align-01.S       : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/xor-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/I/src/xori-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/div-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/divu-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mul-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulh-01.S           : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulhsu-01.S         : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulhu-01.S          : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/rem-01.S            : -           : Passed
-/workspaces/mlogv32/riscof/riscv-arch-test/riscv-test-suite/rv32i_m/M/src/remu-01.S           : -           : Passed
-```
+| TEST NAME                                                                  | COMMIT ID | STATUS |
+| -------------------------------------------------------------------------- | --------- | ------ |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoadd.w-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoand.w-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomax.w-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomaxu.w-01.S              | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amomin.w-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amominu.w-01.S              | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoor.w-01.S                | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoswap.w-01.S              | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/A/src/amoxor.w-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/add-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/addi-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/and-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/andi-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/auipc-01.S                  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/beq-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bge-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bgeu-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/blt-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bltu-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/bne-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/fence-01.S                  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/jal-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/jalr-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lb-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lbu-align-01.S              | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lh-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lhu-align-01.S              | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lui-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/lw-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/misalign1-jalr-01.S         | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/or-01.S                     | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/ori-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sb-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sh-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sll-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slli-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slt-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/slti-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sltiu-01.S                  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sltu-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sra-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srai-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srl-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/srli-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sub-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/sw-align-01.S               | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/xor-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/I/src/xori-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/div-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/divu-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mul-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulh-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulhsu-01.S                 | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/mulhu-01.S                  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/rem-01.S                    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/M/src/remu-01.S                   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/Zifencei/src/Fencei.S             | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/ebreak.S            | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/ecall.S             | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-beq-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-bge-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-bgeu-01.S  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-blt-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-bltu-01.S  | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-bne-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-jal-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-lh-01.S    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-lhu-01.S   | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-lw-01.S    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-sh-01.S    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-sw-01.S    | -         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign2-jalr-01.S | -         | Passed |
 
 ## Building
 

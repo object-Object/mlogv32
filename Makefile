@@ -3,6 +3,8 @@ ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
 RUST_PROJECTS = $(patsubst rust/%,%,$(wildcard rust/*))
 RUST_PROGRAMS = $(filter-out mlogv32,$(RUST_PROJECTS))
 
+MLOG_PROGRAMS = $(patsubst src/%.mlog.jinja,%,$(wildcard src/*.mlog.jinja))
+
 .PHONY: all
 all: asm rust
 
@@ -12,6 +14,9 @@ asm: $(ASM_PROGRAMS)
 .PHONY: rust
 rust: $(RUST_PROGRAMS)
 
+.PHONY: mlog
+mlog: $(MLOG_PROGRAMS)
+
 .PHONY: coremark
 coremark:
 	cd coremark/coremark && $(MAKE) PORT_DIR=../mlogv32 ITERATIONS=10 clean load
@@ -19,6 +24,8 @@ coremark:
 $(ASM_PROGRAMS): %: build/%.bin build/%.dump
 
 $(RUST_PROGRAMS): %: build/rust/%.bin
+
+$(MLOG_PROGRAMS): %: src/%.mlog
 
 # see https://stackoverflow.com/a/61960833
 build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
@@ -40,6 +47,9 @@ build/%.out: build/%.o
 
 build/%.o: asm/%.s | build
 	riscv32-unknown-elf-gcc --compile -o build/$*.o asm/$*.s
+
+src/%.mlog: src/%.mlog.jinja
+	python -m mlogv32.preprocessor -o src/$*.mlog src/$*.mlog.jinja
 
 build:
 	mkdir -p build

@@ -840,7 +840,7 @@ decode_SYSTEM:
     # 45: CSRRCI
     op add op_id 39 funct3
     op sub op_id op_id offset
-    jump end_decode always
+    jump decode_I-type_no_extend_sign always
 
 decode_custom-0:
     # Xmlogsys

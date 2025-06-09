@@ -58,9 +58,6 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    # clear LR/SC reservation set
-    set reservation_set null
-
     # read initial CSR values
     read mtime {{CSRS}} "{{ 'time'|csr }}"
     read mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
@@ -69,16 +66,34 @@ reset__find_lookup_start:
     read minstret {{CSRS}} "{{ 'minstret'|csr }}"
     read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
-    # start executing code at address 0
-    set pc 0
-    set icache_var null
-    set __etext 0
-    set STATE "running"
-
-    # schedule time update
+    # reset time/cycle reference point
     set last_time_update @time
     set last_cycle_update @tick
     set next_time_update @time
+
+    # reset icache
+    set icache_var null
+    set __etext 0
+
+    # reset hart state as per machine-level ISA
+
+    # reset MIE and MPRV to 0
+    read mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
+    # MPRV                                 -
+    # MIE                                                -
+    op and mstatus mstatus 0b11111111111111011111111111110111
+    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
+    
+    # set pc to reset vector
+    set pc 0
+
+    # set mcause to 0, since we don't distinguish different reset conditions
+    write 0 {{CSRS}} "{{ 'mcause'|csr }}"
+    
+    # clear LR/SC reservation set
+    set reservation_set null
+
+    set STATE "running"
 
 main:
     jump main__skip_time_update lessThan @time next_time_update

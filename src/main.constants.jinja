@@ -22,7 +22,8 @@
 {% set RAM_PROC_VARS = 4096 %} {#- number of variables per RAM proc -#}
 
 {#- ROM starts at 0x00000000, so we don't need a variable for it -#}
-{% set RAM_START  = '0x80000000' %}
-{% set MMIO_START = '0xf0000000' %}
+{% set RAM_START     = '0x80000000' %}
+{% set MMIO_START    = '0xf0000000' %}
+{% set DEFAULT_MTVEC = '0xfffffffc' %}
 
 {% block contents %}{% endblock %}

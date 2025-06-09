@@ -22,14 +22,17 @@ The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-b
 | `0x80000000` | RAM   |
 | `0xf0000000` | MMIO  |
 
-Addresses `0xf0000000` - `0xffffffff` are reserved for MMIO.
+Addresses `0xf0000000` - `0xffffffff` are reserved for MMIO and other system purposes.
 
-| Address      | Value       |
-| ------------ | ----------- |
-| `0xf0000000` | `mtime`     |
-| `0xf0000004` | `mtimeh`    |
-| `0xf0000008` | `mtimecmp`  |
-| `0xf000000c` | `mtimecmph` |
+| Address      | Value                 |
+| ------------ | --------------------- |
+| `0xf0000000` | `mtime`               |
+| `0xf0000004` | `mtimeh`              |
+| `0xf0000008` | `mtimecmp`            |
+| `0xf000000c` | `mtimecmph`           |
+| `0xfffffffc` | `mtvec` default value |
+
+The machine trap vector CSR `mtvec` is initialized to `0xfffffffc` at reset. To help catch issues with uninitialized `mtvec`, the processor will halt if code jumps to this address.
 
 ## ISA
 

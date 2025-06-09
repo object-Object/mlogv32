@@ -6,7 +6,6 @@ reset:
     set STATE "reset" # for debug output
 
     # load config
-    read TARGET_IPT {{CONFIG}} "TARGET_IPT"
     read MEMORY_X {{CONFIG}} "MEMORY_X"
     read MEMORY_Y {{CONFIG}} "MEMORY_Y"
     read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
@@ -27,9 +26,8 @@ reset:
 
     # initialization
 
-    # ipt go brrrr
-    setrate TARGET_IPT
-    set IPT @ipt # for debug output
+    op add ret @counter 1
+    jump reload_config always
 
     # initialize peripherals
     control enabled {{PAUSE_SWITCH}} false
@@ -57,6 +55,9 @@ reset:
     # reset icache
     set icache_var null
     set __etext 0
+
+    # reset mtvec to implementation-defined value to help catch bugs
+    write {{DEFAULT_MTVEC}} {{CSRS}} "{{ 'mtvec'|csr }}"
 
     # reset hart state as per machine-level ISA
 
@@ -143,12 +144,10 @@ main:
     # check if interrupts should fire
 
     # timer interrupt
-    set mcause 0x80000007 # machine timer interrupt
-    jump main__skip_timer_interrupt equal mtip 0
     read mie {{CSRS}} "{{ 'mie'|csr }}"
-    op and mtie mie 0b10000000
+    op and mtie mie mtip
+    set mcause 0x80000007 # machine timer interrupt
     jump trap notEqual mtie 0
-main__skip_timer_interrupt:
 
 main__skip_time_update:
 
@@ -156,11 +155,14 @@ main__skip_time_update:
     jump main__read_icache notEqual icache_var null
 
     # fall back to slow instruction fetch/decode if not in valid icache range
+    # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= ROM_SIZE
     jump main__access_icache lessThan pc __etext
     jump main__slow_instruction_fetch lessThan pc ROM_SIZE
     jump main__access_icache lessThan pc ICACHE_SIZE
 
 main__slow_instruction_fetch:
+    jump default_mtvec_handler equal pc {{DEFAULT_MTVEC}}
+
     set mcause 1 # instruction access fault
     jump trap greaterThanEq pc RAM_END # prevent executing from MMIO
 
@@ -197,9 +199,10 @@ main__read_icache:
     read rs1 {{REGISTERS}} arg1
     read rs2 {{REGISTERS}} arg2
     
-    # pause if in single-stepping mode
+    # pause if in single-stepping mode, or if we hit the configured breakpoint
     sensor enabled {{SINGLE_STEP_SWITCH}} @enabled
     jump pause_step equal enabled true
+    jump pause_step strictEqual pc BREAKPOINT_ADDRESS
 done_pause_step:
 
     # jump to instruction handler
@@ -274,13 +277,17 @@ done_pause_step:
     jump MLOGSYS always
     jump MLOGDRAW always
 
-# we jump here after instruction fetch if the single-step switch is enabled
+# we jump here after instruction fetch if the single-step switch is enabled or if we hit an address breakpoint
 pause_step:
     control enabled {{PAUSE_SWITCH}} true
+    control enabled {{SINGLE_STEP_SWITCH}} true
 
 pause_step__loop:
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause_step__loop equal enabled true
+
+    op add ret @counter 1
+    jump reload_config always
 
     jump done_pause_step always
 
@@ -308,6 +315,7 @@ end_instruction__no_overflow:
 
     op add pc pc 4
 
+end_instruction_trap:
     # halt if the reset switch was manually enabled
     sensor enabled {{RESET_SWITCH}} @enabled
     jump main notEqual enabled true
@@ -319,6 +327,11 @@ halt:
     jump reset always
 
 # exceptions
+
+default_mtvec_handler:
+    print "Control transferred to {{DEFAULT_MTVEC}} (default mtvec), halting."
+    printflush {{ERROR_OUTPUT}}
+    jump halt always
 
 illegal_instruction:
     set mcause 2
@@ -349,9 +362,20 @@ trap:
     # we don't have S-mode, so always trap into M-mode
     set privilege_mode 0b11
 
-    jump main always
+    jump end_instruction_trap always
 
 # helper functions
+
+# reload config options that are safe to change mid-execution
+reload_config:
+    # ipt go brrrr
+    read TARGET_IPT {{CONFIG}} "TARGET_IPT"
+    setrate TARGET_IPT
+    set IPT @ipt # for debug output
+
+    read BREAKPOINT_ADDRESS {{CONFIG}} "BREAKPOINT_ADDRESS"
+
+    set @counter ret
 
 # sign extension function
 # value, length -> result
@@ -710,16 +734,19 @@ decode_BRANCH:
     set op_id 10; jump end_decode always # BGEU
 
 decode_LOAD:
+    jump decode_illegal_instruction equal funct3 3
     jump decode_illegal_instruction greaterThanEq funct3 6
 
-    op add @counter @counter funct3_x2
-
-    set op_id 11; jump decode_I-type always # LB
-    set op_id 12; jump decode_I-type always # LH
-    set op_id 13; jump decode_I-type always # LW
-    jump decode_illegal_instruction always; stop
-    set op_id 14; jump decode_I-type always # LBU
-    set op_id 15; jump decode_I-type always # LHU
+    # 11: LB
+    # 12: LH
+    # 13: LW
+    # illegal_instruction
+    # 14: LBU
+    # 15: LHU
+    op add op_id 11 funct3
+    op greaterThan offset funct3 3 # subtract 1 if funct3 > 3
+    op sub op_id op_id offset
+    jump decode_I-type always
 
 decode_STORE:
     # S-type: arg1=rs1, arg2=rs2, arg3=imm
@@ -820,15 +847,13 @@ decode_OP_0000001:
     jump end_decode always
 
 decode_MISC-MEM:
-    jump decode_illegal_instruction notEqual funct3 0
+    jump decode_illegal_instruction greaterThan funct3 1 # FENCE=0, FENCE.I=1
 
-    set op_id 38 # FENCE
+    set op_id 38 # FENCE/FENCE.I
     jump decode_I-type_no_extend_sign always
 
 decode_SYSTEM:
-    # subtract 1 if funct3 > 4
     jump decode_illegal_instruction equal funct3 4
-    op greaterThan offset funct3 4
 
     # 39: PRIV
     # 40: CSRRW
@@ -839,6 +864,7 @@ decode_SYSTEM:
     # 44: CSRRSI
     # 45: CSRRCI
     op add op_id 39 funct3
+    op greaterThan offset funct3 4 # subtract 1 if funct3 > 4
     op sub op_id op_id offset
     jump decode_I-type_no_extend_sign always
 
@@ -1538,6 +1564,7 @@ rem_by_zero:
 
 FENCE:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # note: this currently also handles FENCE.I, but that will need to change if we want either of them to not be a no-op
 
     # PAUSE
     # TODO: there's probably a better way to do this
@@ -1793,10 +1820,8 @@ MLOGSYS:
     # initialize icache
     # NOTE: if we add more instructions to MLOGSYS, this needs to move to its own label
 
-    # TODO: is this the right trap to use here?
-    jump illegal_instruction greaterThan rs1 ROM_SIZE
-
-    set __etext rs1
+    op min __etext rs1 ROM_SIZE
+    op min __etext __etext ICACHE_SIZE
 
     # decode .text
     set STATE "decoding"
@@ -1980,6 +2005,7 @@ set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{RAM_START}} null
 set {{MMIO_START}} null
+set {{DEFAULT_MTVEC}} null
 # unused variables
 set {{ {{
 set STATE STATE

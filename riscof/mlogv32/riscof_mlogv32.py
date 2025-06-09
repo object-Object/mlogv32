@@ -184,15 +184,15 @@ class mlogv32(pluginTemplate):
 
                 logger.debug(f"Compile command: {compile_cmd}")
                 if utils.shellCommand(compile_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError("Compile failed!")
+                    raise RuntimeError(f"Compile failed: {testname}")
 
                 logger.debug(f"Objcopy command: {objcopy_cmd}")
                 if utils.shellCommand(objcopy_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError("Objcopy failed!")
+                    raise RuntimeError(f"Objcopy failed: {testname}")
 
-                # logger.debug(f"Objdump command: {objdump_cmd}")
-                # if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
-                #     raise RuntimeError("Objdump failed!")
+                logger.debug(f"Objdump command: {objdump_cmd}")
+                if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
+                    raise RuntimeError(f"Objdump failed: {testname}")
 
                 if not self.target_run:
                     continue
@@ -229,8 +229,8 @@ class mlogv32(pluginTemplate):
                         sig.write(word.hex() + "\n")
 
                 if msg := processor.status().error_output:
-                    logger.error(f"Processor execution failed: {msg}")
-                    # raise RuntimeError(f"Processor execution failed: {msg}")
+                    # logger.error(f"Processor execution failed: {msg}")
+                    raise RuntimeError(f"Processor execution failed: {msg}")
 
                 logger.debug(f"Finished test: {testname}")
 

@@ -2,39 +2,45 @@ OUTPUT_ARCH( "riscv" )
 ENTRY(rvtest_entry_point)
 
 MEMORY {
-    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 0x200000
-    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 0x200000
+    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 0x480000
+    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 0x480000
     MMIO (rw)  : ORIGIN = 0xf0000000, LENGTH = 16
 }
 
 SECTIONS
 {
-    .text : {
-        KEEP(*(.text.init));
-        *(.text)
+    .text.init.rom : ALIGN(4) {
+        KEEP(*(.text.init.rom));
+        . = ALIGN(4);
+        __etext_rom = .;
+    } > ROM
+
+    .text : ALIGN(4) {
+        __stext = .;
+        *(.text.init);
+        *(.text);
         . = ALIGN(4);
         __etext = .;
-    } > ROM
+    } > RAM AT > ROM
+
+    __sitext = LOADADDR(.text);
 
     .data : ALIGN(4) {
         __sdata = .;
         *(.data);
         *(.data.string);
+        . = ALIGN(4);
+        __edata = .;
     } > RAM AT > ROM
-
-    . = ALIGN(4);
-    __edata = .;
 
     __sidata = LOADADDR(.data);
 
     .bss (NOLOAD) : ALIGN(4) {
-        . = ALIGN(4);
         __sbss = .;
         *(.bss);
+        . = ALIGN(4);
+        __ebss = .;
     } > RAM
-
-    . = ALIGN(4);
-    __ebss = .;
 
     _end = .;
 }

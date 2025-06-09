@@ -200,6 +200,11 @@ loop:
     op add ret @counter 1
     jump mark_memory always
 
+    setmarker remove mark_memory_id
+    op add tmp mark_memory_id 1
+    setmarker remove tmp
+    jump loop__no_mark_icache lessThanEq ICACHE_SIZE 0
+
     print "ICACHE_START\n{0}"
     set address ICACHE_START
     op add ret @counter 1
@@ -209,6 +214,7 @@ loop:
     op sub address ICACHE_END 1
     op add ret @counter 1
     jump mark_memory always
+loop__no_mark_icache:
 
     # clear
 
@@ -356,10 +362,12 @@ loop:
     op add ret @counter 1
     jump format_bin always
 
-    print "mie      = {0}\n\n"
+    print "mie      = {0}\n"
     set n mie
     op add ret @counter 1
     jump format_bin always
+
+    #{{'\n'}} {{ print(0, 17) }}
 
     print "cycle   = {0}\n"
     format cycle
@@ -370,7 +378,7 @@ loop:
     print "instret = {0}\n\n"
     format instret
 
-    #{{'\n'}} {{ print(0, 17) }}
+    #{{'\n'}} {{ print(0, 33) }}
 
     # column 2
 

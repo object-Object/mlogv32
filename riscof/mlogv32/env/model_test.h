@@ -10,11 +10,27 @@
 #define RVMODEL_HALT                                              \
   .insn i CUSTOM_0, 0, zero, zero, 0;
 
-// initialize icache, .data, and .bss
+// initialize icache, .text, .data, and .bss
+// see https://github.com/riscv-non-isa/riscv-arch-test/issues/202
 #define RVMODEL_BOOT \
   .option norelax; \
-  la t0, __etext; \
+  .section .text.init.rom; \
+  \
+  la t0, __etext_rom; \
   .insn i CUSTOM_0, 0, zero, t0, 5; \
+  \
+  la t0, __sitext; \
+  la t1, __stext; \
+  la t2, __etext; \
+mlogv32_load_text: \
+  bgeu t1, t2, mlogv32_text_done; \
+  lb t3, 0(t0); \
+  sb t3, 0(t1); \
+  addi t0, t0, 1; \
+  addi t1, t1, 1; \
+  j mlogv32_load_text; \
+mlogv32_text_done: \
+  \
   la t0, __sidata; \
   la t1, __sdata; \
   la t2, __edata; \
@@ -26,6 +42,7 @@ mlogv32_load_data: \
   addi t1, t1, 1; \
   j mlogv32_load_data; \
 mlogv32_data_done: \
+  \
   la t0, __sbss; \
   la t1, __ebss; \
 mlogv32_clear_bss: \
@@ -33,7 +50,9 @@ mlogv32_clear_bss: \
   sb zero, 0(t0); \
   addi t0, t0, 1; \
   j mlogv32_clear_bss; \
-mlogv32_bss_done:
+mlogv32_bss_done: \
+  \
+  tail rvtest_init;
 
 //RV_COMPLIANCE_DATA_BEGIN
 #define RVMODEL_DATA_BEGIN                                              \

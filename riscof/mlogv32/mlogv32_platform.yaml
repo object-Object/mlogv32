@@ -2,3 +2,9 @@ reset:
   address: 0x0
 nmi:
   label: nmi_vector # we don't have an nmi vector, but riscof gets mad if this is removed
+mtime:
+  implemented: true
+  address: 0xf0000000
+mtimecmp:
+  implemented: true
+  address: 0xf0000008

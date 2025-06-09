@@ -148,6 +148,11 @@ loop:
     op shl timeh timeh 32
     op add time time timeh
     
+    read mtimecmp CPU "mtimecmp"
+    read mtimecmph CPU "mtimecmph"
+    op shl mtimecmph mtimecmph 32
+    op add mtimecmp mtimecmp mtimecmph
+    
     read instret CSRS "{{ 'instret'|csr }}"
     read instreth CSRS "{{ 'instreth'|csr }}"
     op shl instreth instreth 32
@@ -375,13 +380,16 @@ loop__no_mark_icache:
 
     #{{'\n'}} {{ print(0, 17) }}
 
-    print "cycle   = {0}\n"
-    format cycle
+    print "mtimecmp = {0}\n"
+    format mtimecmp
 
-    print "time    = {0}\n"
+    print "time     = {0}\n"
     format time
 
-    print "instret = {0}\n\n"
+    print "cycle    = {0}\n"
+    format cycle
+
+    print "instret  = {0}\n\n"
     format instret
 
     #{{'\n'}} {{ print(0, 34) }}

@@ -128,24 +128,30 @@ main:
     op equal mtimeh_eq_mtimecmph mtimeh mtimecmph
     op greaterThanEq mtime_ge_mtimecmp mtime mtimecmp
 
-    op and mtip mtimeh_eq_mtimecmph mtime_ge_mtimecmp
-    op or mtip mtip mtimeh_gt_mtimecmph
-    op shl mtip mtip 7
+    op and mip.mtip mtimeh_eq_mtimecmph mtime_ge_mtimecmp
+    op or mip.mtip mip.mtip mtimeh_gt_mtimecmph
+    op shl mip.mtip mip.mtip 7
 
     read mip {{CSRS}} "{{ 'mip'|csr }}"
     op and mip mip 0b11111111111111111111111101111111
-    op or mip mip mtip
+    op or mip mip mip.mtip
     write mip {{CSRS}} "{{ 'mip'|csr }}"
 
     # check if interrupts should fire
 
+    jump main__interrupts_user_mode lessThan privilege_mode 0b11
+    op and mstatus.mie mstatus 0b1000
+    jump main__skip_interrupts equal mstatus.mie 0
+main__interrupts_user_mode:
+
     # timer interrupt
     read mie {{CSRS}} "{{ 'mie'|csr }}"
-    op and mtie mie mtip
+    op and mie.mtie mie mip.mtip
     set mcause 0x80000007 # machine timer interrupt
     set mtval 0
-    jump trap notEqual mtie 0
+    jump trap notEqual mie.mtie 0
 
+main__skip_interrupts:
 main__skip_time_update:
 
     set mtval pc
@@ -334,7 +340,11 @@ default_mtvec_handler:
 
 illegal_instruction:
     set mcause 2
-    set mtval 0 # TODO: return faulting instruction bits?
+    # TODO: return faulting instruction bits?
+    # continue into trap_without_mtval
+
+trap_without_mtval:
+    set mtval 0
     # continue into trap
 
 trap:
@@ -1598,8 +1608,7 @@ ECALL:
     # 0b1000 (8) = ecall from U-mode
     # 0b1011 (11) = ecall from S-mode
     op or mcause 0b1000 privilege_mode
-    set mtval 0
-    jump trap always
+    jump trap_without_mtval always
 
 EBREAK:
     set mcause 3 # breakpoint

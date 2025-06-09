@@ -1,3 +1,12 @@
+#% macro print(col, row)
+   #{{'\n'}}    draw print {{ 8 + col * 7 }} {{ 508 - row * 13 }} topLeft
+    drawflush DISPLAY
+#% endmacro
+
+#% macro rect(col, row, width, height)
+   #{{'\n'}}    draw rect {{ 8 + col * 7 }} {{ 508 - row * 13 - 3 }} {{ width * 7 }} {{ height * -13 }}
+#% endmacro
+    
     setrate 2000
 
     set LOOKUP_PROC_SIZE 260
@@ -58,11 +67,7 @@ reset__find_lookup_start:
     print "x14 (a4)    =\n"
     print "x15 (a5)    =\n"
 
-    #
-    #
-    draw print 8 508 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(0, 0) }}
 
     print "x16 (a6)  =\n"
     print "x17 (a7)  =\n"
@@ -81,11 +86,7 @@ reset__find_lookup_start:
     print "x30 (t5)  =\n"
     print "x31 (t6)  =\n"
 
-    #
-    #
-    draw print 260 508 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(36, 0) }}
 
 loop:
     set mark_memory_id 0
@@ -137,28 +138,28 @@ loop:
     read x30_t5 REGISTERS 30
     read x31_t6 REGISTERS 31
     
-    read cycle CSRS "WN"
-    read cycleh CSRS "Y%"
+    read cycle CSRS "{{ 'cycle'|csr }}"
+    read cycleh CSRS "{{ 'cycleh'|csr }}"
     op shl cycleh cycleh 32
     op add cycle cycle cycleh
     
-    read time CSRS "WO"
-    read timeh CSRS "Y&"
+    read time CSRS "{{ 'time'|csr }}"
+    read timeh CSRS "{{ 'timeh'|csr }}"
     op shl timeh timeh 32
     op add time time timeh
     
-    read instret CSRS "WP"
-    read instreth CSRS "Y("
+    read instret CSRS "{{ 'instret'|csr }}"
+    read instreth CSRS "{{ 'instreth'|csr }}"
     op shl instreth instreth 32
     op add instret instret instreth
 
-    read mstatus CSRS "-s"
-    read mtvec CSRS "-x"
-    read mip CSRS ".i"
-    read mie CSRS "-w"
-    read mscratch CSRS ".e"
-    read mepc CSRS ".f"
-    read mcause CSRS ".g"
+    read mstatus CSRS "{{ 'mstatus'|csr }}"
+    read mtvec CSRS "{{ 'mtvec'|csr }}"
+    read mip CSRS "{{ 'mip'|csr }}"
+    read mie CSRS "{{ 'mie'|csr }}"
+    read mscratch CSRS "{{ 'mscratch'|csr }}"
+    read mepc CSRS "{{ 'mepc'|csr }}"
+    read mcause CSRS "{{ 'mcause'|csr }}"
 
     read ipt CPU "IPT"
     read state CPU "STATE"
@@ -212,18 +213,9 @@ loop:
     # clear
 
     draw color 0 0 0 255
-    #
-    #
-    draw rect 106 505 70 -208
-
-    #
-    #
-    draw rect 344 505 70 -208
-
-    #
-    #
-    draw rect 8 284 511 -273
-
+    #{{'\n'}} {{ rect(14, 0, 10, 16) }}
+    #{{'\n'}} {{ rect(48, 0, 10, 16) }}
+    #{{'\n'}} {{ rect(0, 17, 73, 21) }}
     draw color 255 255 255 255
 
     # column 1
@@ -308,11 +300,7 @@ loop:
     op add ret @counter 1
     jump format_hex always
 
-    #
-    #
-    draw print 106 508 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(14, 0) }}
 
     print "cycle   = {0}\n"
     format cycle
@@ -382,11 +370,7 @@ loop:
     op add ret @counter 1
     jump format_bin always
 
-    #
-    #
-    draw print 8 287 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(0, 17) }}
 
     # column 2
 
@@ -470,11 +454,7 @@ loop:
     op add ret @counter 1
     jump format_hex always
 
-    #
-    #
-    draw print 344 508 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(48, 0) }}
 
     print "@ipt            = {0}\n"
     format ipt
@@ -502,11 +482,7 @@ loop:
     format "machine"
 done_privilege_mode:
 
-    #
-    #
-    draw print 260 287 topLeft
-    drawflush DISPLAY
-
+    #{{'\n'}} {{ print(36, 17) }}
 
     wait 0.02
     jump loop always

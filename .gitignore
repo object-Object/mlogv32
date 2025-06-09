@@ -8,6 +8,7 @@
 
 /src/init.mlog
 /src/main.mlog
+/src/debugger.mlog
 
 node_modules/
 

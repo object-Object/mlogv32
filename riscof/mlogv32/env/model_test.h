@@ -10,9 +10,11 @@
 #define RVMODEL_HALT                                              \
   .insn i CUSTOM_0, 0, zero, zero, 0;
 
+// initialize icache, .data, and .bss
 #define RVMODEL_BOOT \
   .option norelax; \
-  .word __etext; \
+  la t0, __etext; \
+  .insn i CUSTOM_0, 0, zero, t0, 5; \
   la t0, __sidata; \
   la t1, __sdata; \
   la t2, __edata; \

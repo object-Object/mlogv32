@@ -6,9 +6,11 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ## Architecture
 
-Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache which is 4x less dense than main memory. The instruction cache is updated at reset, and whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
+Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache which is 4x less dense than main memory.
 
-Code begins executing at address `0x4`. Address `0x0` must contain the size of the `.text` section (ie. `__etext`) to tell the processor how much data to decode from ROM. If this value is `0`, no ROM data will be decoded.
+The instruction cache should be initialized at boot using the MLOGSYS instruction. It is also updated whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
+
+Code begins executing at address `0x00000000` (ie. the start of ROM).
 
 The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
 
@@ -60,15 +62,16 @@ This non-standard extension adds instructions to control the mlogv32 processor's
 
 The MLOG instructions are encoded with an I-type instruction format using the _custom-0_ opcode. The zero-extended immediate is used as a minor opcode (funct12) for implementation reasons.
 
-The MLOGSYS instruction is used for simple system controls, including halt, `printchar`, `printflush`, `drawflush`, and sortKB/kbconv integration.
+The MLOGSYS instruction is used for simple system controls, including halt, `printchar`, `printflush`, `drawflush`, sortKB/kbconv integration, and icache initialization.
 
-| funct12 | rd                      | rs1     | name                       |
-| ------- | ----------------------- | ------- | -------------------------- |
-| 0       | `00000`                 | `00000` | Halt                       |
-| 1       | `00000`                 | char    | `printchar`                |
-| 2       | `00000`                 | `00000` | `printflush`               |
-| 3       | `00000`                 | `00000` | `drawflush`                |
-| 4       | char (0 if no new data) | `00000` | Read next char from sortKB |
+| funct12 | rd                      | rs1       | name                       |
+| ------- | ----------------------- | --------- | -------------------------- |
+| 0       | `00000`                 | `00000`   | Halt                       |
+| 1       | `00000`                 | char      | `printchar`                |
+| 2       | `00000`                 | `00000`   | `printflush`               |
+| 3       | `00000`                 | `00000`   | `drawflush`                |
+| 4       | char (0 if no new data) | `00000`   | Read next char from sortKB |
+| 5       | `00000`                 | \_\_etext | Decode ROM .text section   |
 
 The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers a0 to a5 as necessary, and any return value is placed in _rd_. If _rd_ is specified as `00000` in the below table, no value will be written to `rd` in any case.
 

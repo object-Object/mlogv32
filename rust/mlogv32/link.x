@@ -34,8 +34,6 @@ SECTIONS {
     .text : {
         __stext = .;
 
-        LONG(__etext);
-
         KEEP(*(.text.start));
         *(.text.reset);
         *(.text .text.*);

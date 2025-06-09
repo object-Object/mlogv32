@@ -25,10 +25,13 @@ pub mod prelude;
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-// init global/stack/frame pointers
+// init icache and global/stack/frame pointers
 #[rustfmt::skip]
 global_asm!("
 .section .text.start
+    la t0, __etext
+    .insn i CUSTOM_0, 0, zero, t0, 5
+
     la gp, __global_pointer$
     
     la t1, _stack_start

@@ -2,6 +2,10 @@
 
 .global _start
 _start:
+    # initialize icache
+    la t0, __etext
+    .insn i CUSTOM_0, 0, zero, t0, 5
+
     # reset mtime/mcycle/minstret
     li t0, 0xf0000000 # mtime
     sw zero, 4(t0)

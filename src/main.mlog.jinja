@@ -58,43 +58,8 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    # read __etext from address 0, or default to ROM_SIZE if __etext is 0
-    set address 0
-    op add ret @counter 1
-    jump load_rom_word_unchecked always
-    set __etext result
-
-    jump reset__valid_etext lessThanEq __etext ROM_SIZE
-    print "Invalid __etext found at address 0x0, must be <={0}"
-    format ROM_SIZE
-    jump halt always
-reset__valid_etext:
-
-    # decode .text
-    set STATE "decoding"
-    set decode_address 4
-    set decode_var null
-
-reset__decode:
-    set address decode_address
-    op add ret @counter 1
-    jump load_rom_word_unchecked always
-    set instruction result
-
-    op add decode_ret @counter 1
-    jump decode always
-
-    op add decode_address decode_address 4
-    jump reset__decode lessThan decode_address __etext
-
-    set STATE "running"
-
     # clear LR/SC reservation set
     set reservation_set null
-
-    # start executing code at address 4 (address 0 is __etext)
-    set pc 4
-    set icache_var null
 
     # read initial CSR values
     read mtime {{CSRS}} "{{ 'time'|csr }}"
@@ -103,6 +68,12 @@ reset__decode:
     read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     read minstret {{CSRS}} "{{ 'minstret'|csr }}"
     read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
+
+    # start executing code at address 0
+    set pc 0
+    set icache_var null
+    set __etext 0
+    set STATE "running"
 
     # schedule time update
     set last_time_update @time
@@ -314,7 +285,6 @@ end_instruction_preserve_instret:
 # enable the reset switch, wait until it's disabled, then reset the processor
 # this must stay directly after end_instruction
 halt:
-    printflush {{ERROR_OUTPUT}}
     control enabled {{RESET_SWITCH}} true
     jump reset always
 
@@ -327,6 +297,7 @@ illegal_instruction:
 trap:
     print "Unhandled trap: "
     print mcause
+    printflush {{ERROR_OUTPUT}}
     jump halt always
 
 # helper functions
@@ -1712,8 +1683,8 @@ read_modify_write_csr__minstreth:
     jump end_instruction_with_result always
 
 MLOGSYS:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump illegal_instruction greaterThanEq arg2 5
+    # I-type: arg1=rs1, arg2=funct12, arg3=rd
+    jump illegal_instruction greaterThan arg2 5
     
     op mul jump arg2 2
     op add @counter @counter jump
@@ -1735,8 +1706,38 @@ MLOGSYS:
     jump end_instruction always
 
     # read sortKB
+    jump MLOGSYS__read_sortKB always
+    stop
+
+    # initialize icache
     # NOTE: if we add more instructions to MLOGSYS, this needs to move to its own label
 
+    # TODO: is this the right trap to use here?
+    jump illegal_instruction greaterThan rs1 ROM_SIZE
+
+    set __etext rs1
+
+    # decode .text
+    set STATE "decoding"
+    set decode_address 0
+    set decode_var null
+
+MLOGSYS__init_icache__loop:
+    set address decode_address
+    op add ret @counter 1
+    jump load_rom_word_unchecked always
+    set instruction result
+
+    op add decode_ret @counter 1
+    jump decode always
+
+    op add decode_address decode_address 4
+    jump MLOGSYS__init_icache__loop lessThan decode_address __etext
+
+    set STATE "running"
+    jump end_instruction always
+
+MLOGSYS__read_sortKB:
     # check the current ptr and return 0 if we've already reached it
     # NOTE: this will fail if the user has typed 63 characters since we last checked
     set result 0
@@ -1754,7 +1755,7 @@ MLOGSYS:
 
 MLOGDRAW:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump illegal_instruction greaterThanEq arg2 16
+    jump illegal_instruction greaterThan arg2 15
 
     read a0 {{REGISTERS}} 10
     read a1 {{REGISTERS}} 11

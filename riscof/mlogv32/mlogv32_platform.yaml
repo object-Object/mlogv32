@@ -1,4 +1,4 @@
 reset:
-  address: 0x4
+  address: 0x0
 nmi:
   label: nmi_vector # we don't have an nmi vector, but riscof gets mad if this is removed

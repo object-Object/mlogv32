@@ -55,7 +55,7 @@ REGISTER_NAMES = [
 def main(
     host: str = "localhost",
     port: int = 5000,
-    imitate_sail: bool = False,
+    sail: bool = False,
     log_output: Path = Path("debug.log"),
     json_output: Path = Path("debug.json"),
     verbose: Annotated[bool, Option("-v", "--verbose")] = False,
@@ -85,7 +85,7 @@ def main(
 
         lines = [
             *(
-                f"x{i}{'' if imitate_sail else f' ({REGISTER_NAMES[i]})'} <- 0x{value:08X}"
+                f"x{i}{'' if sail else f' ({REGISTER_NAMES[i]})'} <- 0x{value:08X}"
                 for i, value in enumerate(status.registers)
             ),
             f"CSR mscratch <- 0x{status.mscratch:08X}",
@@ -100,12 +100,9 @@ def main(
             f"state <- {state}",
             f"error_output: {status.error_output or '<empty>'}",
             "",
-            f"{'[M]' if imitate_sail else 'pc'}:{f'0x{status.instruction or 0:#08X}' if imitate_sail else ''} 0x{status.pc or 0:08X}",
-            *(
-                []
-                if imitate_sail
-                else [f"instruction: {status.instruction or 0:#034b}"]
-            ),
+            f"{'[M]' if sail else 'pc'}: 0x{status.pc or 0:08X}"
+            + (f" (0x{status.instruction or 0:08X})" if sail else ""),
+            *([] if sail else [f"instruction: {status.instruction or 0:#034b}"]),
         ]
 
         return "\n".join(lines)
@@ -120,7 +117,7 @@ def main(
         result = [status]
 
         prev_formatted = format_status(status)
-        f.write(prev_formatted)
+        f.write(prev_formatted + "\n")
 
         if status.running:
             processor.unpause()
@@ -155,7 +152,7 @@ def main(
                         for i, (line, prev_line) in enumerate(
                             zip(formatted.splitlines(), prev_formatted.splitlines())
                         )
-                        if len(formatted.splitlines()) - i <= 3
+                        if len(formatted.splitlines()) - i <= (2 if sail else 3)
                         or line != prev_line
                         or line == ""
                     )

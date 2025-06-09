@@ -18,7 +18,8 @@
     sw x1, tohost, t5;                                                        \
     j write_tohost;
 
-#define RVMODEL_BOOT
+#define RVMODEL_BOOT \
+  .option norelax;
 
 //RV_COMPLIANCE_DATA_BEGIN
 #define RVMODEL_DATA_BEGIN                                              \

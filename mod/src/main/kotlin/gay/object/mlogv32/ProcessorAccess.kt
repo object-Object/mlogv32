@@ -13,7 +13,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mindustry.Vars
 import mindustry.gen.Building
+import mindustry.logic.LVar
 import mindustry.world.blocks.logic.LogicBlock.LogicBuild
+import mindustry.world.blocks.logic.MemoryBlock.MemoryBuild
 import mindustry.world.blocks.logic.MessageBlock.MessageBuild
 import mindustry.world.blocks.logic.SwitchBlock.SwitchBuild
 import kotlin.concurrent.thread
@@ -27,8 +29,12 @@ class ProcessorAccess(
     val memoryWidth: Int,
     val romSize: Int,
     val ramSize: Int,
+    val registers: MemoryBuild,
+    val csrs: LogicBuild,
     val errorOutput: MessageBuild,
     val resetSwitch: SwitchBuild,
+    val pauseSwitch: SwitchBuild,
+    val singleStepSwitch: SwitchBuild,
 ) {
     val romEnd = ROM_START + romSize.toUInt()
     val ramEnd = RAM_START + ramSize.toUInt()
@@ -115,6 +121,11 @@ class ProcessorAccess(
     fun stopServer() {
         ProcessorAccess.stopServer()
     }
+
+    fun getCSR(address: Int): UInt =
+        csrs.executor.optionalVar(address + 1)
+            ?.numu()
+            ?: 0u
 
     private fun ramWordsSequence(startAddress: UInt) = sequence {
         require(startAddress in RAM_START..<ramEnd) { "Start address must be within RAM." }
@@ -230,8 +241,12 @@ class ProcessorAccess(
                 memoryWidth = positiveIntVar(build, "MEMORY_WIDTH") ?: return null,
                 romSize = positiveIntVar(build, "ROM_SIZE") ?: return null,
                 ramSize = positiveIntVar(build, "RAM_SIZE") ?: return null,
+                registers = buildVar<MemoryBuild>(build, "cell1") ?: return null,
+                csrs = buildVar<LogicBuild>(build, "processor17") ?: return null,
                 errorOutput = buildVar<MessageBuild>(build, "message1") ?: return null,
                 resetSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
+                pauseSwitch = buildVar<SwitchBuild>(build, "switch2") ?: return null,
+                singleStepSwitch = buildVar<SwitchBuild>(build, "switch3") ?: return null,
             )
         }
 
@@ -264,6 +279,8 @@ private fun linkedBuild(build: LogicBuild, name: String) =
         .firstOrNull { it.active && it.valid && it.name == name }
         ?.let { Vars.world.build(it.x, it.y) }
 
+private fun LVar.numu() = num().toUInt()
+
 @Serializable
 sealed class Request {
     abstract suspend fun handle(processor: ProcessorAccess): Response
@@ -283,7 +300,9 @@ sealed class Request {
 
 @Serializable
 @SerialName("flash")
-data class FlashRequest(val path: String) : Request() {
+data class FlashRequest(
+    val path: String,
+) : Request() {
     override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
         val file = Core.files.absolute(path)
         require(file.exists()) { "File not found." }
@@ -314,22 +333,45 @@ data class DumpRequest(
 
 @Serializable
 @SerialName("start")
-data class StartRequest(val wait: Boolean) : Request() {
-    override suspend fun handle(processor: ProcessorAccess): Response {
-        runOnMainThread {
-            processor.resetSwitch.configure(false)
-        }
-        if (!wait) {
-            return SuccessResponse("Processor started.")
-        }
+data class StartRequest(
+    val singleStep: Boolean = false,
+) : Request() {
+    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+        processor.singleStepSwitch.configure(singleStep)
+        processor.resetSwitch.configure(false)
+        SuccessResponse("Processor started.")
+    }
+}
 
+@Serializable
+@SerialName("wait")
+data class WaitRequest(
+    val stopped: Boolean,
+    val paused: Boolean,
+) : Request() {
+    override suspend fun handle(processor: ProcessorAccess): Response {
         while (true) {
             delay(1000/60) // 1 tick
-            val stopped = runOnMainThread { processor.resetSwitch.enabled }
-            if (stopped) {
-                return SuccessResponse("Processor started and finished executing.")
+            val (stopped, paused) = runOnMainThread {
+                processor.resetSwitch.enabled to processor.pauseSwitch.enabled
+            }
+            if (this.stopped && stopped) {
+                return SuccessResponse("Processor has stopped.")
+            }
+            if (this.paused && paused) {
+                return SuccessResponse("Processor has paused.")
             }
         }
+    }
+}
+
+@Serializable
+@SerialName("unpause")
+data object UnpauseRequest : Request() {
+    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+        require(!processor.resetSwitch.enabled) { "Processor is not running!" }
+        processor.pauseSwitch.configure(false)
+        SuccessResponse("Processor unpaused.")
     }
 }
 
@@ -338,6 +380,8 @@ data class StartRequest(val wait: Boolean) : Request() {
 data object StopRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
         processor.resetSwitch.configure(true)
+        processor.pauseSwitch.configure(false)
+        processor.singleStepSwitch.configure(false)
         SuccessResponse("Processor stopped.")
     }
 }
@@ -348,8 +392,20 @@ data object StatusRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
         StatusResponse(
             running = !processor.resetSwitch.enabled,
-            pc = processor.build.executor.optionalVar("pc")?.numi(),
+            paused = processor.pauseSwitch.enabled,
             errorOutput = processor.errorOutput.message?.toString() ?: "",
+            pc = processor.build.executor.optionalVar("pc")?.numu(),
+            instruction = processor.build.executor.optionalVar("instruction")?.numu(),
+            privilegeMode = processor.build.executor.optionalVar("privilege_mode")?.numu(),
+            registers = processor.registers.memory.take(32).map { it.toUInt() },
+            mscratch = processor.getCSR(0x340),
+            mtvec = processor.getCSR(0x305),
+            mepc = processor.getCSR(0x341),
+            mcause = processor.getCSR(0x342),
+            mtval = processor.getCSR(0x343),
+            mstatus = processor.getCSR(0x300),
+            mip = processor.getCSR(0x344),
+            mie = processor.getCSR(0x304),
         )
     }
 }
@@ -365,8 +421,20 @@ data class SuccessResponse(val message: String) : Response()
 @SerialName("status")
 data class StatusResponse(
     val running: Boolean,
-    val pc: Int?,
+    val paused: Boolean,
     val errorOutput: String,
+    val pc: UInt?,
+    val instruction: UInt?,
+    val privilegeMode: UInt?,
+    val registers: List<UInt>,
+    val mscratch: UInt,
+    val mtvec: UInt,
+    val mepc: UInt,
+    val mcause: UInt,
+    val mtval: UInt,
+    val mstatus: UInt,
+    val mip: UInt,
+    val mie: UInt,
 ) : Response()
 
 @Serializable

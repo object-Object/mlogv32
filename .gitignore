@@ -5,6 +5,7 @@
 *.hex
 /build/
 /out/
+debug.json
 
 /src/init.mlog
 /src/main.mlog

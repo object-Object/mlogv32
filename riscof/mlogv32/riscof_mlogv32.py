@@ -216,7 +216,8 @@ class mlogv32(pluginTemplate):
 
                 processor.stop()
                 processor.flash(binary_file_host)
-                processor.start(wait=True)
+                processor.start()
+                processor.wait(stopped=True, paused=False)
                 processor.dump(out_file_host, begin_signature, signature_length)
 
                 with open(out_file, "rb") as out, open(sig_file, "w") as sig:

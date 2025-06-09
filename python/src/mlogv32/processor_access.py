@@ -56,8 +56,16 @@ class ProcessorAccess:
         self._send_request(DumpRequest(path=path, address=address, bytes=bytes))
         return self._recv_response(SuccessResponse)
 
-    def start(self, wait: bool):
-        self._send_request(StartRequest(wait=wait))
+    def start(self, *, single_step: bool = False):
+        self._send_request(StartRequest(single_step=single_step))
+        return self._recv_response(SuccessResponse)
+
+    def wait(self, *, stopped: bool, paused: bool):
+        self._send_request(WaitRequest(stopped=stopped, paused=paused))
+        return self._recv_response(SuccessResponse)
+
+    def unpause(self):
+        self._send_request(UnpauseRequest())
         return self._recv_response(SuccessResponse)
 
     def stop(self):
@@ -95,6 +103,9 @@ class ProcessorAccess:
 class BaseModel(_BaseModel):
     model_config = ConfigDict(
         alias_generator=alias_generators.to_camel,
+        validate_by_name=True,
+        validate_by_alias=True,
+        serialize_by_alias=True,
     )
 
 
@@ -112,7 +123,17 @@ class DumpRequest(BaseModel):
 
 class StartRequest(BaseModel):
     type: Literal["start"] = "start"
-    wait: bool
+    single_step: bool
+
+
+class WaitRequest(BaseModel):
+    type: Literal["wait"] = "wait"
+    stopped: bool
+    paused: bool
+
+
+class UnpauseRequest(BaseModel):
+    type: Literal["unpause"] = "unpause"
 
 
 class StopRequest(BaseModel):
@@ -124,7 +145,13 @@ class StatusRequest(BaseModel):
 
 
 type Request = Annotated[
-    FlashRequest | DumpRequest | StartRequest | StopRequest | StatusRequest,
+    FlashRequest
+    | DumpRequest
+    | StartRequest
+    | WaitRequest
+    | UnpauseRequest
+    | StopRequest
+    | StatusRequest,
     Field(discriminator="type"),
 ]
 
@@ -137,8 +164,20 @@ class SuccessResponse(BaseModel):
 class StatusResponse(BaseModel):
     type: Literal["status"]
     running: bool
-    pc: int | None
+    paused: bool
     error_output: str
+    pc: int | None
+    instruction: int | None
+    privilege_mode: int | None
+    registers: list[int]
+    mscratch: int
+    mtvec: int
+    mepc: int
+    mcause: int
+    mtval: int
+    mstatus: int
+    mip: int
+    mie: int
 
 
 class ErrorResponse(BaseModel):

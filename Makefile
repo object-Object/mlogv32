@@ -15,7 +15,7 @@ asm: $(ASM_PROGRAMS)
 rust: $(RUST_PROGRAMS)
 
 .PHONY: mlog
-mlog: $(MLOG_PROGRAMS)
+mlog: $(MLOG_PROGRAMS) mlog-configs
 
 .PHONY: coremark
 coremark:
@@ -49,7 +49,11 @@ build/%.o: asm/%.s | build
 	riscv32-unknown-elf-gcc --compile -march=rv32ima_zicsr -o build/$*.o asm/$*.s
 
 src/%.mlog: src/%.mlog.jinja
-	python -m mlogv32.preprocessor -o src/$*.mlog src/$*.mlog.jinja
+	python -m mlogv32.preprocessor file -o src/$*.mlog src/$*.mlog.jinja
+
+.PHONY: mlog-configs
+mlog-configs: src/config/configs.yaml
+	python -m mlogv32.preprocessor configs src/config/configs.yaml
 
 build:
 	mkdir -p build

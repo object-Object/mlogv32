@@ -1,5 +1,5 @@
 {
     "watch": ["src", "python"],
-    "ext": "jinja,py",
-    "exec": "make mlog"
+    "ext": "jinja,py,yaml",
+    "exec": "make mlog || exit 1"
 }

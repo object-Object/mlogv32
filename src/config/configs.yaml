@@ -1,0 +1,14 @@
+template: base.mlog.jinja
+
+defaults:
+  TARGET_IPT: 500000
+  BREAKPOINT_ADDRESS: '0x'
+
+configs:
+  riscv-arch-test:
+    MEMORY_X_OFFSET: -11
+    MEMORY_Y_OFFSET: -26
+    MEMORY_WIDTH: 32
+    ROM_SIZE: '0x480000'
+    RAM_SIZE: '0x480000'
+    ICACHE_SIZE: '0xc0000'

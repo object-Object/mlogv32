@@ -1,0 +1,34 @@
+    # per-world config options for mlogv32
+
+    # reloaded after unpausing
+    set TARGET_IPT {{#TARGET_IPT}}
+    set BREAKPOINT_ADDRESS {{#BREAKPOINT_ADDRESS}}
+
+    # loaded at reset only
+    set MEMORY_X_OFFSET {{#MEMORY_X_OFFSET}}  # x offset from this proc to bottom left memory proc
+    set MEMORY_Y_OFFSET {{#MEMORY_Y_OFFSET}}  # y offset from this proc to bottom left memory proc
+    set MEMORY_WIDTH {{#MEMORY_WIDTH}}  # physical width of the memory procs
+
+    set ROM_SIZE    {{#ROM_SIZE}}  # ROM size in bytes (rx)
+    set RAM_SIZE    {{#RAM_SIZE}}  # RAM size in bytes (rwx)
+    set ICACHE_SIZE {{#ICACHE_SIZE}}  # icache size in variables, or bytes of memory it can represent; 4x less dense than ROM/RAM
+
+    # computed values
+    op add MEMORY_X @thisx MEMORY_X_OFFSET
+    op add MEMORY_Y @thisy MEMORY_Y_OFFSET
+
+    stop
+
+#%- if false
+# {% raw %}
+set {{ null
+set TARGET_IPT TARGET_IPT
+set BREAKPOINT_ADDRESS BREAKPOINT_ADDRESS
+set MEMORY_WIDTH MEMORY_WIDTH
+set ROM_SIZE ROM_SIZE
+set RAM_SIZE RAM_SIZE
+set ICACHE_SIZE ICACHE_SIZE
+set MEMORY_X MEMORY_X
+set MEMORY_Y MEMORY_Y
+# {% endraw %}
+#% endif

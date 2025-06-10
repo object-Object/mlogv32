@@ -10,6 +10,7 @@ debug.json
 /src/init.mlog
 /src/main.mlog
 /src/debugger.mlog
+/src/config/*.mlog
 
 node_modules/
 

@@ -20,9 +20,6 @@
     draw reset
     draw color 255 255 255 255
 
-    draw clear 0 0 0
-    drawflush DISPLAY
-
 reset:
     wait 0.00001
 
@@ -36,6 +33,8 @@ reset:
     set UART0 bank1
     set UART1 bank2
 
+    set DEBUGGER_RESET_SWITCH switch1
+
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
     jump reset strictEqual REGISTERS null
@@ -43,6 +42,7 @@ reset:
     jump reset strictEqual DISPLAY null
     jump reset strictEqual UART0 null
     jump reset strictEqual UART1 null
+    jump reset strictEqual DEBUGGER_RESET_SWITCH null
 
     set i -1
 reset__find_lookup_start:
@@ -54,6 +54,11 @@ reset__find_lookup_start:
     jump reset__find_lookup_start notEqual type_var "lookup"
 
     set LOOKUP_START i
+
+    control enabled DEBUGGER_RESET_SWITCH false
+
+    draw clear 0 0 0
+    drawflush DISPLAY
 
     print "x0  (zero)  =\n"
     print "x1  (ra)    =\n"
@@ -94,6 +99,9 @@ reset__find_lookup_start:
     #{{'\n'}} {{ print(36, 0) }}
 
 loop:
+    sensor enabled DEBUGGER_RESET_SWITCH @enabled
+    jump reset equal enabled true
+
     set mark_memory_id 0
 
     read MEMORY_X CPU "MEMORY_X"
@@ -261,7 +269,7 @@ loop__no_mark_icache:
     draw color 0 0 0 255
     #{{'\n'}} {{ rect(14, 0, 10, 16) }}
     #{{'\n'}} {{ rect(48, 0, 10, 16) }}
-    #{{'\n'}} {{ rect(0, 17, 73, 21) }}
+    #{{'\n'}} {{ rect(0, 17, 73, 22) }}
     draw color 255 255 255 255
 
     # column 1

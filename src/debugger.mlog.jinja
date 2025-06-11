@@ -96,7 +96,7 @@ reset__find_lookup_start:
     print "x30 (t5)  =\n"
     print "x31 (t6)  =\n"
 
-    #{{'\n'}} {{ print(36, 0) }}
+    #{{'\n'}} {{ print(35, 0) }}
 
 loop:
     sensor enabled DEBUGGER_RESET_SWITCH @enabled
@@ -280,7 +280,7 @@ loop__no_mark_icache:
 
     draw color 0 0 0 255
     #{{'\n'}} {{ rect(14, 0, 10, 16) }}
-    #{{'\n'}} {{ rect(48, 0, 10, 16) }}
+    #{{'\n'}} {{ rect(47, 0, 10, 16) }}
     #{{'\n'}} {{ rect(0, 17, 73, 22) }}
     draw color 255 255 255 255
 
@@ -530,7 +530,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    #{{'\n'}} {{ print(48, 0) }}
+    #{{'\n'}} {{ print(47, 0) }}
 
     print "@ipt            = {0}\n"
     format ipt
@@ -586,7 +586,7 @@ uart1_rx_fifo_size__no_overrun:
     format uart1_tx_rptr
     format uart1_tx_wptr
 
-    #{{'\n'}} {{ print(36, 17) }}
+    #{{'\n'}} {{ print(35, 17) }}
 
     wait 0.02
     jump loop always

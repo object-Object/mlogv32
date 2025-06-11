@@ -109,7 +109,13 @@ class ProcessorAccess(
                     try {
                         val selector = SelectorManager(Dispatchers.IO)
                         aSocket(selector).tcp().bind(hostname, port).use { serverSocket ->
-                            runServer(serverSocket)
+                            while (true) {
+                                Log.info("Waiting for clients...")
+                                val client = serverSocket.accept()
+                                launch {
+                                    handleClient(client)
+                                }
+                            }
                         }
                     } catch (e: Exception) {
                         Log.err("ProcessorAccess server failed", e)
@@ -200,32 +206,29 @@ class ProcessorAccess(
         return proc to ramVariable.mod(RAM_PROC_VARS)
     }
 
-    private suspend fun runServer(serverSocket: ServerSocket) {
-        while (true) {
-            Log.info("Waiting for clients...")
-            serverSocket.accept().use { client ->
-                Log.info("Client connected!")
-                val rx = client.openReadChannel()
-                val tx = client.openWriteChannel(true)
-                while (true) {
-                    val response: Response = try {
-                        val line = rx.readUTF8Line() ?: break
-                        Log.info("Got request: $line")
-                        val request = Json.decodeFromString<Request>(line)
-                        request.handle(this, rx, tx)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: IllegalArgumentException) {
-                        Log.err("Bad request", e)
-                        ErrorResponse.badRequest(e)
-                    } catch (e: Exception) {
-                        Log.err("Request failed", e)
-                        ErrorResponse(e)
-                    }
-                    tx.writeStringUtf8(Json.encodeToString(response) + "\n")
+    private suspend fun handleClient(client: Socket) {
+        client.use {
+            Log.info("Client connected!")
+            val rx = client.openReadChannel()
+            val tx = client.openWriteChannel(true)
+            while (true) {
+                val response: Response = try {
+                    val line = rx.readUTF8Line() ?: break
+                    Log.info("Got request: $line")
+                    val request = Json.decodeFromString<Request>(line)
+                    request.handle(this@ProcessorAccess, rx, tx)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IllegalArgumentException) {
+                    Log.err("Bad request", e)
+                    ErrorResponse.badRequest(e)
+                } catch (e: Exception) {
+                    Log.err("Request failed", e)
+                    ErrorResponse(e)
                 }
-                Log.info("Client disconnected.")
+                tx.writeStringUtf8(Json.encodeToString(response) + "\n")
             }
+            Log.info("Client disconnected.")
         }
     }
 

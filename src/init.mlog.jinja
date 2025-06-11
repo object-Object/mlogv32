@@ -1,10 +1,11 @@
-# this processor initializes INCR using a lookup table, and sets readonly CSR values
+#% extends 'main.constants.jinja'
+#% block contents
+
+# this processor initializes INCR using a lookup table, sets readonly CSR values, and disables RAM procs to reduce lag
 # the lookup table must be linked first
 
     set LOOKUP_START 0
-    set EXPECTED_LINKS 17
-    set LOOKUP_PROC_SIZE 260
-    set RAM_PROC_SIZE 4096
+    set EXPECTED_LINKS 19
 
     # wait until ready
 reset:
@@ -15,14 +16,48 @@ reset:
     jump reset equal type "lookup" # sanity check
 
     set CSRS processor18
+    set CPU processor19
 
-    op div wait LOOKUP_PROC_SIZE 120 # micro proc instructions/sec
+    op div wait {{LOOKUP_PROC_SIZE}} 120 # micro proc instructions/sec
     op ceil wait wait
     wait wait
 
-    # initialize INCR
-
     setrate 1000
+
+    # disable RAM procs
+
+    read MEMORY_X CPU "MEMORY_X"
+    read MEMORY_Y CPU "MEMORY_Y"
+    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+    read ROM_SIZE CPU "ROM_SIZE"
+    read RAM_SIZE CPU "RAM_SIZE"
+    read ICACHE_SIZE CPU "ICACHE_SIZE"
+    
+    op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
+
+    op idiv TOTAL_VARS RAM_SIZE 4
+    op add TOTAL_VARS TOTAL_VARS ICACHE_SIZE
+
+    op idiv RAM_END_PROC TOTAL_VARS {{RAM_PROC_VARS}}
+    op add RAM_END_PROC RAM_END_PROC RAM_START_PROC
+
+    set i 0
+disable_ram:
+    op mod x i MEMORY_WIDTH
+    op add x x MEMORY_X
+
+    op idiv y i MEMORY_WIDTH
+    op add y y MEMORY_Y
+
+    getblock building ram x y
+
+    op lessThan enabled i RAM_START_PROC
+    control enabled ram enabled
+
+    op add i i 1
+    jump disable_ram lessThan i RAM_END_PROC
+
+    # initialize INCR
 
     set address 0
     op add ret @counter 1
@@ -30,15 +65,15 @@ reset:
     set prev_variable variable
 
     set address 1
-loop:
+init_incr:
     set variable null
     op add ret @counter 1
-    jump lookup_variable lessThan address RAM_PROC_SIZE
+    jump lookup_variable lessThan address {{RAM_PROC_VARS}}
 
     write variable INCR prev_variable
     set prev_variable variable
     op add address address 1
-    jump loop lessThanEq address RAM_PROC_SIZE
+    jump init_incr lessThanEq address {{RAM_PROC_VARS}}
 
     # initialize CSRS
 
@@ -67,18 +102,28 @@ loop:
     write 0 CSRS "{{ 'mscratch'|csr }}"
     write 0 CSRS "{{ 'mie'|csr }}"
 
+    setrate 1
     stop
 
 # given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # address -> variable
 lookup_variable:
-    op idiv _lookup address LOOKUP_PROC_SIZE
+    op idiv _lookup address {{LOOKUP_PROC_SIZE}}
     op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
 
-    op mod variable address LOOKUP_PROC_SIZE
+    op mod variable address {{LOOKUP_PROC_SIZE}}
     lookup block variable variable
     sensor variable variable @name
     read variable _lookup variable
 
     set @counter ret
+
+#% endblock contents
+
+# {% raw %}
+# preprocessor variable definitions
+set {{LOOKUP_PROC_SIZE}} null
+set {{ROM_PROC_BYTES}} null
+set {{RAM_PROC_VARS}} null
+# {% endraw %}

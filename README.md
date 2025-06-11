@@ -39,6 +39,7 @@ Addresses `0xf0000010` and `0xf0000030` contain emulated UART 16550 peripherals 
 - Configurable FIFO capacity (up to 254 bytes) for TX and RX, stored as a variable in the CONFIG processor.
 - Theoretical maximum transfer rate of 121920 bits/sec (254 bytes/tick).
 - Line Status Register flags: Transmitter Empty, THR Empty, Overrun Error, Data Ready.
+- FIFO Control Register flags: Enable FIFOs (0 is ignored), Reset RX/TX FIFO
 
 The UART registers have a stride of 4 bytes to simplify some internal logic.
 

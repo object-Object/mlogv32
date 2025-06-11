@@ -253,7 +253,7 @@ mlogv32 currently passes all compliance tests for the `RV32IMAUZicsr_Zifencei` I
 ### Dev containers
 
 - Open this folder with Dev Containers in VSCode.
-- Set up the Python environment: `uv sync`
+- Activate the Python environment: `source .venv/bin/activate`
 - Build everything: `make`
 
 ### Assembly

@@ -6,9 +6,9 @@
 set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, BasedUser. Released under GPLv3 (https://www.gnu.org/licenses/gpl-3.0.html).\nThis program is provided without any warranty."
 set SOURCELINK "https://github.com/BasedUser/mPC"
 
-read UART_CAPACITY processor1 "UART_FIFO_CAPACITY"
-op mul UART_MODULO UART_CAPACITY 2
+read UART_FIFO_MODULO processor1 "UART_FIFO_MODULO"
 read uart_wptr bank1 255
+op and uart_wptr uart_wptr 0xff # clear overflow flag if set by another producer
 
 read modifiers cell2 0
 op and shift modifiers 1
@@ -59,22 +59,17 @@ jump handleSpecial greaterThan tgtmodifier 0  # but ONLY if there's anything to 
 noApplySpecial: # TODO: once bank3 as scancode is in
 appliedSpecial:
 
-wait_for_uart:
-read uart_rptr bank1 254
-
-op sub uart_size uart_wptr uart_rptr
-op add uart_size uart_size UART_MODULO
-op mod uart_size uart_size UART_MODULO
+op add next_uart_wptr uart_wptr 1
+op mod next_uart_wptr next_uart_wptr UART_FIFO_MODULO
 
 # wait for uart to have space
-jump wait_for_uart greaterThanEq uart_size UART_CAPACITY
+wait_for_uart:
+read uart_rptr bank1 254
+jump wait_for_uart equal uart_rptr next_uart_wptr
 
 # uart has space, write a byte
-op mod i uart_wptr UART_CAPACITY
-write letter bank1 i
-
-op add uart_wptr uart_wptr 1
-op mod uart_wptr uart_wptr UART_MODULO
+write letter bank1 uart_wptr
+set uart_wptr next_uart_wptr
 write uart_wptr bank1 255
 jump loop always
 

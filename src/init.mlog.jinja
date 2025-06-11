@@ -1,11 +1,16 @@
 #% extends 'main.constants.jinja'
 #% block contents
 
-# this processor initializes INCR using a lookup table, sets readonly CSR values, and disables RAM procs to reduce lag
+# this processor performs the following one-time initialization steps:
+# - disable RAM procs to reduce lag
+# - initialize INCR using a lookup table
+# - set readonly CSR values
+# - reset all UART FIFO pointers to 0
+
 # the lookup table must be linked first
 
     set LOOKUP_START 0
-    set EXPECTED_LINKS 19
+    set EXPECTED_LINKS 21
 
     # wait until ready
 reset:
@@ -17,6 +22,8 @@ reset:
 
     set CSRS processor18
     set CPU processor19
+    set UART0 bank1
+    set UART1 bank2
 
     op div wait {{LOOKUP_PROC_SIZE}} 120 # micro proc instructions/sec
     op ceil wait wait
@@ -102,6 +109,16 @@ init_incr:
     write 0 CSRS "{{ 'mscratch'|csr }}"
     write 0 CSRS "{{ 'mie'|csr }}"
 
+    # init UARTs
+    write 0 UART0 {{UART_RX_RPTR}}
+    write 0 UART0 {{UART_RX_WPTR}}
+    write 0 UART0 {{UART_TX_RPTR}}
+    write 0 UART0 {{UART_TX_WPTR}}
+    write 0 UART1 {{UART_RX_RPTR}}
+    write 0 UART1 {{UART_RX_WPTR}}
+    write 0 UART1 {{UART_TX_RPTR}}
+    write 0 UART1 {{UART_TX_WPTR}}
+
     setrate 1
     stop
 
@@ -126,4 +143,8 @@ lookup_variable:
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
+set {{UART_RX_RPTR}} null
+set {{UART_RX_WPTR}} null
+set {{UART_TX_RPTR}} null
+set {{UART_TX_WPTR}} null
 # {% endraw %}

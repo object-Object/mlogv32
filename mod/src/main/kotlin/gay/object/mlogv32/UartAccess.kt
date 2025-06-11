@@ -6,8 +6,8 @@ import kotlin.reflect.KProperty
 class UartAccess(private val build: MemoryBuild, private val capacity: Int) {
     // NOTE: rx and tx refer to our receiver and transmitter, not the processor's
     private val txRptr by MemoryIntDelegate(build, 254)
-    private var txWptr by MemoryIntDelegate(build, 255)
-    private val txSize get() = (txWptr - txRptr).mod(capacity * 2)
+    private var txWptrRaw by MemoryIntDelegate(build, 255)
+    private val txWptr get() = txWptrRaw and 0xff
 
     private var rxRptr by MemoryIntDelegate(build, 510)
     private val rxWptr by MemoryIntDelegate(build, 511)
@@ -25,19 +25,29 @@ class UartAccess(private val build: MemoryBuild, private val capacity: Int) {
             return null
         }
 
-        val byte = build.memory[256 + rxRptr.mod(capacity)].toInt().toUByte()
-        rxRptr = (rxRptr + 1).mod(capacity * 2)
+        val byte = build.memory[256 + rxRptr].toInt().toUByte()
+        rxRptr = wrap(rxRptr + 1)
         return byte
     }
 
-    fun write(byte: UByte) {
-        if (txSize < capacity) {
-            build.memory[txWptr.mod(capacity)] = byte.toDouble()
+    fun write(byte: UByte, signalOverflow: Boolean = true): Boolean {
+        val nextWptr = wrap(txWptr + 1)
+
+        // full, maybe signal overflow
+        if (nextWptr == txRptr) {
+            if (signalOverflow) {
+                txWptrRaw = txWptr or 0x100
+            }
+            return false
         }
-        if (txSize <= capacity) {
-            txWptr = (txWptr + 1).mod(capacity * 2)
-        }
+
+        // not full, write a byte
+        build.memory[txWptr] = byte.toDouble()
+        txWptrRaw = nextWptr
+        return true
     }
+
+    private fun wrap(index: Int) = index.mod(capacity + 1)
 }
 
 class MemoryIntDelegate(

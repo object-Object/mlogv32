@@ -35,12 +35,12 @@ class ProcessorAccess(
     val resetSwitch: SwitchBuild,
     val pauseSwitch: SwitchBuild,
     val singleStepSwitch: SwitchBuild,
-    val uartFifoCapacity: Int,
+    uartFifoModulo: Int,
     uart0: MemoryBuild,
     uart1: MemoryBuild,
 ) {
-    val uart0 = UartAccess(uart0, uartFifoCapacity)
-    val uart1 = UartAccess(uart1, uartFifoCapacity)
+    val uart0 = UartAccess(uart0, uartFifoModulo - 1)
+    val uart1 = UartAccess(uart1, uartFifoModulo - 1)
 
     val romEnd = ROM_START + romSize.toUInt()
     val ramEnd = RAM_START + ramSize.toUInt()
@@ -253,7 +253,7 @@ class ProcessorAccess(
                 resetSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
                 pauseSwitch = buildVar<SwitchBuild>(build, "switch2") ?: return null,
                 singleStepSwitch = buildVar<SwitchBuild>(build, "switch3") ?: return null,
-                uartFifoCapacity = positiveIntVar(build, "UART_FIFO_CAPACITY") ?: return null,
+                uartFifoModulo = positiveIntVar(build, "UART_FIFO_MODULO") ?: return null,
                 uart0 = buildVar<MemoryBuild>(build, "bank1") ?: return null,
                 uart1 = buildVar<MemoryBuild>(build, "bank2") ?: return null,
             )
@@ -399,15 +399,19 @@ data class UartRequest(
             val toUart = 0.until(rx.availableForRead).map { rx.readByte().toUByte() }
             if (toUart.isNotEmpty()) Log.info("Sending to $device: $toUart")
 
+            var overflowCount = 0
+
             val fromUart = runOnMainThread {
                 if (stopOnHalt && processor.resetSwitch.enabled) {
                     throw RuntimeException("Processor stopped!")
                 }
                 for (byte in toUart) {
-                    uart.write(byte)
+                    if (!uart.write(byte)) overflowCount++
                 }
                 uart.readAll()
             }
+
+            if (overflowCount > 0) Log.warn("$device RX buffer is full, $overflowCount bytes dropped!")
 
             if (fromUart.isNotEmpty()) Log.info("Received from $device: $fromUart")
             for (byte in fromUart) {

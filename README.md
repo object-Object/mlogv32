@@ -36,8 +36,8 @@ Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as M
 
 Addresses `0xf0000010` and `0xf0000030` contain emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
 
-- Configurable FIFO capacity (up to 254 bytes) for TX and RX, stored as a variable in the CONFIG processor.
-- Theoretical maximum transfer rate of 121920 bits/sec (254 bytes/tick).
+- Configurable FIFO capacity (up to 253 bytes) for TX and RX, stored as a variable in the CONFIG processor.
+- Theoretical maximum transfer rate of 121440 bits/sec (253 bytes/tick).
 - Line Status Register flags: Transmitter Empty, THR Empty, Overrun Error, Data Ready.
 - FIFO Control Register flags: Enable FIFOs (0 is ignored), Reset RX/TX FIFO
 
@@ -58,20 +58,18 @@ The UART registers have a stride of 4 bytes to simplify some internal logic.
 
 Each UART is implemented as two circular buffers in a memory bank with the following layout. Note that RX refers to data sent to / read by the processor, and TX refers to data sent from / written by the processor.
 
-| Index | Name                    |
-| ----- | ----------------------- |
-| 0     | RX buffer start         |
-| 254   | RX buffer read pointer  |
-| 255   | RX buffer write pointer |
-| 256   | TX buffer start         |
-| 510   | TX buffer read pointer  |
-| 511   | TX buffer write pointer |
+| Index | Name                                    |
+| ----- | --------------------------------------- |
+| 0     | RX buffer start                         |
+| 254   | RX buffer read pointer                  |
+| 255   | RX buffer write pointer / overflow flag |
+| 256   | TX buffer start                         |
+| 510   | TX buffer read pointer                  |
+| 511   | TX buffer write pointer                 |
 
-Read/write pointers are stored modulo `2 * capacity` ([ref 1](https://github.com/hathach/tinyusb/blob/b203d9eaf7d76fd9fec71b4ee327805a80594574/src/common/tusb_fifo.h), [ref 2](https://gist.github.com/mcejp/719d3485b04cfcf82e8a8734957da06a)) to allow using the entire buffer capacity without introducing race conditions.
+Read/write pointers are stored modulo `capacity + 1`. A buffer is empty when `rptr == wptr` and full when `rptr == (wptr + 1) % (capacity + 1)`. If the RX buffer is full and more data arrives, producers should discard the new data rather than overwriting old data in the buffer. An overflow may optionally be indicated to the processor by setting bit 8 of `rx_wptr` (ie. `rx_wptr | 0x100`).
 
-If the RX buffer is full and more data arrives, producers should discard the new data rather than overwriting old data in the buffer. An overflow may optionally be indicated by advancing the RX write pointer (without writing a value to the buffer) such that the size of the buffer is `capacity + 1`; this must be done atomically (ie. `wait` first) to avoid race conditions.
-
-Note that the processor itself does not prevent code from overflowing the TX buffer. Users are expected to check the Line Status Register and avoid writing too much data at once.
+Note that the processor itself does not set the TX overflow flag or prevent code from overflowing the TX buffer. Users are expected to check the Line Status Register and avoid writing too much data at once.
 
 ### Syscon
 

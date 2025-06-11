@@ -197,13 +197,15 @@ loop:
     read reservation_set CPU "reservation_set"
     read privilege_mode CPU "privilege_mode"
 
-    read UART_FIFO_CAPACITY CPU "UART_FIFO_CAPACITY"
-    op mul UART_FIFO_MODULO UART_FIFO_CAPACITY 2
+    read UART_FIFO_MODULO CPU "UART_FIFO_MODULO"
+    op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
 
     read uart0_rx_rptr UART0 254
-    read uart0_rx_wptr UART0 255
+    read uart0_rx_wptr_raw UART0 255
     read uart0_tx_rptr UART0 510
     read uart0_tx_wptr UART0 511
+
+    op and uart0_rx_wptr uart0_rx_wptr_raw 0xff
 
     op sub uart0_rx_fifo_size uart0_rx_wptr uart0_rx_rptr
     op add uart0_rx_fifo_size uart0_rx_fifo_size UART_FIFO_MODULO
@@ -213,10 +215,16 @@ loop:
     op add uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
     op mod uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
 
+    op equal uart0_rx_full uart0_rx_fifo_size UART_FIFO_CAPACITY
+    op notEqual uart0_rx_overflow_flag uart0_rx_wptr uart0_rx_wptr_raw
+    op land uart0_rx_overrun uart0_rx_full uart0_rx_overflow_flag
+
     read uart1_rx_rptr UART1 254
-    read uart1_rx_wptr UART1 255
+    read uart1_rx_wptr_raw UART1 255
     read uart1_tx_rptr UART1 510
     read uart1_tx_wptr UART1 511
+
+    op and uart1_rx_wptr uart1_rx_wptr_raw 0xff
 
     op sub uart1_rx_fifo_size uart1_rx_wptr uart1_rx_rptr
     op add uart1_rx_fifo_size uart1_rx_fifo_size UART_FIFO_MODULO
@@ -225,6 +233,10 @@ loop:
     op sub uart1_tx_fifo_size uart1_tx_wptr uart1_tx_rptr
     op add uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
     op mod uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
+
+    op equal uart1_rx_full uart1_rx_fifo_size UART_FIFO_CAPACITY
+    op notEqual uart1_rx_overflow_flag uart1_rx_wptr uart1_rx_wptr_raw
+    op land uart1_rx_overrun uart1_rx_full uart1_rx_overflow_flag
 
     # markers
 
@@ -546,29 +558,33 @@ loop__no_mark_icache:
     format "machine"
 done_privilege_mode:
 
-    print "uart0_rx_fifo_size = {0}\n"
-    jump uart0_rx_fifo_size__no_overflow lessThanEq uart0_rx_fifo_size UART_FIFO_CAPACITY
-    format "{0} (!)"
-uart0_rx_fifo_size__no_overflow:
+    print "uart0_rx_size = {0} ({1} -> {2})"
+    jump uart0_rx_fifo_size__no_overrun notEqual uart0_rx_overrun true
+    print " !!"
+uart0_rx_fifo_size__no_overrun:
     format uart0_rx_fifo_size
+    format uart0_rx_rptr
+    format uart0_rx_wptr
+    print "\n"
 
-    print "uart0_tx_fifo_size = {0}\n\n"
-    jump uart0_tx_fifo_size__no_overflow lessThanEq uart0_tx_fifo_size UART_FIFO_CAPACITY
-    format "{0} (!)"
-uart0_tx_fifo_size__no_overflow:
+    print "uart0_tx_size = {0} ({1} -> {2})\n\n"
     format uart0_tx_fifo_size
+    format uart0_tx_rptr
+    format uart0_tx_wptr
 
-    print "uart1_rx_fifo_size = {0}\n"
-    jump uart1_rx_fifo_size__no_overflow lessThanEq uart1_rx_fifo_size UART_FIFO_CAPACITY
-    format "{0} (!)"
-uart1_rx_fifo_size__no_overflow:
+    print "uart1_rx_size = {0} ({1} -> {2})"
+    jump uart1_rx_fifo_size__no_overrun notEqual uart1_rx_overrun true
+    print " !!"
+uart1_rx_fifo_size__no_overrun:
     format uart1_rx_fifo_size
+    format uart1_rx_rptr
+    format uart1_rx_wptr
+    print "\n"
 
-    print "uart1_tx_fifo_size = {0}\n"
-    jump uart1_tx_fifo_size__no_overflow lessThanEq uart1_tx_fifo_size UART_FIFO_CAPACITY
-    format "{0} (!)"
-uart1_tx_fifo_size__no_overflow:
+    print "uart1_tx_size = {0} ({1} -> {2})\n"
     format uart1_tx_fifo_size
+    format uart1_tx_rptr
+    format uart1_tx_wptr
 
     #{{'\n'}} {{ print(36, 17) }}
 

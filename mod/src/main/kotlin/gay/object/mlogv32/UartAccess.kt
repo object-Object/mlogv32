@@ -12,6 +12,9 @@ class UartAccess(private val build: MemoryBuild, private val capacity: Int) {
     private var rxRptr by MemoryIntDelegate(build, 510)
     private val rxWptr by MemoryIntDelegate(build, 511)
 
+    val writeBufferSize get() = wrap(txWptr - txRptr)
+    val availableForWrite get() = capacity - writeBufferSize
+
     fun readAll() : List<UByte>{
         val result = mutableListOf<UByte>()
         while (true) {
@@ -30,7 +33,7 @@ class UartAccess(private val build: MemoryBuild, private val capacity: Int) {
         return byte
     }
 
-    fun write(byte: UByte, signalOverflow: Boolean = true): Boolean {
+    fun write(byte: UByte, signalOverflow: Boolean): Boolean {
         val nextWptr = wrap(txWptr + 1)
 
         // full, maybe signal overflow

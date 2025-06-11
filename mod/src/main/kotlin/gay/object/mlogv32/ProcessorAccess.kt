@@ -8,6 +8,7 @@ import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.io.readUByte
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -21,6 +22,7 @@ import mindustry.world.blocks.logic.SwitchBlock.SwitchBuild
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.min
 
 class ProcessorAccess(
     val build: LogicBuild,
@@ -381,10 +383,11 @@ enum class UartDevice {
 }
 
 @Serializable
-@SerialName("uart")
-data class UartRequest(
+@SerialName("serial")
+data class SerialRequest(
     val device: UartDevice,
-    val stopOnHalt: Boolean = true,
+    val stopOnHalt: Boolean,
+    val overrun: Boolean,
 ) : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response {
         val uart = when (device) {
@@ -396,18 +399,28 @@ data class UartRequest(
                 throw RuntimeException("Client disconnected!")
             }
 
-            val toUart = 0.until(rx.availableForRead).map { rx.readByte().toUByte() }
-            if (toUart.isNotEmpty()) Log.info("Sending to $device: $toUart")
-
             var overflowCount = 0
 
             val fromUart = runOnMainThread {
                 if (stopOnHalt && processor.resetSwitch.enabled) {
                     throw RuntimeException("Processor stopped!")
                 }
-                for (byte in toUart) {
-                    if (!uart.write(byte)) overflowCount++
+
+                rx.readAvailable(1) { buffer ->
+                    val bytes = if (overrun) {
+                        buffer.size.toInt()
+                    } else {
+                        min(buffer.size.toInt(), uart.availableForWrite)
+                    }
+
+                    for (i in 0..<bytes) {
+                        val byte = buffer.readUByte()
+                        if (!uart.write(byte, signalOverflow = overrun)) overflowCount++
+                    }
+
+                    bytes
                 }
+
                 uart.readAll()
             }
 

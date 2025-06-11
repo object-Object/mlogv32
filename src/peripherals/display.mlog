@@ -1,0 +1,73 @@
+# Display controller for printing text from a UART port.
+
+reset:
+    draw clear 0 0 0
+    drawflush display1
+
+reset_loop:
+    sensor enabled switch1 @enabled
+    jump reset_loop equal enabled false
+
+    setrate 5000
+
+    set CONFIG processor1
+    set UART bank1
+
+    read UART_FIFO_MODULO CONFIG "UART_FIFO_MODULO"
+
+    read rptr UART 510
+
+    draw color 255 255 255 255
+
+    set LF 10
+
+    set CHAR_WIDTH 7
+    set CHAR_HEIGHT 13
+    set BASE_X 8
+    set BASE_Y 508
+
+    set cur_x 0
+    set next_x 0
+
+    set cur_y 0
+    set next_y 0
+
+main:
+    sensor enabled switch1 @enabled
+    jump reset equal enabled false
+    read wptr UART 511
+    jump main equal rptr wptr
+
+loop:
+    op add index rptr 256
+    read char UART index
+
+    jump loop__newline equal char LF
+
+    op add next_x next_x CHAR_WIDTH
+    jump loop__same_line lessThanEq next_x 497
+    print "\n"
+loop__newline:
+    set next_x 0
+    op add next_y next_y CHAR_HEIGHT
+loop__same_line:
+    printchar char
+
+    op add rptr rptr 1
+    op mod rptr rptr UART_FIFO_MODULO
+    write rptr UART 510
+
+    read wptr UART 511
+    jump loop notEqual rptr wptr
+
+    op add x BASE_X cur_x
+    op sub y BASE_Y cur_y
+    draw print x y topLeft
+
+    set cur_x next_x
+    set cur_y next_y
+
+    drawflush display1
+
+    jump main always
+

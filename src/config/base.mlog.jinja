@@ -13,6 +13,8 @@
     set RAM_SIZE    {{#RAM_SIZE}}  # RAM size in bytes (rwx)
     set ICACHE_SIZE {{#ICACHE_SIZE}}  # icache size in variables, or bytes of memory it can represent; 4x less dense than ROM/RAM
 
+    set UART_FIFO_CAPACITY {{#UART_FIFO_CAPACITY}}  # UART TX/RX FIFO capacity in bytes (max 254)
+
     # computed values
     op add MEMORY_X @thisx MEMORY_X_OFFSET
     op add MEMORY_Y @thisy MEMORY_Y_OFFSET
@@ -28,6 +30,7 @@ set MEMORY_WIDTH MEMORY_WIDTH
 set ROM_SIZE ROM_SIZE
 set RAM_SIZE RAM_SIZE
 set ICACHE_SIZE ICACHE_SIZE
+set UART_FIFO_CAPACITY UART_FIFO_CAPACITY
 set MEMORY_X MEMORY_X
 set MEMORY_Y MEMORY_Y
 # {% endraw %}

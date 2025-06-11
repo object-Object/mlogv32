@@ -8,7 +8,8 @@
 
 //RV_COMPLIANCE_HALT
 #define RVMODEL_HALT                                              \
-  .insn i CUSTOM_0, 0, zero, zero, 0;
+  li t0, 0xfffffff0; \
+  sw zero, 0(t0);
 
 // initialize icache, .text, .data, and .bss
 // see https://github.com/riscv-non-isa/riscv-arch-test/issues/202
@@ -17,7 +18,7 @@
   .section .text.init.rom; \
   \
   la t0, __etext_rom; \
-  .insn i CUSTOM_0, 0, zero, t0, 5; \
+  .insn i CUSTOM_0, 0, zero, t0, 0; \
   \
   la t0, __sitext; \
   la t1, __stext; \

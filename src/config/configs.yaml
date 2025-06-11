@@ -12,3 +12,4 @@ configs:
     ROM_SIZE: '0x480000'
     RAM_SIZE: '0x480000'
     ICACHE_SIZE: '0xc0000'
+    UART_FIFO_CAPACITY: 254

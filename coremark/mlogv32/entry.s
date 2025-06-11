@@ -4,7 +4,7 @@
 _start:
     # initialize icache
     la t0, __etext
-    .insn i CUSTOM_0, 0, zero, t0, 5
+    .insn i CUSTOM_0, 0, zero, t0, 0
 
     # reset mtime/mcycle/minstret
     li t0, 0xf0000000 # mtime

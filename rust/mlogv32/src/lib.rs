@@ -8,7 +8,7 @@ pub extern crate alloc;
 pub use riscv::{register, result as riscv_result};
 
 use core::{
-    arch::{asm, global_asm, riscv32::pause},
+    arch::{global_asm, riscv32::pause},
     panic::PanicInfo,
 };
 #[cfg(feature = "alloc")]
@@ -30,7 +30,7 @@ static HEAP: Heap = Heap::empty();
 global_asm!("
 .section .text.start
     la t0, __etext
-    .insn i CUSTOM_0, 0, zero, t0, 5
+    .insn i CUSTOM_0, 0, zero, t0, 0
 
     la gp, __global_pointer$
     
@@ -144,12 +144,19 @@ macro_rules! entry {
 
 // functions
 
+const SYSCON: *mut u32 = 0xfffffff0 as *mut u32;
+
 pub fn halt() -> ! {
     unsafe {
-        asm!(
-            ".insn i CUSTOM_0, 0, zero, zero, 0",
-            options(nostack, noreturn),
-        );
+        core::ptr::write_volatile(SYSCON, 0);
+        unreachable!();
+    };
+}
+
+pub fn reboot() -> ! {
+    unsafe {
+        core::ptr::write_volatile(SYSCON, 1);
+        unreachable!();
     };
 }
 

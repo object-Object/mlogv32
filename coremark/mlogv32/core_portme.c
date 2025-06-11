@@ -157,5 +157,6 @@ portable_fini(core_portable *p)
 {
     p->portable_id = 0;
 
-    MLOGSYS_halt();
+    int volatile * const syscon = (int*) 0xfffffff0;
+    *syscon = 0;
 }

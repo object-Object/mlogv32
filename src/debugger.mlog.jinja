@@ -33,11 +33,16 @@ reset:
 
     set DISPLAY display1
 
+    set UART0 bank1
+    set UART1 bank1
+
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
     jump reset strictEqual REGISTERS null
     jump reset strictEqual CSRS null
     jump reset strictEqual DISPLAY null
+    jump reset strictEqual UART0 null
+    jump reset strictEqual UART1 null
 
     set i -1
 reset__find_lookup_start:
@@ -184,6 +189,35 @@ loop:
     read reservation_set CPU "reservation_set"
     read privilege_mode CPU "privilege_mode"
 
+    read UART_FIFO_CAPACITY CPU "UART_FIFO_CAPACITY"
+    op mul UART_FIFO_MODULO UART_FIFO_CAPACITY 2
+
+    read uart0_rx_rptr UART0 254
+    read uart0_rx_wptr UART0 255
+    read uart0_tx_rptr UART0 510
+    read uart0_tx_wptr UART0 511
+
+    op sub uart0_rx_fifo_size uart0_rx_wptr uart0_rx_rptr
+    op add uart0_rx_fifo_size uart0_rx_fifo_size UART_FIFO_MODULO
+    op mod uart0_rx_fifo_size uart0_rx_fifo_size UART_FIFO_MODULO
+
+    op sub uart0_tx_fifo_size uart0_tx_wptr uart0_tx_rptr
+    op add uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
+    op mod uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
+
+    read uart1_rx_rptr UART1 254
+    read uart1_rx_wptr UART1 255
+    read uart1_tx_rptr UART1 510
+    read uart1_tx_wptr UART1 511
+
+    op sub uart1_rx_fifo_size uart1_rx_wptr uart1_rx_rptr
+    op add uart1_rx_fifo_size uart1_rx_fifo_size UART_FIFO_MODULO
+    op mod uart1_rx_fifo_size uart1_rx_fifo_size UART_FIFO_MODULO
+
+    op sub uart1_tx_fifo_size uart1_tx_wptr uart1_tx_rptr
+    op add uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
+    op mod uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
+
     # markers
 
     print "ROM_START\n{0}"
@@ -319,6 +353,11 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
+    print "instruction = {0}\n"
+    set n instruction
+    op add ret @counter 1
+    jump format_hex always
+
     print "op_id       = {0}\n"
     set n op_id
     op add ret @counter 1
@@ -332,11 +371,6 @@ loop__no_mark_icache:
 
     print "arg3        = {0}\n\n"
     format arg3
-
-    print "instruction = {0}\n\n"
-    set n instruction
-    op add ret @counter 1
-    jump format_bin always
 
     print "mscratch = {0}\n"
     set n mscratch
@@ -392,7 +426,7 @@ loop__no_mark_icache:
     print "instret  = {0}\n\n"
     format instret
 
-    #{{'\n'}} {{ print(0, 34) }}
+    #{{'\n'}} {{ print(0, 33) }}
 
     # column 2
 
@@ -495,7 +529,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    print "privilege_mode  = {0}\n"
+    print "privilege_mode  = {0}\n\n"
     op mul jump privilege_mode 2
     op add @counter @counter jump
     format "user"; jump done_privilege_mode always
@@ -503,6 +537,30 @@ loop__no_mark_icache:
     format "reserved"; jump done_privilege_mode always
     format "machine"
 done_privilege_mode:
+
+    print "uart0_rx_fifo_size = {0}\n"
+    jump uart0_rx_fifo_size__no_overflow lessThanEq uart0_rx_fifo_size UART_FIFO_CAPACITY
+    format "{0} (!)"
+uart0_rx_fifo_size__no_overflow:
+    format uart0_rx_fifo_size
+
+    print "uart0_tx_fifo_size = {0}\n\n"
+    jump uart0_tx_fifo_size__no_overflow lessThanEq uart0_tx_fifo_size UART_FIFO_CAPACITY
+    format "{0} (!)"
+uart0_tx_fifo_size__no_overflow:
+    format uart0_tx_fifo_size
+
+    print "uart1_rx_fifo_size = {0}\n"
+    jump uart1_rx_fifo_size__no_overflow lessThanEq uart1_rx_fifo_size UART_FIFO_CAPACITY
+    format "{0} (!)"
+uart1_rx_fifo_size__no_overflow:
+    format uart1_rx_fifo_size
+
+    print "uart1_tx_fifo_size = {0}\n"
+    jump uart1_tx_fifo_size__no_overflow lessThanEq uart1_tx_fifo_size UART_FIFO_CAPACITY
+    format "{0} (!)"
+uart1_tx_fifo_size__no_overflow:
+    format uart1_tx_fifo_size
 
     #{{'\n'}} {{ print(36, 17) }}
 

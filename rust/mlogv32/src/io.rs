@@ -1,7 +1,10 @@
-use core::{arch::asm, error::Error, fmt::Display};
+use core::arch::asm;
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
+use uart::{address::MmioAddress, Data, Uart};
+
+pub use uart;
 
 #[cfg(feature = "alloc")]
 #[macro_export]
@@ -32,8 +35,8 @@ pub fn print_str(msg: &str) {
 pub fn print_char(c: char) {
     unsafe {
         asm!(
-            ".insn i CUSTOM_0, 0, zero, a0, 1",
-            in("a0") c as u32,
+            ".insn i CUSTOM_0, 0, zero, {}, 1",
+            in(reg) c as u32,
             options(nomem, preserves_flags, nostack),
         );
     };
@@ -48,40 +51,21 @@ pub fn print_flush() {
     }
 }
 
-#[derive(Debug)]
-pub struct ReadCharError {
-    pub value: u32,
+// TODO: create Peripherals struct?
+
+const UART0_ADDRESS: usize = 0xf0000010;
+const UART1_ADDRESS: usize = 0xf0000030;
+
+/// # Safety
+///
+/// This function is unsafe because the caller must ensure that only one instance exists at a time, as it represents a physical memory-mapped peripheral.
+pub unsafe fn get_uart0() -> Uart<MmioAddress, Data> {
+    unsafe { Uart::new(MmioAddress::new(UART0_ADDRESS as *mut u8, 4)) }
 }
 
-impl Display for ReadCharError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        #[cfg(feature = "alloc")]
-        {
-            write!(f, "received invalid char from kbconv: {}", self.value)
-        }
-        #[cfg(not(feature = "alloc"))]
-        {
-            write!(f, "received invalid char from kbconv")
-        }
-    }
-}
-
-impl Error for ReadCharError {}
-
-pub fn read_char() -> Option<Result<char, ReadCharError>> {
-    let value: u32;
-
-    unsafe {
-        asm!(
-            ".insn i CUSTOM_0, 0, {}, zero, 4",
-            out(reg) value,
-            options(nomem, preserves_flags, nostack),
-        );
-    };
-
-    if value == 0 {
-        None
-    } else {
-        Some(char::from_u32(value).ok_or(ReadCharError { value }))
-    }
+/// # Safety
+///
+/// This function is unsafe because the caller must ensure that only one instance exists at a time, as it represents a physical memory-mapped peripheral.
+pub unsafe fn get_uart1() -> Uart<MmioAddress, Data> {
+    unsafe { Uart::new(MmioAddress::new(UART1_ADDRESS as *mut u8, 4)) }
 }

@@ -5,7 +5,9 @@ _start:
 
     ecall
 
-    .insn i CUSTOM_0, 0, zero, zero, 0 # halt
+    # halt
+    li t0, 0xfffffff0
+    sw zero, 0(t0)
 
 trap:
     csrr t0, mepc

@@ -12,6 +12,7 @@ reset:
     read ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read RAM_SIZE {{CONFIG}} "RAM_SIZE"
     read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
+    read UART_FIFO_CAPACITY {{CONFIG}} "UART_FIFO_CAPACITY"
 
     op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
 
@@ -19,29 +20,19 @@ reset:
 
     op idiv ICACHE_START_VAR RAM_SIZE 4
 
+    op mul UART_FIFO_MODULO UART_FIFO_CAPACITY 2
+
     # loop until the reset switch is linked and disabled
     jump reset strictEqual {{RESET_SWITCH}} null
     sensor enabled {{RESET_SWITCH}} @enabled
     jump reset equal enabled true
 
-    # initialization
-
+    # load reloadable config options
     op add ret @counter 1
     jump reload_config always
 
     # initialize peripherals
-    control enabled {{PAUSE_SWITCH}} false
-
     printflush {{ERROR_OUTPUT}}
-
-    draw clear 0 0 0
-    drawflush {{DISPLAY}}
-
-    read kbconv_rptr {{KBCONV_DATA}} 63
-
-    # read initial CSR values
-    read minstret {{CSRS}} "{{ 'minstret'|csr }}"
-    read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
     # reset time/cycle reference point
     set last_time_update @time
@@ -53,18 +44,16 @@ reset:
     set __etext 0
 
     # reset mtvec to implementation-defined value to help catch bugs
-    write {{DEFAULT_MTVEC}} {{CSRS}} "{{ 'mtvec'|csr }}"
+    write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
 
     # reset hart state as per machine-level ISA
 
     # set privilege mode to M
     set privilege_mode 0b11
 
-    # reset MIE and MPRV to 0
-    read mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
-    # MPRV                                 -
-    # MIE                                                -
-    op and mstatus mstatus 0b11111111111111011111111111110111
+    # clear mstatus
+    # technically we're only supposed to clear MPRV and MIE, but the other bits are explicitly unspecified, so this is allowed
+    set mstatus 0
     write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
     
     # set pc to reset vector
@@ -166,7 +155,7 @@ main__skip_time_update:
     jump main__access_icache lessThan pc ICACHE_SIZE
 
 main__slow_instruction_fetch:
-    jump default_mtvec_handler equal pc {{DEFAULT_MTVEC}}
+    jump default_mtvec_handler equal pc {{SYSCON}}
 
     set mcause 1 # instruction access fault
     jump trap greaterThanEq pc RAM_END # prevent executing from MMIO
@@ -334,7 +323,7 @@ halt:
 # exceptions
 
 default_mtvec_handler:
-    print "Control transferred to {{DEFAULT_MTVEC}} (default mtvec), halting."
+    print "Control transferred to {{SYSCON}} (default mtvec), halting."
     printflush {{ERROR_OUTPUT}}
     jump halt always
 
@@ -555,17 +544,95 @@ load_rom_word__loop:
 
 # address, mcause, mtval -> result
 load_mmio_word:
-    op sub _jump address {{MMIO_START}}
-    op idiv _jump _jump 4
-    jump trap greaterThanEq _jump 4
+    op sub _offset address {{MMIO_START}}
+    op and _offset _offset 0xfffffffc
+    jump trap greaterThanEq _offset 0x50
 
-    op mul _jump _jump 2
+    set _uart {{UART0}}
+    jump load_mmio_word__uart0 lessThan _offset 0x30
+    set _uart {{UART1}}
+    op sub _offset _offset 0x20 # hack
+load_mmio_word__uart0:
+
+    # read these here to save space, since we need them in multiple UART handlers
+    read _rx_rptr _uart {{UART_RX_RPTR}}
+    read _rx_wptr _uart {{UART_RX_WPTR}}
+
+    # MCR, MSR, and SPR are all hardwired to zero
+    set result 0
+    jump load_mmio_word__uart_lsr equal _offset 0x24
+    jump load_mmio_word__not_zero lessThan _offset 0x20
+    set @counter ret
+load_mmio_word__not_zero:
+
+    op idiv _jump _offset 2
     op add @counter @counter _jump
 
-    set result mtime; set @counter ret
-    set result mtimeh; set @counter ret
-    set result mtimecmp; set @counter ret
-    set result mtimecmph; set @counter ret
+    # mtime
+    set result mtime
+    set @counter ret
+    # mtimeh
+    set result mtimeh
+    set @counter ret
+    # mtimecmp
+    set result mtimecmp
+    set @counter ret
+    # mtimecmph
+    set result mtimecmph
+    set @counter ret
+    # UART
+    # Receiver Holding Register: character received, or 0 if RX FIFO is empty
+    jump load_mmio_word__uart_rhr__empty equal _rx_rptr _rx_wptr
+    jump load_mmio_word__uart_rhr always
+    # Interrupt Enable Register: 0 (not supported)
+    set result 0b00000000
+    set @counter ret
+    # Interrupt Status Register: both FIFOs enabled, no interrupt pending, other flags 0
+    set result 0b11000001
+    set @counter ret
+    # Line Control Register: word length = 8 bits, other flags 0
+    set result 0b00000011
+    set @counter ret
+
+load_mmio_word__uart_rhr:
+    # read one byte from the FIFO
+    op mod _index _rx_rptr UART_FIFO_CAPACITY
+    read result _uart _index
+    op and result result 0xff
+
+    # HACK: if mcause is 7, we're loading this word as part of a store instruction, so don't modify UART state
+    jump load_mmio_word__uart_rhr__empty equal mcause 7
+
+    # else, advance rptr
+    op add _rx_rptr _rx_rptr 1
+    op mod _rx_rptr _rx_rptr UART_FIFO_MODULO
+    write _rx_rptr _uart {{UART_RX_RPTR}}
+
+load_mmio_word__uart_rhr__empty:
+    set @counter ret
+
+load_mmio_word__uart_lsr:
+    # Line Status Register: transmitter/THR empty = TX FIFO empty, overrun error = RX FIFO overflowed, data ready = RX FIFO not empty, other flags 0
+    # transmitter empty and THR empty
+    read _tx_rptr _uart {{UART_TX_RPTR}}
+    read _tx_wptr _uart {{UART_TX_WPTR}}
+    op equal _tx_empty _tx_rptr _tx_wptr
+    op mul _tx_empty _tx_empty 0b11
+    op shl result _tx_empty 5
+
+    # overrun error
+    op sub _rx_size _rx_wptr _rx_rptr
+    op add _rx_size _rx_size UART_FIFO_MODULO
+    op mod _rx_size _rx_size UART_FIFO_MODULO
+    op greaterThan _rx_overrun _rx_size UART_FIFO_CAPACITY
+    op shl _rx_overrun _rx_overrun 1
+    op or result result _rx_overrun
+
+    # data ready
+    op notEqual _rx_not_empty _rx_rptr _rx_wptr
+    op or result result _rx_not_empty
+
+    set @counter ret
 
 # instruction decoder
 
@@ -734,16 +801,19 @@ decode_BRANCH:
     op sub arg3 arg3 0b1000000000000
     op and arg3 arg3 0xffffffff
 
-    op add @counter @counter funct3_x2
-
-    set op_id 5; jump end_decode always # BEQ
-    set op_id 6; jump end_decode always # BNE
-    jump decode_illegal_instruction always; stop # this stop should never be executed, it's just to fill space
-    jump decode_illegal_instruction always; stop
-    set op_id 7; jump end_decode always # BLT
-    set op_id 8; jump end_decode always # BGE
-    set op_id 9; jump end_decode always # BLTU
-    set op_id 10; jump end_decode always # BGEU
+    # 5: BEQ
+    # 6: BNE
+    # illegal_instruction
+    # illegal_instruction
+    # 7: BLT
+    # 8: BGE
+    # 9: BLTU
+    # 10: BGEU
+    op add op_id funct3 5
+    jump end_decode lessThan funct3 2
+    jump decode_illegal_instruction lessThan funct3 4
+    op sub op_id op_id 2
+    jump end_decode always
 
 decode_LOAD:
     jump decode_illegal_instruction equal funct3 3
@@ -812,7 +882,7 @@ decode_OP-IMM:
     set op_id 20; jump decode_I-type always # SLTI
     set op_id 21; jump decode_I-type always # SLTIU
     set op_id 22; jump decode_I-type always # XORI
-    jump decode_SRLI_SRAI always; stop
+    set op_id 26; jump decode_SRLI_SRAI always # 26: SRLI
     set op_id 23; jump decode_I-type always # ORI
     set op_id 24; jump decode_I-type always # ANDI
 
@@ -822,29 +892,25 @@ decode_SLLI:
     jump decode_I-type_no_extend_sign always
 
 decode_SRLI_SRAI:
-    set op_id 26 # SRLI
+    # SRLI (op_id set above)
     jump decode_I-type_no_extend_sign equal funct7 0b0000000
 
-    # HACK: zero out funct7 so it's not included in imm
-    set _funct7 funct7
-    set funct7 0
+    # SRAI
+    jump decode_illegal_instruction notEqual funct7 0b0100000
+    set funct7 0 # HACK: zero out funct7 so it's not included in imm
     set op_id 27 # SRAI
-    jump decode_I-type_no_extend_sign equal _funct7 0b0100000
-
-    jump decode_illegal_instruction always
+    jump decode_I-type_no_extend_sign always
 
 decode_OP:
     # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    jump decode_OP_0000000 equal funct7 0b0000000
-    jump decode_OP_0100000 equal funct7 0b0100000
-    jump decode_OP_0000001 equal funct7 0b0000001
-    jump decode_illegal_instruction always
-
-decode_OP_0000000:
     op add op_id 28 funct3 # 28 (ADD) to 35 (AND)
-    jump end_decode always
+    jump end_decode equal funct7 0b0000000
 
-decode_OP_0100000:
+    op add op_id 46 funct3 # 46 (MUL) to 53 (REMU)
+    jump end_decode equal funct7 0b0000001
+
+    jump decode_illegal_instruction notEqual funct7 0b0100000
+
     set op_id 36 # SUB
     jump end_decode equal funct3 0b000
 
@@ -852,11 +918,6 @@ decode_OP_0100000:
     jump end_decode equal funct3 0b101
 
     jump decode_illegal_instruction always
-
-# M extension
-decode_OP_0000001:
-    op add op_id 46 funct3 # 46 (MUL) to 53 (REMU)
-    jump end_decode always
 
 decode_MISC-MEM:
     jump decode_illegal_instruction greaterThan funct3 1 # FENCE=0, FENCE.I=1
@@ -914,13 +975,6 @@ decode_I-type_no_extend_sign:
 decode_illegal_instruction:
     # use 0 as the illegal instruction id because null coerces to 0
     set op_id 0
-
-    # set arguments to null to avoid confusion / storing unnecessary data
-    # also pass the raw instruction as arg1 to aid in debugging
-    # NOTE: we can't use this for the illegal instruction trap handler if raised in PRIV
-    set arg1 instruction
-    set arg2 null
-    set arg3 null
 
 # all decoders jump here after completing successfully
 end_decode:
@@ -1031,6 +1085,32 @@ LB:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     set length 8
     set is_signed true
+    jump load_value always
+
+LH:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    set length 16
+    set is_signed true
+    jump load_value always
+
+LW:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    set length 32
+    jump load_value_unsigned always
+
+LBU:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    set length 8
+    jump load_value_unsigned always
+
+LHU:
+    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    set length 16
+    # continue into load_value_unsigned
+
+load_value_unsigned:
+    set is_signed false
+    # continue into load_value
 
 # helper for LOAD instructions to load a value with a specified length in bits (8, 16, or 32) from memory
 # raises a misaligned-load exception if the address is misaligned for the specified length
@@ -1069,33 +1149,20 @@ load_value:
     # write result to rd
     jump end_instruction_with_result always
 
-LH:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    set length 16
-    set is_signed true
-    jump load_value always
-
-LW:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    set length 32
-    set is_signed false
-    jump load_value always
-
-LBU:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    set length 8
-    set is_signed false
-    jump load_value always
-
-LHU:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    set length 16
-    set is_signed false
-    jump load_value always
-
 SB:
     # S-type: arg1=rs1, arg2=rs2, arg3=imm
     set length 8
+    jump store_value always
+
+SH:
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    set length 16
+    jump store_value always
+
+SW:
+    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    set length 32
+    # continue into store_value
 
 # helper for STORE instructions to store a value with a specified length in bits (8, 16, or 32) to memory
 # raises a misaligned-store exception if the address is misaligned for the specified length
@@ -1104,6 +1171,8 @@ SB:
 store_value:
     op add address rs1 arg3
     op mod address address 0x100000000 # 2^32 (trunc 32)
+
+    jump store_value__syscon equal address {{SYSCON}}
 
     # check alignment
     op idiv _bytes length 8
@@ -1134,6 +1203,10 @@ store_value:
     op and result result _bitmask
     op add value _value result
 
+    # get word-aligned decode address
+    # we do this here because MMIO also needs a word-aligned address
+    op and decode_address address 0xfffffffc
+
     # if it's in the MMIO range, handle it separately
     jump store_mmio_word_unchecked greaterThanEq address {{MMIO_START}}
 
@@ -1147,7 +1220,6 @@ store_ram_word_unchecked:
     # decode the new value and update the icache to allow executing from RAM and self-modifying code
     # TODO: add a way for the CPU to temporarily disable this for performance?
     set instruction value
-    op and decode_address address 0xfffffffc # word-aligned
     set decode_var null
 
     # only decode if we're in icache range
@@ -1157,40 +1229,80 @@ store_ram_word_unchecked:
     jump end_instruction always
 
 store_mmio_word_unchecked:
+    op sub _offset decode_address {{MMIO_START}}
+
     # trigger a time update
     set next_time_update @time
 
-    # if we get to this point, the MMIO address must be valid, so don't do a bounds check
-    op sub _jump address {{MMIO_START}}
-    op idiv _jump _jump 4
-    op mul _jump _jump 3
+    # reset last_time_update if writing to mtime or mtimeh
+    jump store_mmio_word_unchecked__not_mtime greaterThanEq _offset 0x08
+    set last_time_update @time
+store_mmio_word_unchecked__not_mtime:
+
+    set _uart {{UART0}}
+    jump store_mmio_word_unchecked__uart0 lessThan _offset 0x30
+    set _uart {{UART1}}
+    op sub _offset _offset 0x20 # hack
+store_mmio_word_unchecked__uart0:
+
+    # ignore writes to UART registers other than THR and FCR
+    jump store_mmio_word_unchecked__uart_fcr equal _offset 0x18
+    jump end_instruction greaterThan _offset 0x10
+
+    # NOTE: if we get to this point, the MMIO address must be valid, so we don't need a bounds check
+    op idiv _jump _offset 2
     op add @counter @counter _jump
 
     # mtime
     set mtime value
-    set last_time_update @time
     jump end_instruction always
     # mtimeh
     set mtimeh value
-    set last_time_update @time
     jump end_instruction always
     # mtimecmp
     set mtimecmp value
     jump end_instruction always
-    stop
     # mtimecmph
     set mtimecmph value
     jump end_instruction always
+    # UART
+    # Transmitter Holding Register
+    # append value to queue
+    # NOTE: we don't check for overflow here, see readme
+    read _tx_wptr _uart {{UART_TX_WPTR}}
+    op mod _index _tx_wptr UART_FIFO_CAPACITY
+    op add _index _index {{UART_TX_START}}
+    op and value value 0xff
+    write value _uart _index
 
-SH:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
-    set length 16
-    jump store_value always
+    # advance wptr
+    op add _tx_wptr _tx_wptr 1
+    op mod _tx_wptr _tx_wptr UART_FIFO_MODULO
+    write _tx_wptr _uart {{UART_TX_WPTR}}
 
-SW:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
-    set length 32
-    jump store_value always
+    jump end_instruction always
+
+store_mmio_word_unchecked__uart_fcr:
+    # FIFO Control Register
+
+    op and reset_tx value 0b101
+    jump store_mmio_word_unchecked__uart_fcr__no_reset_tx equal reset_tx 0
+    read _tx_rptr _uart {{UART_TX_RPTR}}
+    write _tx_rptr _uart {{UART_TX_WPTR}}
+store_mmio_word_unchecked__uart_fcr__no_reset_tx:
+
+    op and reset_rx value 0b11
+    jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal reset_rx 0
+    read _rx_wptr _uart {{UART_RX_WPTR}}
+    write _rx_wptr _uart {{UART_RX_RPTR}}
+store_mmio_word_unchecked__uart_fcr__no_reset_rx:
+
+    jump end_instruction always
+
+store_value__syscon:
+    jump halt equal rs2 0
+    jump reset equal rs2 1
+    jump end_instruction always
 
 LR.W:
     # R-type: arg1=rs1, arg2=0, arg3=rd
@@ -1807,39 +1919,28 @@ read_modify_write_csr__minstreth:
 
 MLOGSYS:
     # I-type: arg1=rs1, arg2=funct12, arg3=rd
-    jump illegal_instruction greaterThan arg2 5
+    jump illegal_instruction greaterThan arg2 3
     
     op mul jump arg2 2
     op add @counter @counter jump
 
-    # halt
-    jump halt always
-    stop # placeholder
-
+    # init icache
+    op min __etext rs1 ROM_SIZE
+    jump MLOGSYS__init_icache always
     # printchar
     printchar rs1
     jump end_instruction always
-
     # printflush
     printflush {{ERROR_OUTPUT}}
     jump end_instruction always
-
     # drawflush
     drawflush {{DISPLAY}}
     jump end_instruction always
 
-    # read sortKB
-    jump MLOGSYS__read_sortKB always
-    stop
-
-    # initialize icache
-    # NOTE: if we add more instructions to MLOGSYS, this needs to move to its own label
-
-    op min __etext rs1 ROM_SIZE
+MLOGSYS__init_icache:
     op min __etext __etext ICACHE_SIZE
 
     # decode .text
-    set STATE "decoding"
     set decode_address 0
     set decode_var null
 
@@ -1855,30 +1956,12 @@ MLOGSYS__init_icache__loop:
     op add decode_address decode_address 4
     jump MLOGSYS__init_icache__loop lessThan decode_address __etext
 
-    set STATE "running"
     jump end_instruction always
-
-MLOGSYS__read_sortKB:
-    # check the current ptr and return 0 if we've already reached it
-    # NOTE: this will fail if the user has typed 63 characters since we last checked
-    set result 0
-    read ptr {{KBCONV_DATA}} 63
-    jump end_instruction_with_result equal kbconv_rptr ptr
-
-    # read the char at the current ptr
-    read result {{KBCONV_DATA}} kbconv_rptr
-
-    # increment rptr
-    op add kbconv_rptr kbconv_rptr 1
-    op mod kbconv_rptr kbconv_rptr 63
-
-    jump end_instruction_with_result always
 
 MLOGDRAW:
     # I-type: arg1=rs1, arg2=imm, arg3=rd
     jump illegal_instruction greaterThan arg2 15
 
-    read a0 {{REGISTERS}} 10
     read a1 {{REGISTERS}} 11
     read a2 {{REGISTERS}} 12
     read a3 {{REGISTERS}} 13
@@ -1889,77 +1972,59 @@ MLOGDRAW:
     op add @counter @counter jump
 
     # draw_clear
-    draw clear a0 a1 a2
+    draw clear rs1 a1 a2
     jump end_instruction always
-
     # draw_color
-    draw color a0 a1 a2 a3
+    draw color rs1 a1 a2 a3
     jump end_instruction always
-
     # draw_col
+    op mul rs1 rs1 %00000001
     jump MLOGDRAW_draw_col always
-    stop
-
     # draw_stroke
-    draw stroke a0
+    draw stroke rs1
     jump end_instruction always
-
     # draw_line
-    draw line a0 a1 a2 a3
+    draw line rs1 a1 a2 a3
     jump end_instruction always
-
     # draw_rect
-    draw rect a0 a1 a2 a3
+    draw rect rs1 a1 a2 a3
     jump end_instruction always
-
     # draw_lineRect
-    draw lineRect a0 a1 a2 a3
+    draw lineRect rs1 a1 a2 a3
     jump end_instruction always
-
     # draw_poly
-    draw poly a0 a1 a2 a3 a4
+    draw poly rs1 a1 a2 a3 a4
     jump end_instruction always
-
     # draw_linePoly
-    draw linePoly a0 a1 a2 a3 a4
+    draw linePoly rs1 a1 a2 a3 a4
     jump end_instruction always
-
     # draw_triangle
-    draw triangle a0 a1 a2 a3 a4 a5
+    draw triangle rs1 a1 a2 a3 a4 a5
     jump end_instruction always
-
     # draw_image
+    jump end_instruction greaterThanEq a2 4
     jump MLOGDRAW_draw_image always
-    stop
-
     # draw_print
-    jump MLOGDRAW_draw_print always
-    stop
-
+    draw print rs1 a1 topLeft
+    jump end_instruction always
     # draw_translate
-    draw translate a0 a1
+    draw translate rs1 a1
     jump end_instruction always
-
     # draw_scale
-    draw scale a0 a1
+    draw scale rs1 a1
     jump end_instruction always
-
     # draw_rotate
-    draw rotate a0
+    draw rotate rs1
     jump end_instruction always
-
     # draw_reset
     draw reset
     jump end_instruction always
 
 MLOGDRAW_draw_col:
-    op mul a0 a0 %00000001
-    draw col a0
+    draw col rs1
     jump end_instruction always
 
 MLOGDRAW_draw_image:
-    jump illegal_instruction greaterThanEq a2 4
-
     op mul a2 a2 2 # instructions per index
     op add @counter @counter a2
 
@@ -1969,31 +2034,8 @@ MLOGDRAW_draw_image:
     lookup liquid image a3; jump MLOGDRAW_draw_image__end always
 
 MLOGDRAW_draw_image__end:
-    jump MLOGDRAW_draw_image__lookup_fail strictEqual image null
-
-    set result 1
-    draw image a0 a1 image a4 a5
-    jump end_instruction_with_result always
-
-MLOGDRAW_draw_image__lookup_fail:
-    set result 0
-    jump end_instruction_with_result always
-
-MLOGDRAW_draw_print:
-    jump illegal_instruction greaterThanEq a2 9
-
-    op mul a2 a2 2 # instructions per index
-    op add @counter @counter a2
-
-    draw print a0 a1 bottom; jump end_instruction always
-    draw print a0 a1 bottomLeft; jump end_instruction always
-    draw print a0 a1 bottomRight; jump end_instruction always
-    draw print a0 a1 center; jump end_instruction always
-    draw print a0 a1 left; jump end_instruction always
-    draw print a0 a1 right; jump end_instruction always
-    draw print a0 a1 top; jump end_instruction always
-    draw print a0 a1 topLeft; jump end_instruction always
-    draw print a0 a1 topRight; jump end_instruction always
+    draw image rs1 a1 image a4 a5
+    jump end_instruction always
 
 #% endblock contents
 
@@ -2012,15 +2054,21 @@ set {{ERROR_OUTPUT}} null
 set {{RESET_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{SINGLE_STEP_SWITCH}} null
-set {{KBCONV_DATA}} null
 set {{DISPLAY}} null
+set {{UART0}} null
+set {{UART1}} null
+set {{UART_RX_RPTR}} null
+set {{UART_RX_WPTR}} null
+set {{UART_TX_START}} null
+set {{UART_TX_RPTR}} null
+set {{UART_TX_WPTR}} null
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_BYTE_OFFSET}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{RAM_START}} null
 set {{MMIO_START}} null
-set {{DEFAULT_MTVEC}} null
+set {{SYSCON}} null
 # unused variables
 set {{ {{
 set STATE STATE

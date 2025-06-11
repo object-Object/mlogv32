@@ -1,0 +1,682 @@
+# modified version of kbconv adding UART support
+# see COPYRIGHT variable for license
+# source: https://github.com/BasedUser/mPC/blob/1096376c59018fee4718bd46e0c5edd552df2cb1/dev/kb/kbconv.mlog
+
+# init vars - just in case we changed proc
+set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, BasedUser. Released under GPLv3 (https://www.gnu.org/licenses/gpl-3.0.html).\nThis program is provided without any warranty."
+set SOURCELINK "https://github.com/BasedUser/mPC"
+
+read UART_CAPACITY processor1 "UART_FIFO_CAPACITY"
+op mul UART_MODULO UART_CAPACITY 2
+read uart_wptr bank1 255
+
+read modifiers cell2 0
+op and shift modifiers 1
+op and ctrl modifiers 2
+op and caps modifiers 32
+read rptr cell1 62
+
+loop:
+read wptr cell1 63
+jump loop equal wptr rptr
+
+set tgtmodifier 0
+read scancode cell1 rptr
+op add rptr rptr 1
+op mod rptr rptr 62
+write rptr cell1 62
+op add callback @counter 1
+jump convert always 0 0
+
+jump unmapped equal char 0
+# handle shift and caps/shiftlock
+op shr isL char 48
+op shr isL isL layout
+op and doCaps isL caps
+op xor off shift doCaps
+# handle keyboard layout (i.e. KOI8-R in initial kbconv)
+op add off off layout
+op add off off layout
+# handle final offset
+op mul off off 8
+op shr letter char off
+op and letter letter 0xff
+
+# handle ctrl - THIS REALLY SHOULD BE DONE IN OS!!!
+jump ctrlFail lessThan letter 0x40
+jump ctrlFail greaterThanEq letter 0x7f
+jump ctrlFail equal ctrl 0
+op and letter letter 0x1f # turn into caret char
+
+ctrlFail:
+unmapped:
+jump loop notEqual tgtmodifier 0              # only if a modifier wasn't changed - TODO change to noApplySpecial when bank3
+                                              # otherwise, unset 0xf in modifiers - shift, ctrl, alt, OS
+op and tgtmodifier modifiers 0x0f             # yes this also literally acts as a megakeypress
+op add callback @counter 1 # callback = appliedSpecial:
+jump handleSpecial greaterThan tgtmodifier 0  # but ONLY if there's anything to cancel
+
+noApplySpecial: # TODO: once bank3 as scancode is in
+appliedSpecial:
+
+wait_for_uart:
+read uart_rptr bank1 254
+
+op sub uart_size uart_wptr uart_rptr
+op add uart_size uart_size UART_MODULO
+op mod uart_size uart_size UART_MODULO
+
+# wait for uart to have space
+jump wait_for_uart greaterThanEq uart_size UART_CAPACITY
+
+# uart has space, write a byte
+op mod i uart_wptr UART_CAPACITY
+write letter bank1 i
+
+op add uart_wptr uart_wptr 1
+op mod uart_wptr uart_wptr UART_MODULO
+write uart_wptr bank1 255
+jump loop always
+
+handleSpecial:
+op and type tgtmodifier 0xff
+jump notshift notEqual type 1
+op sub shift 1 shift # invert shift state
+notshift:
+jump notcaps notEqual type 32
+op sub caps 1 caps
+notcaps:
+jump notctrl notEqual type 2
+op sub ctrl 1 ctrl
+notctrl:
+op xor modifiers modifiers type
+write modifiers cell2 0  # v8: change to `write modifiers processor1 "modifiers"`, i forget what var it was -router
+  #sendcode:
+  #write scancode bank2 ptr # TODO: send scancode to separate buffer, bank3?
+  #write ptr bank2 511
+  #op add ptr ptr 1
+  #op mod ptr ptr 511
+set char 0
+set @counter callback
+
+convert:
+op mul offset scancode 2
+op add @counter @counter offset
+
+# Scancode 0: 'tab' key
+set char 0x09090909  # '\t' in all layouts and shift states
+set @counter callback
+
+# Scancode 1: 'q' key
+set char 0x30000EACA5171  # KOI8-R: Йй (EA, CA), ASCII: Qq (51, 71)
+set @counter callback
+
+# Scancode 2: 'w' key
+set char 0x30000E3C35777  # KOI8-R: Цц (E3, C3), ASCII: Ww (57, 77)
+set @counter callback
+
+# Scancode 3: 'e' key
+set char 0x30000F5D54565  # KOI8-R: Уу (F5, D5), ASCII: Ee (45, 65)
+set @counter callback
+
+# Scancode 4: 'capslock' key (modifier)
+set tgtmodifier 32   # CapsLock modifier code
+jump handleSpecial always 0 0
+
+# Scancode 5: 'a' key
+set char 0x30000E6C64161  # KOI8-R: Фф (E6, C6), ASCII: Aa (41, 61)
+set @counter callback
+
+# Scancode 6: 's' key
+set char 0x30000F9D95373  # KOI8-R: Ыы (F9, D9), ASCII: Ss (53, 73)
+set @counter callback
+
+# Scancode 7: 'd' key
+set char 0x30000F7D74464  # KOI8-R: Вв (F7, D7), ASCII: Dd (44, 64)
+set @counter callback
+
+# Scancode 8: 'lshift' key (modifier)
+set tgtmodifier 1    # Left Shift modifier code
+jump handleSpecial always 0 0
+
+# Scancode 9: 'lshift' key (duplicate modifier)
+set tgtmodifier 1    # Left Shift modifier code
+jump handleSpecial always 0 0
+
+# Scancode 10: 'z' key
+set char 0x30000F1D15A7A  # KOI8-R: Яя (F1, D1), ASCII: Zz (5A, 7A)
+set @counter callback
+
+# Scancode 11: 'x' key
+set char 0x30000FEDE5878  # KOI8-R: Чч (FE, DE), ASCII: Xx (58, 78)
+set @counter callback
+
+# Scancode 12: 'lctrl' key (modifier)
+set tgtmodifier 2    # Left Ctrl modifier code
+jump handleSpecial always 0 0
+
+# Scancode 13: 'lctrl' key (duplicate modifier)
+set tgtmodifier 2    # Left Ctrl modifier code
+jump handleSpecial always 0 0
+
+# Scancode 14: 'lOS' key (modifier)
+set tgtmodifier 8    # Left OS modifier code
+jump handleSpecial always 0 0
+
+# Scancode 15: 'lalt' key (modifier)
+set tgtmodifier 4    # Left Alt modifier code
+jump handleSpecial always 0 0
+
+# Scancode 16: 'r' key
+set char 0x30000EBCB5272  # KOI8-R: Кк (EB, CB), ASCII: Rr (52, 72)
+set @counter callback
+
+# Scancode 17: 't' key
+set char 0x30000E5C55474  # KOI8-R: Ее (E5, C5), ASCII: Tt (54, 74)
+set @counter callback
+
+# Scancode 18: 'y' key
+set char 0x30000EECE5979  # KOI8-R: Нн (EE, CE), ASCII: Yy (59, 79)
+set @counter callback
+
+# Scancode 19: 'u' key
+set char 0x30000E7C75575  # KOI8-R: Гг (E7, C7), ASCII: Uu (55, 75)
+set @counter callback
+
+# Scancode 20: 'f' key
+set char 0x30000E1C14666  # KOI8-R: Аа (E1, C1), ASCII: Ff (46, 66)
+set @counter callback
+
+# Scancode 21: 'g' key
+set char 0x30000F0D04767  # KOI8-R: Пп (F0, D0), ASCII: Gg (47, 67)
+set @counter callback
+
+# Scancode 22: 'h' key
+set char 0x30000F2D24868  # KOI8-R: Рр (F2, D2), ASCII: Hh (48, 68)
+set @counter callback
+
+# Scancode 23: 'j' key
+set char 0x30000EFCF4A6A  # KOI8-R: Оо (EF, CF), ASCII: Jj (4A, 6A)
+set @counter callback
+
+# Scancode 24: 'c' key
+set char 0x30000F3D34363  # KOI8-R: Сс (F3, D3), ASCII: Cc (43, 63)
+set @counter callback
+
+# Scancode 25: 'v' key
+set char 0x30000EDCD5676  # KOI8-R: Мм (ED, CD), ASCII: Vv (56, 76)
+set @counter callback
+
+# Scancode 26: 'b' key
+set char 0x30000E9C94262  # KOI8-R: Ии (E9, C9), ASCII: Bb (42, 62)
+set @counter callback
+
+# Scancode 27: 'n' key
+set char 0x30000F4D44E6E  # KOI8-R: Тт (F4, D4), ASCII: Nn (4E, 6E)
+set @counter callback
+
+# Scancode 28: 'space' key
+set char 0x20202020  # Space character in all layouts and shift states
+set @counter callback
+
+# Scancode 29: 'space' key
+set char 0x20202020
+set @counter callback
+
+# Scancode 30: 'space' key
+set char 0x20202020
+set @counter callback
+
+# Scancode 31: 'space' key
+set char 0x20202020
+set @counter callback
+
+# Scancode 32: 'i' key
+set char 0x30000FBDB4969  # KOI8-R: Шш (FB, DB), ASCII: Ii (49, 69)
+set @counter callback
+
+# Scancode 33: 'o' key
+set char 0x30000FDDD4F6F  # KOI8-R: Щщ (FD, DD), ASCII: Oo (4F, 6F)
+set @counter callback
+
+# Scancode 34: 'p' key
+set char 0x30000FADA5070  # KOI8-R: Зз (FA, DA), ASCII: Pp (50, 70)
+set @counter callback
+
+# Scancode 35: 'backspace' key
+set char 0x08080808  # Backspace character in all layouts and shift states
+set @counter callback
+
+# Scancode 36: 'k' key
+set char 0x30000ECCC4B6B  # KOI8-R: Лл (EC, CC), ASCII: Kk (4B, 6B)
+set @counter callback
+
+# Scancode 37: 'l' key
+set char 0x30000E4C44C6C  # KOI8-R: Дд (E4, C4), ASCII: Ll (4C, 6C)
+set @counter callback
+
+# Scancode 38: ';' key
+set char 0x20000F6D63A3B  # KOI8-R: Жж (F6, D6), ASCII: :; (3A, 3B)
+set @counter callback
+
+# Scancode 39: ''' key
+set char 0x20000FCDC2227  # KOI8-R: Ээ (FC, DC), ASCII: "' (22, 27)
+set @counter callback
+
+# Scancode 40: 'm' key
+set char 0x30000F8D84D6D  # KOI8-R: Ьь (F8, D8), ASCII: Mm (4D, 6D)
+set @counter callback
+
+# Scancode 41: ',' key
+set char 0x20000E2C23C2C  # KOI8-R: Бб (E2, C2), ASCII: <, (3C, 2C)
+set @counter callback
+
+# Scancode 42: '.' key
+set char 0x20000E0C03E2E  # KOI8-R: Юю (E0, C0), ASCII: >. (3E, 2E)
+set @counter callback
+
+# Scancode 43: '/' key
+set char 0x2C2E3F2F  # KOI8-R: ,. (2C, 2E), ASCII: ?/ (3F, 2F)
+set @counter callback
+
+# Scancode 44: 'ralt' key (modifier)
+set tgtmodifier 260  # Right Alt modifier code (4 + 256)
+jump handleSpecial always 0 0
+
+# Scancode 45: 'menu' key
+set char 0
+set @counter callback
+
+# Scancode 46: 'rOS' key (modifier)
+set tgtmodifier 264  # Right OS modifier code (8 + 256)
+jump handleSpecial always 0 0
+
+# Scancode 47: 'rctrl' key (modifier)
+set tgtmodifier 258  # Right Ctrl modifier code (2 + 256)
+jump handleSpecial always 0 0
+
+# Scancode 48: '\' key
+set char 0x2F5C7C5C  # KOI8-R: /\ (2F, 5C); ASCII: |\ (7C, 5C)
+set @counter callback
+
+# Scancode 49: 'delete' key
+set char 0x7F7F7F7F  # Delete character in all layouts and shift states
+set @counter callback
+
+# Scancode 50: 'end' key
+set char 0
+set @counter callback
+
+# Scancode 51: 'pagedown' key
+set char 0
+set @counter callback
+
+# Scancode 52: 'return' key
+set char 0x0A0A0A0A  # Line Feed in all layouts and shift states
+set @counter callback
+
+# Scancode 53: Unused
+set char 0
+set @counter callback
+
+# Scancode 54: Unused
+set char 0
+set @counter callback
+
+# Scancode 55: 'numlock' key (modifier)
+set tgtmodifier 16   # NumLock modifier code
+jump handleSpecial always 0 0
+
+# Scancode 56: 'rshift' key (modifier)
+set tgtmodifier 257  # Right Shift modifier code (1 + 256)
+jump handleSpecial always 0 0
+
+# Scancode 57: '[' key
+set char 0x20000E8C87B5B  # KOI8-R: Хх (E8, C8), ASCII: {[ (7B, 5B)
+set @counter callback
+
+# Scancode 58: 'uparrow' key
+set char 0
+set @counter callback
+
+# Scancode 59: ']' key
+set char 0x20000FFDF7D5D  # KOI8-R: Ъъ (FF, DF), ASCII: }] (7D, 5D)
+set @counter callback
+
+# Scancode 60: 'rctrl' key (modifier)
+set tgtmodifier 258  # Right Ctrl modifier code (2 + 256)
+jump handleSpecial always 0 0
+
+# Scancode 61: 'leftarrow' key
+set char 0
+set @counter callback
+
+# Scancode 62: 'downarrow' key
+set char 0
+set @counter callback
+
+# Scancode 63: 'rightarrow' key
+set char 0
+set @counter callback
+
+# Scancode 64: 'num7' key
+set char 0x37373737  # '7' in all layouts and shift states
+set @counter callback
+
+# Scancode 65: 'num8' key
+set char 0x38383838  # '8' in all layouts and shift states
+set @counter callback
+
+# Scancode 66: 'num9' key
+set char 0x39393939  # '9' in all layouts and shift states
+set @counter callback
+
+# Scancode 67: 'num/' key
+set char 0x2F2F2F2F  # '/' in all layouts and shift states
+set @counter callback
+
+# Scancode 68: 'num4' key
+set char 0x34343434  # '4' in all layouts and shift states
+set @counter callback
+
+# Scancode 69: 'num5' key
+set char 0x35353535  # '5' in all layouts and shift states
+set @counter callback
+
+# Scancode 70: 'num6' key
+set char 0x36363636  # '6' in all layouts and shift states
+set @counter callback
+
+# Scancode 71: 'num*' key
+set char 0x2A2A2A2A  # '*' in all layouts and shift states
+set @counter callback
+
+# Scancode 72: 'num1' key
+set char 0x31313131  # '1' in all layouts and shift states
+set @counter callback
+
+# Scancode 73: 'num2' key
+set char 0x32323232  # '2' in all layouts and shift states
+set @counter callback
+
+# Scancode 74: 'num3' key
+set char 0x33333333  # '3' in all layouts and shift states
+set @counter callback
+
+# Scancode 75: 'num-' key
+set char 0x2D2D2D2D  # '-' in all layouts and shift states
+set @counter callback
+
+# Scancode 76: 'num0' key
+set char 0x30303030  # '0' in all layouts and shift states
+set @counter callback
+
+# Scancode 77: 'num.' key
+set char 0x2E2E2E2E  # '.' in all layouts and shift states
+set @counter callback
+
+# Scancode 78: 'numreturn' key
+set char 0x0D0D0D0D  # Carriage return in all layouts and shift states
+set @counter callback
+
+# Scancode 79: 'num+' key
+set char 0x2B2B2B2B  # '+' in all layouts and shift states
+set @counter callback
+
+# Scancode 80: Unused
+set char 0
+set @counter callback
+
+# Scancode 81: Unused
+set char 0
+set @counter callback
+
+# Scancode 82: Unused
+set char 0
+set @counter callback
+
+# Scancode 83: Unused
+set char 0
+set @counter callback
+
+# Scancode 84: Unused
+set char 0
+set @counter callback
+
+# Scancode 85: 'f13' key
+set char 0
+set @counter callback
+
+# Scancode 86: 'f14' key
+set char 0
+set @counter callback
+
+# Scancode 87: 'f15' key
+set char 0
+set @counter callback
+
+# Scancode 88: 'escape' key
+set char 0x1B1B1B1B  # Escape character in all layouts and shift states
+set @counter callback
+
+# Scancode 89: 'f1' key
+set char 0
+set @counter callback
+
+# Scancode 90: 'f2' key
+set char 0
+set @counter callback
+
+# Scancode 91: 'f3' key
+set char 0
+set @counter callback
+
+# Scancode 92: '`' key
+set char 0x20000B3A37E60  # KOI8-R: Ёё (B3, A3), ASCII: ~` (7E, 60)
+set @counter callback
+
+# Scancode 93: '1' key
+set char 0x21312131  # ASCII and KOI8-R: !1 (21, 31)
+set @counter callback
+
+# Scancode 94: '2' key
+set char 0x22324032  # KOI8-R: "2 (22, 32), ASCII: @2 (40, 32)
+set @counter callback
+
+# Scancode 95: '3' key
+set char 0x23332333  # ASCII and KOI8-R: #3 (23, 33)
+set @counter callback
+
+# Scancode 96: Unused
+set char 0
+set @counter callback
+
+# Scancode 97: Unused
+set char 0
+set @counter callback
+
+# Scancode 98: Unused
+set char 0
+set @counter callback
+
+# Scancode 99: Unused
+set char 0
+set @counter callback
+
+# Scancode 100: 'f16' key
+set char 0
+set @counter callback
+
+# Scancode 101: 'f17' key
+set char 0
+set @counter callback
+
+# Scancode 102: 'f18' key
+set char 0
+set @counter callback
+
+# Scancode 103: 'f19' key
+set char 0
+set @counter callback
+
+# Scancode 104: 'f4' key
+set char 0
+set @counter callback
+
+# Scancode 105: 'f5' key
+set char 0
+set @counter callback
+
+# Scancode 106: 'f6' key
+set char 0
+set @counter callback
+
+# Scancode 107: 'f7' key
+set char 0
+set @counter callback
+
+# Scancode 108: '4' key
+set char 0x3B342434  # KOI8-R: ;4 (3B, 34), ASCII: $4 (24, 34)
+set @counter callback
+
+# Scancode 109: '5' key
+set char 0x25352535  # ASCII and KOI8-R: %5 (25, 35)
+set @counter callback
+
+# Scancode 110: '6' key
+set char 0x3A365E36  # KOI8-R: :6 (3A, 36), ASCII: ^6 (5E, 36)
+set @counter callback
+
+# Scancode 111: '7' key
+set char 0x3F372637  # KOI8-R: ?7 (3F, 37), ASCII: &7 (26, 37)
+set @counter callback
+
+# Scancode 112: Unused
+set char 0
+set @counter callback
+
+# Scancode 113: Unused
+set char 0
+set @counter callback
+
+# Scancode 114: Unused
+set char 0
+set @counter callback
+
+# Scancode 115: Unused
+set char 0
+set @counter callback
+
+# Scancode 116: 'f20' key
+set char 0
+set @counter callback
+
+# Scancode 117: 'f21' key
+set char 0
+set @counter callback
+
+# Scancode 118: 'f22' key
+set char 0
+set @counter callback
+
+# Scancode 119: 'f23' key
+set char 0
+set @counter callback
+
+# Scancode 120: 'f8' key
+set char 0
+set @counter callback
+
+# Scancode 121: 'f9' key
+set char 0
+set @counter callback
+
+# Scancode 122: 'f10' key
+set char 0
+set @counter callback
+
+# Scancode 123: 'f11' key
+set char 0
+set @counter callback
+
+# Scancode 124: '8' key
+set char 0x2A382A38  # ASCII and KOI8-R: *8 (2A, 38)
+set @counter callback
+
+# Scancode 125: '9' key
+set char 0x28392839  # ASCII and KOI8-R: (9 (28, 39)
+set @counter callback
+
+# Scancode 126: '0' key
+set char 0x29302930  # ASCII and KOI8-R: )0 (29, 30)
+set @counter callback
+
+# Scancode 127: '-' key
+set char 0x5F2D5F2D  # ASCII and KOI8-R: _- (5F, 2D)
+set @counter callback
+
+# Scancode 128: Unused
+set char 0
+set @counter callback
+
+# Scancode 129: Unused
+set char 0
+set @counter callback
+
+# Scancode 130: Unused
+set char 0
+set @counter callback
+
+# Scancode 131: Unused
+set char 0
+set @counter callback
+
+# Scancode 132: 'f24' key
+set char 0
+set @counter callback
+
+# Scancode 133: Unused
+set char 0
+set @counter callback
+
+# Scancode 134: Unused
+set char 0
+set @counter callback
+
+# Scancode 135: Unused
+set char 0
+set @counter callback
+
+# Scancode 136: 'f12' key
+set char 0
+set @counter callback
+
+# Scancode 137: 'sysrq' key
+set char 0
+set @counter callback
+
+# Scancode 138: 'scrolllock' key (modifier)
+set tgtmodifier 64   # ScrollLock modifier code
+jump handleSpecial always 0 0
+
+# Scancode 139: 'pause' key
+set char 0
+set @counter callback
+
+# Scancode 140: '=' key
+set char 0x2B3D2B3D  # ASCII and KOI8-R: += (2B, 3D)
+set @counter callback
+
+# Scancode 141: 'insert' key
+set char 0
+set @counter callback
+
+# Scancode 142: 'home' key
+set char 0
+set @counter callback
+
+# Scancode 143: 'pageup' key
+set char 0
+set @counter callback
+
+# End of the lookup table

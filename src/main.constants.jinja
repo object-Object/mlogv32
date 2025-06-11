@@ -13,7 +13,9 @@
 {% set PAUSE_SWITCH = 'switch2' %}
 {% set SINGLE_STEP_SWITCH = 'switch3' %}
 
-{% set KBCONV_DATA = 'cell2' %}
+{% set UART0 = 'bank1' %}
+{% set UART1 = 'bank2' %}
+
 {% set DISPLAY = 'display1' %}
 
 {% set LOOKUP_PROC_SIZE = 260 %} {#- number of variables per lookup proc -#}
@@ -22,8 +24,14 @@
 {% set RAM_PROC_VARS = 4096 %} {#- number of variables per RAM proc -#}
 
 {#- ROM starts at 0x00000000, so we don't need a variable for it -#}
-{% set RAM_START     = '0x80000000' %}
-{% set MMIO_START    = '0xf0000000' %}
-{% set DEFAULT_MTVEC = '0xfffffffc' %}
+{% set RAM_START  = '0x80000000' %}
+{% set MMIO_START = '0xf0000000' %}
+{% set SYSCON     = '0xfffffff0' %}
+
+{% set UART_RX_RPTR = 254 %}
+{% set UART_RX_WPTR = 255 %}
+{% set UART_TX_START = 256 %}
+{% set UART_TX_RPTR = 510 %}
+{% set UART_TX_WPTR = 511 %}
 
 {% block contents %}{% endblock %}

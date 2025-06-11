@@ -35,7 +35,13 @@ class ProcessorAccess(
     val resetSwitch: SwitchBuild,
     val pauseSwitch: SwitchBuild,
     val singleStepSwitch: SwitchBuild,
+    val uartFifoCapacity: Int,
+    uart0: MemoryBuild,
+    uart1: MemoryBuild,
 ) {
+    val uart0 = UartAccess(uart0, uartFifoCapacity)
+    val uart1 = UartAccess(uart1, uartFifoCapacity)
+
     val romEnd = ROM_START + romSize.toUInt()
     val ramEnd = RAM_START + ramSize.toUInt()
 
@@ -204,7 +210,7 @@ class ProcessorAccess(
                         val line = rx.readUTF8Line() ?: break
                         Log.info("Got request: $line")
                         val request = Json.decodeFromString<Request>(line)
-                        request.handle(this)
+                        request.handle(this, rx, tx)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: IllegalArgumentException) {
@@ -247,6 +253,9 @@ class ProcessorAccess(
                 resetSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
                 pauseSwitch = buildVar<SwitchBuild>(build, "switch2") ?: return null,
                 singleStepSwitch = buildVar<SwitchBuild>(build, "switch3") ?: return null,
+                uartFifoCapacity = positiveIntVar(build, "UART_FIFO_CAPACITY") ?: return null,
+                uart0 = buildVar<MemoryBuild>(build, "bank1") ?: return null,
+                uart1 = buildVar<MemoryBuild>(build, "bank2") ?: return null,
             )
         }
 
@@ -283,7 +292,7 @@ private fun LVar.numu() = num().toUInt()
 
 @Serializable
 sealed class Request {
-    abstract suspend fun handle(processor: ProcessorAccess): Response
+    abstract suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response
 
     protected suspend fun <T> runOnMainThread(block: () -> T): T {
         return suspendCancellableCoroutine { continuation ->
@@ -303,7 +312,7 @@ sealed class Request {
 data class FlashRequest(
     val path: String,
 ) : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         val file = Core.files.absolute(path)
         require(file.exists()) { "File not found." }
 
@@ -319,7 +328,7 @@ data class DumpRequest(
     val address: UInt?,
     val bytes: Int?,
 ) : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         val file = Core.files.absolute(path)
         file.parent().mkdirs()
 
@@ -336,7 +345,7 @@ data class DumpRequest(
 data class StartRequest(
     val singleStep: Boolean = false,
 ) : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         processor.singleStepSwitch.configure(singleStep)
         processor.resetSwitch.configure(false)
         SuccessResponse("Processor started.")
@@ -349,7 +358,7 @@ data class WaitRequest(
     val stopped: Boolean,
     val paused: Boolean,
 ) : Request() {
-    override suspend fun handle(processor: ProcessorAccess): Response {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response {
         while (true) {
             delay(1000/60) // 1 tick
             val (stopped, paused) = runOnMainThread {
@@ -366,9 +375,54 @@ data class WaitRequest(
 }
 
 @Serializable
+enum class UartDevice {
+    uart0,
+    uart1,
+}
+
+@Serializable
+@SerialName("uart")
+data class UartRequest(
+    val device: UartDevice,
+    val stopOnHalt: Boolean = true,
+) : Request() {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response {
+        val uart = when (device) {
+            UartDevice.uart0 -> processor.uart0
+            UartDevice.uart1 -> processor.uart1
+        }
+        while (true) {
+            if (rx.isClosedForRead || tx.isClosedForWrite) {
+                throw RuntimeException("Client disconnected!")
+            }
+
+            val toUart = 0.until(rx.availableForRead).map { rx.readByte().toUByte() }
+            if (toUart.isNotEmpty()) Log.info("Sending to $device: $toUart")
+
+            val fromUart = runOnMainThread {
+                if (stopOnHalt && processor.resetSwitch.enabled) {
+                    throw RuntimeException("Processor stopped!")
+                }
+                for (byte in toUart) {
+                    uart.write(byte)
+                }
+                uart.readAll()
+            }
+
+            if (fromUart.isNotEmpty()) Log.info("Received from $device: $fromUart")
+            for (byte in fromUart) {
+                tx.writeByte(byte.toByte())
+            }
+
+            delay(1000/60) // 1 tick
+        }
+    }
+}
+
+@Serializable
 @SerialName("unpause")
 data object UnpauseRequest : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         require(!processor.resetSwitch.enabled) { "Processor is not running!" }
         processor.pauseSwitch.configure(false)
         SuccessResponse("Processor unpaused.")
@@ -378,7 +432,7 @@ data object UnpauseRequest : Request() {
 @Serializable
 @SerialName("stop")
 data object StopRequest : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         processor.resetSwitch.configure(true)
         processor.pauseSwitch.configure(false)
         processor.singleStepSwitch.configure(false)
@@ -389,7 +443,7 @@ data object StopRequest : Request() {
 @Serializable
 @SerialName("status")
 data object StatusRequest : Request() {
-    override suspend fun handle(processor: ProcessorAccess) = runOnMainThread {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         StatusResponse(
             running = !processor.resetSwitch.enabled,
             paused = processor.pauseSwitch.enabled,

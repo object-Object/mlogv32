@@ -15,9 +15,9 @@ dependencies = [
 
 [[package]]
 name = "bitflags"
-version = "2.7.0"
+version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1be3f42a67d6d345ecd59f675f3f012d6974981560836e938c22b424b85ce1be"
+checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "critical-section"
@@ -52,6 +52,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "riscv",
+ "uart",
 ]
 
 [[package]]
@@ -117,6 +118,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "uart"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e43cb66305134d1113ca51b4bb5ae6d1f316714bb93146f2339d3a1557df2c83"
+dependencies = [
+ "bitflags",
 ]
 
 [[package]]

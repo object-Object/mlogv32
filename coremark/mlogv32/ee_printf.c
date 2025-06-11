@@ -710,7 +710,7 @@ ee_printf(const char *fmt, ...)
         p++;
     }
 
-    MLOGDRAW_print(old_print_x, old_print_y, 7);
+    MLOGDRAW_print(old_print_x, old_print_y);
     MLOGSYS_drawflush();
 
     return n;

@@ -8,31 +8,80 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache which is 4x less dense than main memory.
 
-The instruction cache should be initialized at boot using the MLOGSYS instruction. It is also updated whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
-
-Code begins executing at address `0x00000000` (ie. the start of ROM).
+For maximum performance, the instruction cache for ROM can be initialized at boot using the MLOGSYS instruction. It is also updated whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
 
 The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
 
 ## Memory
 
-| Address      | Value |
-| ------------ | ----- |
-| `0x00000000` | ROM   |
-| `0x80000000` | RAM   |
-| `0xf0000000` | MMIO  |
+| Address      | Size         | Access Type | Name        |
+| ------------ | ------------ | ----------- | ----------- |
+| `0x00000000` | Configurable | R/X         | ROM         |
+| `0x80000000` | Configurable | R/W/X/A\*   | RAM         |
+| `0xf0000000` | `0x4`        | R/W         | `mtime`     |
+| `0xf0000004` | `0x4`        | R/W         | `mtimeh`    |
+| `0xf0000008` | `0x4`        | R/W         | `mtimecmp`  |
+| `0xf000000c` | `0x4`        | R/W         | `mtimecmph` |
+| `0xf0000010` | `0x20`       | R/W         | UART0       |
+| `0xf0000030` | `0x20`       | R/W         | UART1       |
+| `0xfffffff0` | `0x4`        | W           | Syscon      |
 
-Addresses `0xf0000000` - `0xffffffff` are reserved for MMIO and other system purposes.
+\* Atomic instructions are only supported in RAM.
 
-| Address      | Value                 |
-| ------------ | --------------------- |
-| `0xf0000000` | `mtime`               |
-| `0xf0000004` | `mtimeh`              |
-| `0xf0000008` | `mtimecmp`            |
-| `0xf000000c` | `mtimecmph`           |
-| `0xfffffffc` | `mtvec` default value |
+Code begins executing at address `0x00000000` (ie. the start of ROM).
 
-The machine trap vector CSR `mtvec` is initialized to `0xfffffffc` at reset. To help catch issues with uninitialized `mtvec`, the processor will halt if code jumps to this address.
+Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as MMIO.
+
+### UART
+
+Addresses `0xf0000010` and `0xf0000030` contain emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
+
+- Configurable FIFO capacity (up to 254 bytes) for TX and RX, stored as a variable in the CONFIG processor.
+- Theoretical maximum transfer rate of 121920 bits/sec (254 bytes/tick).
+- Line Status Register flags: Transmitter Empty, THR Empty, Overrun Error, Data Ready.
+
+The UART registers have a stride of 4 bytes to simplify some internal logic.
+
+| Offset | Access Type | Register                     |
+| ------ | ----------- | ---------------------------- |
+| `0x00` | R           | Receiver Holding Register    |
+| `0x00` | W           | Transmitter Holding Register |
+| `0x04` | R/W         | Interrupt Enable Register    |
+| `0x08` | R           | Interrupt Status Register    |
+| `0x08` | W           | FIFO Control Register        |
+| `0x0c` | R/W         | Line Control Register        |
+| `0x10` | R/W         | Modem Control Register       |
+| `0x14` | R           | Line Status Register         |
+| `0x18` | R           | Modem Status Register        |
+| `0x1c` | R/W         | Scratch Pad Register         |
+
+Each UART is implemented as two circular buffers in a memory bank with the following layout. Note that RX refers to data sent to / read by the processor, and TX refers to data sent from / written by the processor.
+
+| Index | Name                    |
+| ----- | ----------------------- |
+| 0     | RX buffer start         |
+| 254   | RX buffer read pointer  |
+| 255   | RX buffer write pointer |
+| 256   | TX buffer start         |
+| 510   | TX buffer read pointer  |
+| 511   | TX buffer write pointer |
+
+Read/write pointers are stored modulo `2 * capacity` ([ref 1](https://github.com/hathach/tinyusb/blob/b203d9eaf7d76fd9fec71b4ee327805a80594574/src/common/tusb_fifo.h), [ref 2](https://gist.github.com/mcejp/719d3485b04cfcf82e8a8734957da06a)) to allow using the entire buffer capacity without introducing race conditions.
+
+If the RX buffer is full and more data arrives, producers should discard the new data rather than overwriting old data in the buffer. An overflow may optionally be indicated by advancing the RX write pointer (without writing a value to the buffer) such that the size of the buffer is `capacity + 1`; this must be done atomically (ie. `wait` first) to avoid race conditions.
+
+Note that the processor itself does not prevent code from overflowing the TX buffer. Users are expected to check the Line Status Register and avoid writing too much data at once.
+
+### Syscon
+
+Address `0xfffffff0` contains a simple write-only peripheral which can be used to control the system by writing values from the following table. Unsupported values will have no effect if written.
+
+| Value        | Effect    |
+| ------------ | --------- |
+| `0x00000000` | Power off |
+| `0x00000001` | Reboot    |
+
+Additionally, the machine trap vector CSR `mtvec` is initialized to `0xfffffff0` at reset. To help catch issues with uninitialized `mtvec`, the processor will halt and output an error message if code jumps to this address.
 
 ## ISA
 
@@ -61,41 +110,41 @@ This non-standard extension adds instructions to control the mlogv32 processor's
 | funct12 (31:20) | rs1 (19:15) | funct3 (14:12) | rd (11:7) | opcode (6:0) | name     |
 | --------------- | ----------- | -------------- | --------- | ------------ | -------- |
 | funct12         | rs1         | `000`          | `00000`   | `0001011`    | MLOGSYS  |
-| funct12         | `00000`     | `001`          | rd        | `0001011`    | MLOGDRAW |
+| funct12         | rs1         | `001`          | `00000`   | `0001011`    | MLOGDRAW |
 
 The MLOG instructions are encoded with an I-type instruction format using the _custom-0_ opcode. The zero-extended immediate is used as a minor opcode (funct12) for implementation reasons.
 
-The MLOGSYS instruction is used for simple system controls, including halt, `printchar`, `printflush`, `drawflush`, sortKB/kbconv integration, and icache initialization.
+The MLOGSYS instruction is used for simple system controls, including `printchar`, `printflush`, `drawflush`, and icache initialization.
 
-| funct12 | rd                      | rs1       | name                       |
-| ------- | ----------------------- | --------- | -------------------------- |
-| 0       | `00000`                 | `00000`   | Halt                       |
-| 1       | `00000`                 | char      | `printchar`                |
-| 2       | `00000`                 | `00000`   | `printflush`               |
-| 3       | `00000`                 | `00000`   | `drawflush`                |
-| 4       | char (0 if no new data) | `00000`   | Read next char from sortKB |
-| 5       | `00000`                 | \_\_etext | Decode ROM .text section   |
+The `mlogsys.icache` instruction uses register _rs1_ as the number of bytes to decode. This can be generated by using a linker script to find the end address of the `.text` section and load it using `li`. The actual number of bytes decoded will be the smallest of _rs1_, the size of the icache, and the size of ROM.
 
-The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers a0 to a5 as necessary, and any return value is placed in _rd_. If _rd_ is specified as `00000` in the below table, no value will be written to `rd` in any case.
+| funct12 | rs1     | name                  |
+| ------- | ------- | --------------------- |
+| 0       | length  | Initialize ROM icache |
+| 1       | char    | `printchar`           |
+| 2       | `00000` | `printflush`          |
+| 3       | `00000` | `drawflush`           |
 
-| funct12 | rd                      | a0      | a1    | a2        | a3     | a4       | a5       | name             |
-| ------- | ----------------------- | ------- | ----- | --------- | ------ | -------- | -------- | ---------------- |
-| 0       | `00000`                 | red     | green | blue      |        |          |          | `draw clear`     |
-| 1       | `00000`                 | red     | green | blue      | alpha  |          |          | `draw color`     |
-| 2       | `00000`                 | color   |       |           |        |          |          | `draw col`       |
-| 3       | `00000`                 | width   |       |           |        |          |          | `draw stroke`    |
-| 4       | `00000`                 | x1      | y1    | x2        | y2     |          |          | `draw line`      |
-| 5       | `00000`                 | x       | y     | width     | height |          |          | `draw rect`      |
-| 6       | `00000`                 | x       | y     | width     | height |          |          | `draw lineRect`  |
-| 7       | `00000`                 | x       | y     | sides     | radius | rotation |          | `draw poly`      |
-| 8       | `00000`                 | x       | y     | sides     | radius | rotation |          | `draw linePoly`  |
-| 9       | `00000`                 | x1      | y1    | x2        | y2     | x3       | y3       | `draw triangle`  |
-| 10      | lookup success (1 or 0) | x       | y     | type      | id     | size     | rotation | `draw image`     |
-| 11      | `00000`                 | x       | y     | alignment |        |          |          | `draw print`     |
-| 12      | `00000`                 | x       | y     |           |        |          |          | `draw translate` |
-| 13      | `00000`                 | x       | y     |           |        |          |          | `draw scale`     |
-| 14      | `00000`                 | degrees |       |           |        |          |          | `draw rotate`    |
-| 15      | `00000`                 |         |       |           |        |          |          | `draw reset`     |
+The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers _rs1_, a1, a2, a3, a4, and a5 as necessary.
+
+| funct12 | rs1     | a1    | a2    | a3     | a4       | a5       | name             |
+| ------- | ------- | ----- | ----- | ------ | -------- | -------- | ---------------- |
+| 0       | red     | green | blue  |        |          |          | `draw clear`     |
+| 1       | red     | green | blue  | alpha  |          |          | `draw color`     |
+| 2       | color   |       |       |        |          |          | `draw col`       |
+| 3       | width   |       |       |        |          |          | `draw stroke`    |
+| 4       | x1      | y1    | x2    | y2     |          |          | `draw line`      |
+| 5       | x       | y     | width | height |          |          | `draw rect`      |
+| 6       | x       | y     | width | height |          |          | `draw lineRect`  |
+| 7       | x       | y     | sides | radius | rotation |          | `draw poly`      |
+| 8       | x       | y     | sides | radius | rotation |          | `draw linePoly`  |
+| 9       | x1      | y1    | x2    | y2     | x3       | y3       | `draw triangle`  |
+| 10      | x       | y     | type  | id     | size     | rotation | `draw image`     |
+| 11      | x       | y     |       |        |          |          | `draw print`     |
+| 12      | x       | y     |       |        |          |          | `draw translate` |
+| 13      | x       | y     |       |        |          |          | `draw scale`     |
+| 14      | degrees |       |       |        |          |          | `draw rotate`    |
+| 15      | `00000` |       |       |        |          |          | `draw reset`     |
 
 #### `draw col`
 
@@ -118,17 +167,7 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 
 #### `draw print`
 
-| Alignment   | Value |
-| ----------- | ----- |
-| bottom      | 0     |
-| bottomLeft  | 1     |
-| bottomRight | 2     |
-| center      | 3     |
-| left        | 4     |
-| right       | 5     |
-| top         | 6     |
-| topLeft     | 7     |
-| topRight    | 8     |
+Only alignment `topLeft` is supported.
 
 ## riscv-arch-test
 

@@ -1,9 +1,11 @@
 #![no_std]
 #![no_main]
 
-use mlogv32::constants::DrawPrintAlignment;
+use core::hint::spin_loop;
+
 use mlogv32::graphics::*;
-use mlogv32::io::{print_char, read_char};
+use mlogv32::io::uart::{FifoControl, LineStatus};
+use mlogv32::io::{get_uart0, get_uart1, print_char};
 use mlogv32::prelude::*;
 
 pub const CHAR_WIDTH: u32 = 7;
@@ -15,13 +17,33 @@ fn main() -> ! {
     let mut printer = DisplayPrinter::new();
     printer.clear();
 
+    let mut uart0 = unsafe { get_uart0() };
+    let mut uart1 = unsafe { get_uart1() };
+
+    uart0.write_fifo_control(FifoControl::ENABLE | FifoControl::CLEAR_RX | FifoControl::CLEAR_TX);
+    uart1.write_fifo_control(FifoControl::ENABLE | FifoControl::CLEAR_RX | FifoControl::CLEAR_TX);
+
     loop {
-        if let Some(Ok(c)) = read_char() {
-            printer.print_char(c);
+        // forward sortKB input from uart0 to uart1
+        if uart0
+            .read_line_status()
+            .contains(LineStatus::DATA_AVAILABLE)
+            && uart1.read_line_status().contains(LineStatus::THR_EMPTY)
+        {
+            uart1.write_byte(uart0.read_byte());
+        }
+
+        // print uart1 to display
+        while uart1
+            .read_line_status()
+            .contains(LineStatus::DATA_AVAILABLE)
+        {
+            printer.print_char(uart1.read_byte() as char);
             printer.flush();
             draw_flush();
         }
-        sleep();
+
+        spin_loop();
     }
 }
 
@@ -105,11 +127,7 @@ impl DisplayPrinter {
     }
 
     pub fn flush(&mut self) {
-        draw_print(
-            self.base_x + self.cur_x,
-            self.base_y - self.cur_y,
-            DrawPrintAlignment::TopLeft,
-        );
+        draw_print(self.base_x + self.cur_x, self.base_y - self.cur_y);
         self.cur_x = self.next_x;
         self.cur_y = self.next_y;
     }

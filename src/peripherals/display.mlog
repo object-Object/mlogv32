@@ -17,9 +17,10 @@ reset_loop:
 
     read rptr UART 510
 
+    draw reset
     draw color 255 255 255 255
-
-    set LF 10
+    draw clear 0 0 0
+    drawflush display1
 
     set CHAR_WIDTH 7
     set CHAR_HEIGHT 13
@@ -42,7 +43,7 @@ loop:
     op add index rptr 256
     read char UART index
 
-    jump loop__newline equal char LF
+    jump loop__newline equal char 10
 
     op add next_x next_x CHAR_WIDTH
     jump loop__same_line lessThanEq next_x 497

@@ -2,6 +2,11 @@
 #% extends 'main.constants.jinja'
 #% block contents
 
+# disable the power switch, then reset
+halt:
+    control enabled {{POWER_SWITCH}} false
+
+# wait until the power switch is enabled, then reset/start
 reset:
     set STATE "reset" # for debug output
 
@@ -20,10 +25,9 @@ reset:
 
     op idiv ICACHE_START_VAR RAM_SIZE 4
 
-    # loop until the reset switch is linked and disabled
-    jump reset strictEqual {{RESET_SWITCH}} null
-    sensor enabled {{RESET_SWITCH}} @enabled
-    jump reset equal enabled true
+    # loop until the power switch is linked and enabled
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump reset equal enabled false
 
     # load reloadable config options
     op add ret @counter 1
@@ -309,15 +313,10 @@ end_instruction__no_overflow:
     op add pc pc 4
 
 end_instruction_trap:
-    # halt if the reset switch was manually enabled
-    sensor enabled {{RESET_SWITCH}} @enabled
-    jump main notEqual enabled true
-
-# enable the reset switch, wait until it's disabled, then reset the processor
-# this must stay directly after end_instruction
-halt:
-    control enabled {{RESET_SWITCH}} true
-    jump reset always
+    # halt if the power switch was manually disabled
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump main equal enabled true
+    jump halt always
 
 # exceptions
 
@@ -2060,7 +2059,7 @@ set {{CSRS}} null
 set {{INCR}} null
 set {{CONFIG}} null
 set {{ERROR_OUTPUT}} null
-set {{RESET_SWITCH}} null
+set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{SINGLE_STEP_SWITCH}} null
 set {{DISPLAY}} null

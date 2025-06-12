@@ -34,7 +34,7 @@ class ProcessorAccess(
     val registers: MemoryBuild,
     val csrs: LogicBuild,
     val errorOutput: MessageBuild,
-    val resetSwitch: SwitchBuild,
+    val powerSwitch: SwitchBuild,
     val pauseSwitch: SwitchBuild,
     val singleStepSwitch: SwitchBuild,
     uartFifoModulo: Int,
@@ -255,7 +255,7 @@ class ProcessorAccess(
                 registers = buildVar<MemoryBuild>(build, "cell1") ?: return null,
                 csrs = buildVar<LogicBuild>(build, "processor17") ?: return null,
                 errorOutput = buildVar<MessageBuild>(build, "message1") ?: return null,
-                resetSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
+                powerSwitch = buildVar<SwitchBuild>(build, "switch1") ?: return null,
                 pauseSwitch = buildVar<SwitchBuild>(build, "switch2") ?: return null,
                 singleStepSwitch = buildVar<SwitchBuild>(build, "switch3") ?: return null,
                 uartFifoModulo = positiveIntVar(build, "UART_FIFO_MODULO") ?: return null,
@@ -352,7 +352,7 @@ data class StartRequest(
 ) : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         processor.singleStepSwitch.configure(singleStep)
-        processor.resetSwitch.configure(false)
+        processor.powerSwitch.configure(true)
         SuccessResponse("Processor started.")
     }
 }
@@ -366,10 +366,10 @@ data class WaitRequest(
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response {
         while (true) {
             delay(1000/60) // 1 tick
-            val (stopped, paused) = runOnMainThread {
-                processor.resetSwitch.enabled to processor.pauseSwitch.enabled
+            val (running, paused) = runOnMainThread {
+                processor.powerSwitch.enabled to processor.pauseSwitch.enabled
             }
-            if (this.stopped && stopped) {
+            if (this.stopped && !running) {
                 return SuccessResponse("Processor has stopped.")
             }
             if (this.paused && paused) {
@@ -405,7 +405,7 @@ data class SerialRequest(
             var overflowCount = 0
 
             val fromUart = runOnMainThread {
-                if (stopOnHalt && processor.resetSwitch.enabled) {
+                if (stopOnHalt && !processor.powerSwitch.enabled) {
                     throw RuntimeException("Processor stopped!")
                 }
 
@@ -443,7 +443,7 @@ data class SerialRequest(
 @SerialName("unpause")
 data object UnpauseRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
-        require(!processor.resetSwitch.enabled) { "Processor is not running!" }
+        require(processor.powerSwitch.enabled) { "Processor is not running!" }
         processor.pauseSwitch.configure(false)
         SuccessResponse("Processor unpaused.")
     }
@@ -453,7 +453,7 @@ data object UnpauseRequest : Request() {
 @SerialName("stop")
 data object StopRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
-        processor.resetSwitch.configure(true)
+        processor.powerSwitch.configure(false)
         processor.pauseSwitch.configure(false)
         processor.singleStepSwitch.configure(false)
         SuccessResponse("Processor stopped.")
@@ -465,7 +465,7 @@ data object StopRequest : Request() {
 data object StatusRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
         StatusResponse(
-            running = !processor.resetSwitch.enabled,
+            running = processor.powerSwitch.enabled,
             paused = processor.pauseSwitch.enabled,
             errorOutput = processor.errorOutput.message?.toString() ?: "",
             pc = processor.build.executor.optionalVar("pc")?.numu(),

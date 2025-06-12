@@ -33,8 +33,6 @@ reset:
     set UART0 bank1
     set UART1 bank2
 
-    set DEBUGGER_RESET_SWITCH switch1
-
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
     jump reset strictEqual REGISTERS null
@@ -42,7 +40,6 @@ reset:
     jump reset strictEqual DISPLAY null
     jump reset strictEqual UART0 null
     jump reset strictEqual UART1 null
-    jump reset strictEqual DEBUGGER_RESET_SWITCH null
 
     set i -1
 reset__find_lookup_start:
@@ -55,7 +52,7 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    control enabled DEBUGGER_RESET_SWITCH false
+    control enabled switch1 true
 
     draw clear 0 0 0
     drawflush DISPLAY
@@ -99,8 +96,8 @@ reset__find_lookup_start:
     #{{'\n'}} {{ print(35, 0) }}
 
 loop:
-    sensor enabled DEBUGGER_RESET_SWITCH @enabled
-    jump reset equal enabled true
+    sensor enabled switch1 @enabled
+    jump reset equal enabled false
 
     set mark_memory_id 0
 

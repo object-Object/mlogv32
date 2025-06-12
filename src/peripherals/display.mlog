@@ -32,6 +32,9 @@ reset_loop:
     # 498 = 70 characters
     set WRAP_X 505
 
+    # TODO: test this
+    set WRAP_Y 8
+
     set cur_x BASE_X
     set next_x BASE_X
 
@@ -60,20 +63,36 @@ loop__newline:
     set next_x BASE_X
     op sub next_y next_y CHAR_HEIGHT
 
+    jump loop__no_overflow_y greaterThanEq next_y WRAP_Y
+    set next_y BASE_Y
+loop__no_overflow_y:
+
 loop__print_now:
     draw print cur_x cur_y topLeft
     set cur_x next_x
     set cur_y next_y
 
-    jump loop__no_print equal char 10 # lf
-    jump loop__no_print equal char 32 # space
+    jump loop__no_print notEqual cur_x BASE_X # space in middle of line
 
-    op add next_x next_x CHAR_WIDTH # hack
+    # if we reach this point, we're at the start of a new line, so clear it
+    draw color 0 0 0 255
+    op sub y cur_y CHAR_HEIGHT
+    op sub y y 3
+    draw rect 6 y 500 CHAR_HEIGHT
+    draw color 255 255 255 255
+
+    drawflush display1
+
+    jump loop__no_print equal char 32 # space at start of line
+    jump loop__no_print equal char 10 # lf
+
+    # if we reach this point, we're printing a character after moving to a new line, so shift next_x again
+    op add next_x next_x CHAR_WIDTH
 
 loop__same_line:
     printchar char
-loop__no_print:
 
+loop__no_print:
     op add rptr rptr 1
     op mod rptr rptr UART_FIFO_MODULO
     write rptr UART 510

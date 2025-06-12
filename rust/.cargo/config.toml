@@ -11,3 +11,21 @@ build-std = ["core", "alloc", "compiler_builtins"]
 [alias]
 rbuild = "build --release"
 rb = "rbuild"
+
+rsize = "size --release"
+
+robjdump = [
+    "objdump",
+    "--release",
+    "--",
+    "--disassemble",
+    "--no-show-raw-insn",
+]
+rod = "robjdump"
+
+robjcopy = [
+    "objcopy",
+    "--release",
+    "--",
+    "--output-target", "binary",
+]

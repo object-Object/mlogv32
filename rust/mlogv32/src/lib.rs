@@ -39,10 +39,10 @@ global_asm!("
     add s0, sp, zero
 ");
 
-#[no_mangle]
-#[link_section = ".text.start"]
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".text.start")]
 unsafe extern "C" fn _start() -> ! {
-    extern "C" {
+    unsafe extern "C" {
         static mut __sbss: u8;
         static mut __ebss: u8;
         static mut __sdata: u8;
@@ -51,18 +51,18 @@ unsafe extern "C" fn _start() -> ! {
     }
 
     #[cfg(feature = "alloc")]
-    extern "C" {
+    unsafe extern "C" {
         static __sheap: u8;
         static _heap_size: u8;
     }
 
     // zero bss
     let count = &raw const __ebss as usize - &raw const __sbss as usize;
-    core::ptr::write_bytes(&raw mut __sbss, 0, count);
+    unsafe { core::ptr::write_bytes(&raw mut __sbss, 0, count) };
 
     // copy static variables
     let count = &raw const __edata as usize - &raw const __sdata as usize;
-    core::ptr::copy_nonoverlapping(&__sidata as *const u8, &raw mut __sdata, count);
+    unsafe { core::ptr::copy_nonoverlapping(&__sidata as *const u8, &raw mut __sdata, count) };
 
     #[cfg(feature = "alloc")]
     unsafe {
@@ -76,11 +76,11 @@ unsafe extern "C" fn _start() -> ! {
         HEAP.init(heap_bottom, heap_size);
     }
 
-    extern "Rust" {
+    unsafe extern "Rust" {
         fn main() -> !;
     }
 
-    main()
+    unsafe { main() }
 }
 
 #[panic_handler]
@@ -133,11 +133,11 @@ unsafe impl critical_section::Impl for CriticalSection {
 #[macro_export]
 macro_rules! entry {
     ($path:path) => {
-        #[export_name = "main"]
+        #[unsafe(export_name = "main")]
         pub unsafe fn __main() -> ! {
             // type check the given path
             let f: unsafe fn() -> ! = $path;
-            f()
+            unsafe { f() }
         }
     };
 }

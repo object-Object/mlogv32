@@ -1,4 +1,0 @@
-[toolchain]
-channel = "nightly-2025-06-10"
-components = ["rust-src"]
-targets = ["riscv32imac-unknown-none-elf"]

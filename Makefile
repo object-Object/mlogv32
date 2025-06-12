@@ -1,7 +1,6 @@
 ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
 
-RUST_PROJECTS = $(patsubst rust/%,%,$(wildcard rust/*))
-RUST_PROGRAMS = $(filter-out mlogv32,$(RUST_PROJECTS))
+RUST_PROGRAMS = $(patsubst rust/examples/%,%,$(wildcard rust/examples/*))
 
 MLOG_PROGRAMS = $(patsubst src/%.mlog.jinja,%,$(wildcard src/*.mlog.jinja))
 
@@ -23,7 +22,7 @@ coremark:
 
 $(ASM_PROGRAMS): %: build/%.bin build/%.dump
 
-$(RUST_PROGRAMS): %: build/rust/%.bin
+$(RUST_PROGRAMS): %: build/rust/examples/%.bin
 
 $(MLOG_PROGRAMS): %: src/%.mlog
 
@@ -32,9 +31,9 @@ build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
 	-rm -f build/$*-[0-9].mlog build/$*-[0-9][0-9].mlog
 	python -m mlogv32.scripts.bin_to_mlog build/$*.bin
 
-build/rust/%.bin: FORCE | build/rust
-	cd rust/$* && cargo robjcopy ../../build/rust/$*.bin
-	cd rust/$* && cargo objdump --release -- --disassemble > ../../build/rust/$*.dump
+build/rust/examples/%.bin: FORCE | build/rust
+	cd rust/examples/$* && cargo robjcopy ../../../build/rust/$*.bin
+	cd rust/examples/$* && cargo objdump --release -- --disassemble > ../../../build/rust/$*.dump
 
 build/%.bin: build/%.out
 	riscv32-unknown-elf-objcopy --output-target binary build/$*.out build/$*.bin
@@ -66,10 +65,8 @@ clean:
 	rm -rf build
 
 .PHONY: clean-rust
-clean-rust: $(addprefix clean-rust/,$(RUST_PROJECTS))
-
-clean-rust/%:
-	cd rust/$* && cargo clean
+clean-rust:
+	cd rust && cargo clean
 
 .PHONY: clean-coremark
 clean-coremark:

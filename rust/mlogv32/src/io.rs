@@ -2,7 +2,7 @@ use core::{arch::asm, hint};
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
-use uart::{address::MmioAddress, Data, FifoControl, LineStatus, Uart};
+use uart::{Data, FifoControl, LineStatus, Uart, address::MmioAddress};
 
 pub use uart;
 
@@ -62,12 +62,12 @@ pub enum UartAddress {
 }
 
 impl UartAddress {
-    unsafe fn get_address(&self) -> MmioAddress {
+    fn get_address(&self) -> MmioAddress {
         let base = match self {
             UartAddress::Uart0 => UART0_ADDRESS,
             UartAddress::Uart1 => UART1_ADDRESS,
         };
-        MmioAddress::new(base as *mut u8, 4)
+        unsafe { MmioAddress::new(base as *mut u8, 4) }
     }
 }
 
@@ -82,7 +82,7 @@ pub unsafe fn get_uart0() -> Uart<MmioAddress, Data> {
 ///
 /// This function is unsafe because the caller must ensure that only one instance exists at a time, as it represents a physical memory-mapped peripheral.
 pub unsafe fn get_uart1() -> Uart<MmioAddress, Data> {
-    unsafe { Uart::new(UartAddress::Uart0.get_address()) }
+    unsafe { Uart::new(UartAddress::Uart1.get_address()) }
 }
 
 pub struct UartPort {
@@ -96,11 +96,7 @@ impl UartPort {
     ///
     /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral.
     pub unsafe fn new(device: UartAddress) -> Self {
-        Self {
-            uart: Uart::new(device.get_address()),
-            fifo_capacity: 1,
-            fifo_len: 0,
-        }
+        unsafe { Self::new_with_fifo(device, 1) }
     }
 
     /// # Safety
@@ -108,7 +104,7 @@ impl UartPort {
     /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral. The caller must also ensure that the fifo capacity is correct.
     pub unsafe fn new_with_fifo(device: UartAddress, fifo_capacity: usize) -> Self {
         Self {
-            uart: Uart::new(device.get_address()),
+            uart: unsafe { Uart::new(device.get_address()) },
             fifo_capacity,
             fifo_len: 0,
         }

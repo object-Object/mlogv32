@@ -7,14 +7,8 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
-    "rust-analyzer.linkedProjects": [
-        "rust/mlogv32/Cargo.toml",
-        "rust/demo_no_alloc/Cargo.toml",
-        "rust/sortKB/Cargo.toml",
-        "rust/ppp/Cargo.toml"
-    ],
     "rust-analyzer.check.allTargets": false,
-    "rust-analyzer.cargo.features": "all",
+    // "rust-analyzer.cargo.features": "all",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,

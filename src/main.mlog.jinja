@@ -38,7 +38,6 @@ reset:
     set next_time_update @time
 
     # reset icache
-    set icache_var null
     set __etext 0
 
     # reset mtvec to implementation-defined value to help catch bugs
@@ -56,6 +55,7 @@ reset:
     
     # set pc to reset vector
     set pc 0
+    set icache_var null
 
     # set mcause to 0, since we don't distinguish different reset conditions
     write 0 {{CSRS}} "{{ 'mcause'|csr }}"
@@ -305,6 +305,7 @@ end_instruction__no_overflow:
     write minstret {{CSRS}} "{{ 'minstret'|csr }}"
     write minstret {{CSRS}} "{{ 'instret'|csr }}"
 
+    # if we're in the icache, icache_var was already incremented
     op add pc pc 4
 
 end_instruction_trap:
@@ -357,10 +358,12 @@ trap:
 
     # we only support direct mode, so set pc to mtvec
     read pc {{CSRS}} "{{ 'mtvec'|csr }}"
+    set icache_var null
 
     # we don't have S-mode, so always trap into M-mode
     set privilege_mode 0b11
 
+    # don't increment pc or instret
     jump end_instruction_trap always
 
 # helper functions
@@ -1747,8 +1750,10 @@ MRET:
     write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
 
     # set pc to MEPC
+    # sub 4 because end_instruction will increment it
     read pc {{CSRS}} "{{ 'mepc'|csr }}"
     op sub pc pc 4
+    set icache_var null
 
     # check for interrupts
     set next_time_update @time

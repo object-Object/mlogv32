@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mlogv32 = { path = "../../mlogv32" }
+mlogv32 = { path = "../../mlogv32", features = ["default-memory"] }

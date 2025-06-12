@@ -6,13 +6,11 @@ use core::hint::spin_loop;
 use mlogv32::graphics::*;
 use mlogv32::io::uart::{FifoControl, LineStatus};
 use mlogv32::io::{get_uart0, get_uart1, print_char};
-use mlogv32::prelude::*;
 
 pub const CHAR_WIDTH: u32 = 7;
 pub const CHAR_HEIGHT: u32 = 13;
 
-entry!(main);
-
+#[mlogv32::entry]
 fn main() -> ! {
     let mut printer = DisplayPrinter::new();
     printer.clear();

@@ -6,8 +6,7 @@ use mlogv32::graphics::*;
 use mlogv32::prelude::*;
 use mlogv32::register::{cycle, instret, time};
 
-entry!(main);
-
+#[mlogv32::entry]
 fn main() -> ! {
     let mut buf = Buffer::new();
 

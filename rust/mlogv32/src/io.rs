@@ -1,30 +1,8 @@
 use core::{arch::asm, hint};
 
-#[cfg(feature = "alloc")]
-use alloc::string::ToString;
 use uart::{Data, FifoControl, LineStatus, Uart, address::MmioAddress};
 
 pub use uart;
-
-#[cfg(feature = "alloc")]
-#[macro_export]
-macro_rules! println {
-    () => {
-        $crate::io::print_str!("")
-    };
-    ($arg:ident) => {{
-        $crate::io::print_str($arg);
-    }};
-    ($($arg:tt)*) => {{
-        $crate::io::_print(format_args!($($arg)*));
-    }};
-}
-
-/// Internal function.
-#[cfg(feature = "alloc")]
-pub fn _print(msg: core::fmt::Arguments) {
-    print_str(msg.to_string().as_str());
-}
 
 pub fn print_str(msg: &str) {
     for c in msg.chars() {

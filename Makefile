@@ -42,7 +42,7 @@ build/%.dump: build/%.out
 	riscv32-unknown-elf-objdump --disassemble build/$*.out > build/$*.dump
 
 build/%.out: build/%.o
-	riscv32-unknown-elf-ld --script=rust/mlogv32/link.x -o build/$*.out build/$*.o
+	riscv32-unknown-elf-ld --script=link.x -o build/$*.out build/$*.o
 
 build/%.o: asm/%.s | build
 	riscv32-unknown-elf-gcc --compile -march=rv32ima_zicsr -o build/$*.o asm/$*.s

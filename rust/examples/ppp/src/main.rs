@@ -4,12 +4,10 @@
 #![no_main]
 
 use mlogv32::io::{UartAddress, UartPort};
-use mlogv32::prelude::*;
-use ppproto::pppos::{PPPoS, PPPoSAction};
 use ppproto::Config;
+use ppproto::pppos::{PPPoS, PPPoSAction};
 
-entry!(main);
-
+#[mlogv32::entry]
 fn main() -> ! {
     let mut log_port = unsafe { UartPort::new_with_fifo(UartAddress::Uart0, 253) };
     let mut ppp_port = unsafe { UartPort::new_with_fifo(UartAddress::Uart1, 253) };

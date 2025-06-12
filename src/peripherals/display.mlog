@@ -27,11 +27,11 @@ reset_loop:
     set BASE_X 8
     set BASE_Y 508
 
-    set cur_x 0
-    set next_x 0
+    set cur_x BASE_X
+    set next_x BASE_X
 
-    set cur_y 0
-    set next_y 0
+    set cur_y BASE_Y
+    set next_y BASE_Y
 
 main:
     sensor enabled switch1 @enabled
@@ -43,16 +43,31 @@ loop:
     op add index rptr 256
     read char UART index
 
-    jump loop__newline equal char 10
+    jump loop__no_print equal char 13 # cr
+
+    jump loop__newline equal char 10 # lf
 
     op add next_x next_x CHAR_WIDTH
-    jump loop__same_line lessThanEq next_x 497
-    print "\n"
+    jump loop__print_now equal char 32 # space
+    jump loop__same_line lessThanEq next_x 504
+
 loop__newline:
-    set next_x 0
-    op add next_y next_y CHAR_HEIGHT
+    set next_x BASE_X
+    op sub next_y next_y CHAR_HEIGHT
+
+loop__print_now:
+    draw print cur_x cur_y topLeft
+    set cur_x next_x
+    set cur_y next_y
+
+    jump loop__no_print equal char 10 # lf
+    jump loop__no_print equal char 32 # space
+
+    op add next_x next_x CHAR_WIDTH # hack
+
 loop__same_line:
     printchar char
+loop__no_print:
 
     op add rptr rptr 1
     op mod rptr rptr UART_FIFO_MODULO
@@ -61,14 +76,10 @@ loop__same_line:
     read wptr UART 511
     jump loop notEqual rptr wptr
 
-    op add x BASE_X cur_x
-    op sub y BASE_Y cur_y
-    draw print x y topLeft
-
+    draw print cur_x cur_y topLeft
     set cur_x next_x
     set cur_y next_y
 
     drawflush display1
 
     jump main always
-

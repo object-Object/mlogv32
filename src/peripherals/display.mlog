@@ -24,8 +24,13 @@ reset_loop:
 
     set CHAR_WIDTH 7
     set CHAR_HEIGHT 13
+
     set BASE_X 8
     set BASE_Y 508
+
+    # 505 = 71 characters
+    # 498 = 70 characters
+    set WRAP_X 505
 
     set cur_x BASE_X
     set next_x BASE_X
@@ -49,7 +54,7 @@ loop:
 
     op add next_x next_x CHAR_WIDTH
     jump loop__print_now equal char 32 # space
-    jump loop__same_line lessThanEq next_x 504
+    jump loop__same_line lessThanEq next_x WRAP_X
 
 loop__newline:
     set next_x BASE_X

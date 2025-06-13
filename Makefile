@@ -1,6 +1,6 @@
 ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
 
-RUST_PROGRAMS = $(patsubst rust/examples/%,%,$(wildcard rust/examples/*))
+RUST_PROGRAMS = $(filter-out webserver,$(patsubst rust/examples/%,%,$(wildcard rust/examples/*)))
 
 MLOG_PROGRAMS = $(patsubst src/%.mlog.jinja,%,$(wildcard src/*.mlog.jinja))
 
@@ -25,6 +25,10 @@ $(ASM_PROGRAMS): %: build/%.bin build/%.dump
 $(RUST_PROGRAMS): %: build/rust/examples/%.bin
 
 $(MLOG_PROGRAMS): %: src/%.mlog
+
+webserver: FORCE | build/rust
+	cd rust/examples/webserver && cargo objcopy --bin server --release -- --output-target binary ../../../build/rust/webserver_server.bin
+	cd rust/examples/webserver && cargo objcopy --bin client --release -- --output-target binary ../../../build/rust/webserver_client.bin
 
 # see https://stackoverflow.com/a/61960833
 build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py

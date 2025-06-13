@@ -17,5 +17,6 @@ embassy-net-ppp = { workspace = true }
 picoserve = { workspace = true }
 panic-persist = { workspace = true, features = ["custom-panic-handler"] }
 log = { workspace = true }
+reqwless = { workspace = true }
 static_cell = { workspace = true }
-smoltcp = { version = "0.12.0", features = ["log"], default-features = false }
+smoltcp = { workspace = true }

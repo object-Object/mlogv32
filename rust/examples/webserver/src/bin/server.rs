@@ -7,44 +7,18 @@ use core::{cell::RefCell, panic::PanicInfo};
 use embassy_net_ppp::Device;
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_time::Duration;
-use embedded_io::{ReadReady, Write};
-use log::{Log, SetLoggerError};
+use embedded_io::ReadReady;
 use mlogv32::{
     io::{BufferedUartPort, UartPort},
     register,
 };
 use picoserve::{AppBuilder, AppRouter, make_static, routing::get};
+use webserver::UartLogger;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     panic_persist::report_panic_info(info);
     mlogv32::reboot();
-}
-
-struct Logger {
-    uart: CriticalSectionMutex<RefCell<UartPort>>,
-}
-
-impl Logger {
-    fn init(&'static self) -> Result<(), SetLoggerError> {
-        log::set_logger(self)?;
-        log::set_max_level(log::LevelFilter::Info);
-        Ok(())
-    }
-}
-
-impl Log for Logger {
-    fn enabled(&self, _metadata: &log::Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &log::Record) {
-        self.uart.lock(|uart| {
-            writeln!(uart.borrow_mut(), "[{}] {}", record.level(), record.args()).unwrap();
-        });
-    }
-
-    fn flush(&self) {}
 }
 
 #[embassy_executor::task]
@@ -126,9 +100,10 @@ async fn main(spawner: embassy_executor::Spawner) {
     log_port.init();
 
     let logger = make_static!(
-        Logger,
-        Logger {
-            uart: CriticalSectionMutex::new(RefCell::new(log_port))
+        UartLogger,
+        UartLogger {
+            uart: CriticalSectionMutex::new(RefCell::new(log_port)),
+            level: log::LevelFilter::Info,
         }
     );
     logger.init().unwrap();

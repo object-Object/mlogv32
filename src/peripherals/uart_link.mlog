@@ -1,0 +1,62 @@
+    setrate 1000
+
+reset:
+    sensor enabled switch1 @enabled
+    jump reset notEqual enabled true
+
+    read UART_FIFO_MODULO processor1 "UART_FIFO_MODULO"
+
+    # bank1 -> bank2
+
+    read tx_rptr bank1 510
+    read tx_wptr bank1 511
+    
+    jump skip1 equal tx_rptr tx_wptr
+
+    read rx_rptr bank2 254
+    read rx_wptr bank2 255
+
+    op add rx_wptr_next rx_wptr 1
+    op mod rx_wptr_next rx_wptr_next UART_FIFO_MODULO
+
+    jump skip1 equal rx_rptr rx_wptr_next
+
+    op add index tx_rptr 256
+    read byte bank1 index
+
+    op add tx_rptr_next tx_rptr 1
+    op mod tx_rptr_next tx_rptr_next UART_FIFO_MODULO
+    write tx_rptr_next bank1 510
+
+    write byte bank2 rx_wptr
+    write rx_wptr_next bank2 255
+
+skip1:
+
+    # bank2 -> bank1
+
+    read tx_rptr bank2 510
+    read tx_wptr bank2 511
+    
+    jump skip2 equal tx_rptr tx_wptr
+
+    read rx_rptr bank1 254
+    read rx_wptr bank1 255
+
+    op add rx_wptr_next rx_wptr 1
+    op mod rx_wptr_next rx_wptr_next UART_FIFO_MODULO
+
+    jump skip2 equal rx_rptr rx_wptr_next
+
+    op add index tx_rptr 256
+    read byte bank2 index
+
+    op add tx_rptr_next tx_rptr 1
+    op mod tx_rptr_next tx_rptr_next UART_FIFO_MODULO
+    write tx_rptr_next bank2 510
+
+    write byte bank1 rx_wptr
+    write rx_wptr_next bank1 255
+
+skip2:
+    end

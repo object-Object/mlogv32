@@ -23,9 +23,11 @@ log = "0.4.27"
 panic-persist = { version = "0.3.0", features = ["utf8"] }
 picoserve = { version = "0.16.0", features = ["embassy", "log"] }
 ppproto = "0.2.1"
+reqwless = "0.13.0"
 riscv = { version = "0.14.0", features = ["critical-section-single-hart"] }
 riscv-rt = { version = "0.15.0", features = ["pre-init", "single-hart", "memory"] }
 static_cell = "2.1.0"
+smoltcp = { version = "0.12.0", features = ["log"], default-features = false }
 uart = "2.1.1"
 
 [profile.release]

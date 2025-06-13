@@ -447,8 +447,8 @@ access_ram_raw:
 # this must stay directly after access_ram
 # _address -> variable
 lookup_variable:
+    # the lookup is assumed to start at link 0, so we don't need to add an offset here
     op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
-    op add _lookup _lookup {{LOOKUP_START}}
     getlink _lookup _lookup
 
     op mod variable _address {{LOOKUP_PROC_SIZE}}
@@ -2053,7 +2053,6 @@ MLOGDRAW_draw_image__end:
 # {% raw %}
 # preprocessor variable definitions
 set {{ null
-set {{LOOKUP_START}} null
 set {{REGISTERS}} null
 set {{CSRS}} null
 set {{INCR}} null

@@ -2,7 +2,9 @@
 
 Runs a simple webserver using [Embassy](https://embassy.dev/) and [picoserve](https://docs.rs/picoserve/latest/picoserve/).
 
-Steps:
+![image](https://github.com/user-attachments/assets/3ed6199b-cfe5-4a85-82a1-39c5d87f2440)
+
+## Steps
 
 - Set up the processor and memory as per the `src/config/webserver.mlog` config.
 - Start the mlogv32-utils socket server.

@@ -155,7 +155,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     }
 
     let (ppp_device, ppp_runner) = embassy_net_ppp::new(make_static!(
-        embassy_net_ppp::State<1024, 1024>,
+        embassy_net_ppp::State<64, 64>,
         embassy_net_ppp::State::new()
     ));
 
@@ -191,7 +191,7 @@ async fn main(spawner: embassy_executor::Spawner) {
             read_request: Some(Duration::from_secs(1)),
             write: Some(Duration::from_secs(1)),
         })
-        .close_connection_after_response()
+        .keep_connection_alive()
     );
 
     for id in 0..WEB_TASK_POOL_SIZE {

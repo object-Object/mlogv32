@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 mlogv32 = { path = "../../mlogv32", features = ["default-memory"] }
-ppproto = "0.2.1"
+ppproto = { workspace = true }

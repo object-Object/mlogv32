@@ -4,8 +4,8 @@
 use core::hint::spin_loop;
 
 use mlogv32::graphics::*;
-use mlogv32::io::uart::{FifoControl, LineStatus};
-use mlogv32::io::{get_uart0, get_uart1, print_char};
+use mlogv32::io::uart::LineStatus;
+use mlogv32::io::{UartPort, print_char};
 
 pub const CHAR_WIDTH: u32 = 7;
 pub const CHAR_HEIGHT: u32 = 13;
@@ -15,28 +15,33 @@ fn main() -> ! {
     let mut printer = DisplayPrinter::new();
     printer.clear();
 
-    let mut uart0 = unsafe { get_uart0() };
-    let mut uart1 = unsafe { get_uart1() };
+    let mut uart0 = unsafe { UartPort::new_uart0(1) };
+    let mut uart1 = unsafe { UartPort::new_uart0(1) };
 
-    uart0.write_fifo_control(FifoControl::ENABLE | FifoControl::CLEAR_RX | FifoControl::CLEAR_TX);
-    uart1.write_fifo_control(FifoControl::ENABLE | FifoControl::CLEAR_RX | FifoControl::CLEAR_TX);
+    uart0.init();
+    uart1.init();
 
     loop {
         // forward sortKB input from uart0 to uart1
         if uart0
+            .uart_mut()
             .read_line_status()
             .contains(LineStatus::DATA_AVAILABLE)
-            && uart1.read_line_status().contains(LineStatus::THR_EMPTY)
+            && uart1
+                .uart_mut()
+                .read_line_status()
+                .contains(LineStatus::THR_EMPTY)
         {
-            uart1.write_byte(uart0.read_byte());
+            uart1.uart_mut().write_byte(uart0.uart_mut().read_byte());
         }
 
         // print uart1 to display
         while uart1
+            .uart_mut()
             .read_line_status()
             .contains(LineStatus::DATA_AVAILABLE)
         {
-            printer.print_char(uart1.read_byte() as char);
+            printer.print_char(uart1.uart_mut().read_byte() as char);
             printer.flush();
             draw_flush();
         }

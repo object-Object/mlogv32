@@ -1,0 +1,12 @@
+[package]
+name = "mlogv32-embassy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+critical-section = { workspace = true }
+derive-mmio = { workspace = true }
+embassy-time-driver = { version = "0.2.0", features = ["tick-hz-1_000"] }
+embassy-time-queue-utils = "0.1.0"
+riscv = { workspace = true }
+riscv-rt = { workspace = true }

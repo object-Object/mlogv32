@@ -3,7 +3,30 @@ resolver = "3"
 members = [
     "examples/*",
     "mlogv32",
+    "mlogv32-embassy",
 ]
+
+[workspace.dependencies]
+bitflags = "2.7.0"
+critical-section = "1.2.0"
+derive-mmio = "0.5.0"
+embassy-executor = { version = "0.7.0", features = ["arch-riscv32", "executor-thread", "nightly"] }
+embassy-futures = "0.1.0"
+embassy-net = { version = "0.7.0", features = ["proto-ipv4", "medium-ip", "icmp", "tcp", "dns"] }
+embassy-net-ppp = "0.2.0"
+embassy-sync = "0.7.0"
+embassy-time = "0.4.0"
+embedded-io = "0.6.1"
+embedded-io-async = "0.6.1"
+itoa = "1.0.11"
+log = "0.4.27"
+panic-persist = { version = "0.3.0", features = ["utf8"] }
+picoserve = { version = "0.16.0", features = ["embassy", "log"] }
+ppproto = "0.2.1"
+riscv = { version = "0.14.0", features = ["critical-section-single-hart"] }
+riscv-rt = { version = "0.15.0", features = ["pre-init", "single-hart", "memory"] }
+static_cell = "2.1.0"
+uart = "2.1.1"
 
 [profile.release]
 panic = "abort"

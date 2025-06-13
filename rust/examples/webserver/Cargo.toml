@@ -1,0 +1,21 @@
+[package]
+name = "webserver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mlogv32 = { path = "../../mlogv32", default-features = false }
+mlogv32-embassy = { path = "../../mlogv32-embassy" }
+riscv-rt = { workspace = true }
+embedded-io = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-time = { workspace = true }
+embassy-futures = { workspace = true }
+embassy-net = { workspace = true }
+embassy-net-ppp = { workspace = true }
+picoserve = { workspace = true }
+panic-persist = { workspace = true, features = ["custom-panic-handler"] }
+log = { workspace = true }
+static_cell = { workspace = true }
+smoltcp = { version = "0.12.0", features = ["log"], default-features = false }

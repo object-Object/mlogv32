@@ -4,12 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bitflags = "2.7.0"
-riscv = "0.12.1"
-riscv-rt = { version = "0.15.0", features = ["pre-init", "single-hart"] }
-uart = "2.1.1"
+bitflags = { workspace = true }
+derive-mmio = { workspace = true }
+embassy-futures = { workspace = true }
+embassy-hal-internal = "0.2.0"
+embedded-io = { workspace = true }
+embedded-io-async = { workspace = true }
+riscv = { workspace = true }
+riscv-rt = { workspace = true }
+uart = { workspace = true }
 
 [features]
 default = ["panic-handler"]
 panic-handler = []
-default-memory = ["riscv-rt/memory"]
+default-memory = []

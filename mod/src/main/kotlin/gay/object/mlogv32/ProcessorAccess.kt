@@ -429,7 +429,6 @@ data class SerialRequest(
 
             if (overflowCount > 0) Log.warn("$device RX buffer is full, $overflowCount bytes dropped!")
 
-            if (fromUart.isNotEmpty()) Log.info("Received from $device: $fromUart")
             for (byte in fromUart) {
                 tx.writeByte(byte.toByte())
             }

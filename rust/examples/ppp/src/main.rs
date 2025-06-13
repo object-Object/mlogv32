@@ -3,19 +3,19 @@
 #![no_std]
 #![no_main]
 
-use mlogv32::io::{UartAddress, UartPort};
+use mlogv32::io::UartPort;
 use ppproto::Config;
 use ppproto::pppos::{PPPoS, PPPoSAction};
 
 #[mlogv32::entry]
 fn main() -> ! {
-    let mut log_port = unsafe { UartPort::new_with_fifo(UartAddress::Uart0, 253) };
-    let mut ppp_port = unsafe { UartPort::new_with_fifo(UartAddress::Uart1, 253) };
+    let mut log_port = unsafe { UartPort::new_uart0(253) };
+    let mut ppp_port = unsafe { UartPort::new_uart1(253) };
 
     log_port.init();
     ppp_port.init();
 
-    log_port.write(b"initializing ppp\n");
+    log_port.blocking_write(b"initializing ppp\n");
 
     let config = Config {
         username: b"username",
@@ -24,7 +24,7 @@ fn main() -> ! {
     let mut ppp = PPPoS::new(config);
     ppp.open().unwrap();
 
-    log_port.write(b"ppp opened\n");
+    log_port.blocking_write(b"ppp opened\n");
 
     let mut rx_buf = [0; 2048];
     let mut tx_buf = [0; 2048];
@@ -36,10 +36,10 @@ fn main() -> ! {
         // Poll the ppp
         match ppp.poll(&mut tx_buf, &mut rx_buf) {
             PPPoSAction::None => {}
-            PPPoSAction::Transmit(n) => ppp_port.write(&tx_buf[..n]),
+            PPPoSAction::Transmit(n) => ppp_port.blocking_write(&tx_buf[..n]),
             PPPoSAction::Received(range) => {
                 let pkt = &mut rx_buf[range];
-                log_port.write(b"received request\n");
+                log_port.blocking_write(b"received request\n");
 
                 // Toy code to reply to pings with no error handling whatsoever.
                 let header_len = (pkt[0] & 0x0f) as usize * 4;
@@ -71,9 +71,9 @@ fn main() -> ! {
 
                         // Send it!
                         let n = ppp.send(pkt, &mut tx_buf).unwrap();
-                        ppp_port.write(&tx_buf[..n]);
+                        ppp_port.blocking_write(&tx_buf[..n]);
 
-                        log_port.write(b"replied to ping!\n");
+                        log_port.blocking_write(b"replied to ping!\n");
                     }
                 }
             }

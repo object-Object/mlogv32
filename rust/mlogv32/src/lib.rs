@@ -7,38 +7,14 @@ mod asm;
 pub use riscv::{self, register, result as riscv_result};
 pub use riscv_rt::{self, entry};
 
-use core::{arch::riscv32::pause, panic::PanicInfo};
+use core::arch::riscv32::pause;
 
-use io::{print_flush, print_str};
+#[cfg(feature = "panic-handler")]
+mod panic_handler;
 
 pub mod graphics;
 pub mod io;
 pub mod prelude;
-
-#[cfg(feature = "panic-handler")]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    let message = info.message().as_str();
-    let location = info.location();
-
-    if message.is_none() && location.is_none() {
-        print_str("thread panicked");
-    } else {
-        print_str("thread panicked:");
-        if let Some(message) = message {
-            print_str("\n");
-            print_str(message);
-        }
-        if let Some(location) = location {
-            print_str("\n");
-            print_str(location.file());
-        }
-    }
-
-    print_flush();
-
-    halt();
-}
 
 // functions
 

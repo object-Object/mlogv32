@@ -1,0 +1,12 @@
+[package]
+name = "timer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+critical-section = { workspace = true }
+itoa = { workspace = true }
+mlogv32 = { path = "../../mlogv32", features = ["default-memory"] }
+riscv = { workspace = true }
+riscv-rt = { workspace = true }
+derive-mmio = { workspace = true }

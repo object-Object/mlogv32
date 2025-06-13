@@ -6,7 +6,7 @@ Steps:
 
 - Make sure UART_FIFO_CAPACITY in the CONFIG proc is set to 253.
 - Start the mlogv32-utils socket server.
-- Run each of the following commands in a separate terminal (replace `127.0.0.1` with your [host ip](https://superuser.com/a/1679774) if using WSL):
+- Run each of the following commands in a separate terminal (replace `127.0.0.1` with your [host ip](https://learn.microsoft.com/en-us/windows/wsl/networking#accessing-windows-networking-apps-from-linux-host-ip) if using WSL):
 
   ```sh
   # show log output from uart0

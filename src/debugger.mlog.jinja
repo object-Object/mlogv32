@@ -789,7 +789,8 @@ mark_memory__found:
 
     setmarker remove mark_memory_id
     makemarker shapeText mark_memory_id x y false
-    setmarker shape 0 4 0 0
+    op sub layer 120 mark_memory_id
+    setmarker drawLayer mark_memory_id layer
     setmarker flushText mark_memory_id false
 
     op add mark_memory_id mark_memory_id 1

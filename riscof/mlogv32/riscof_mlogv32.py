@@ -67,7 +67,7 @@ class mlogv32(pluginTemplate):
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
          -T "
             + self.pluginpath
-            + "/env/link.ld\
+            + "/env/{linker_script}\
          -I "
             + self.pluginpath
             + "/env/\
@@ -160,6 +160,12 @@ class mlogv32(pluginTemplate):
                 # prefix with "-D". The following does precisely that.
                 compile_macros = " -D" + " -D".join(testentry["macros"])
 
+                # use a different linker script for tests that require .text to be writable
+                if testname.endswith("/Zifencei/src/Fencei.S"):
+                    linker_script = "reloc.ld"
+                else:
+                    linker_script = "xip.ld"
+
                 # substitute all variables in the compile command that we created in the initialize
                 # function
                 compile_cmd = self.compile_cmd.format(
@@ -168,6 +174,7 @@ class mlogv32(pluginTemplate):
                     test=test,
                     elf=elf,
                     macros=compile_macros,
+                    linker_script=linker_script,
                 )
 
                 objcopy_cmd = self.objcopy_cmd.format(

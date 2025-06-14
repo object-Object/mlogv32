@@ -23,6 +23,7 @@
   la t0, __sitext; \
   la t1, __stext; \
   la t2, __etext; \
+  beqz t2, mlogv32_text_done; \
 mlogv32_load_text: \
   bgeu t1, t2, mlogv32_text_done; \
   lb t3, 0(t0); \

@@ -179,7 +179,7 @@ main__access_icache:
     #                           = RAM_SIZE + pc
     # so just calculate that and skip the extra subtraction
     op add _address RAM_SIZE pc
-    op add access_ram__ret @counter 1
+    op add lookup_variable_ret @counter 1
     jump access_ram_raw always
     set icache_ram ram
     set icache_var variable
@@ -422,6 +422,7 @@ unsigned_to_signed__done_2:
 
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
+# ret: lookup_variable_ret
 access_ram:
     op sub _address address {{RAM_START}}
 
@@ -443,11 +444,11 @@ access_ram_raw:
 
     # get the variable within the ram proc containing this address
     op mod _address _address {{RAM_PROC_VARS}}
-    set lookup_variable__ret access_ram__ret
 
 # given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
+# ret: lookup_variable_ret
 lookup_variable:
     # the lookup is assumed to start at link 0, so we don't need to add an offset here
     op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
@@ -458,7 +459,7 @@ lookup_variable:
     sensor variable variable @name
     read variable _lookup variable
 
-    set @counter lookup_variable__ret
+    set @counter lookup_variable_ret
 
 # loads the word from memory that contains the specified address
 # mcause is required in order to raise the correct exception in case of access fault
@@ -474,7 +475,7 @@ load_ram_or_mmio_word:
 
 load_ram_word_unchecked:
     # locate and read value from ram
-    op add access_ram__ret @counter 1
+    op add lookup_variable_ret @counter 1
     jump access_ram always
     read value ram variable
     # null is coerced to 0 by swap_endianness
@@ -1024,7 +1025,7 @@ end_decode:
     # get the current instruction cache processor and variable
     jump end_decode__decode_var_valid notEqual decode_var null
     op add _address RAM_SIZE decode_address
-    op add access_ram__ret @counter 1
+    op add lookup_variable_ret @counter 1
     jump access_ram_raw always
     set decode_ram ram
     set decode_var variable
@@ -1394,7 +1395,7 @@ SC.W__no_write_rd:
     # conditionally write value
     jump end_instruction notEqual success true
 
-    op add access_ram__ret @counter 1
+    op add lookup_variable_ret @counter 1
     jump access_ram always
 
     set value rs2
@@ -1833,7 +1834,7 @@ read_modify_write_csr:
     # read
 
     set _address imm
-    op add lookup_variable__ret @counter 1
+    op add lookup_variable_ret @counter 1
     jump lookup_variable always
     read result {{CSRS}} variable
 

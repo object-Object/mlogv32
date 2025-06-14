@@ -6,9 +6,15 @@ RISC-V processor in Mindustry logic. Requires Mindustry build 149+.
 
 ## Architecture
 
-Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache which is 4x less dense than main memory.
+Physical memory consists of three sections. Two are directly accessible by code: ROM (rx) and RAM (rwx). The third section is an instruction cache, which sits directly after RAM and uses the same processor layout to store partially decoded instructions.
 
 For maximum performance, the instruction cache for ROM can be initialized at boot using the MLOGSYS instruction. It is also updated whenever an instruction writes to RAM that is covered by the icache. If executing from memory not covered by the icache, the processor manually fetches and decodes the instruction from main memory.
+
+Instructions are cached in the following format, utilizing the full 54 bits of `double` precision ([53 mantissa](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER), 1 sign).
+
+| 53:47             | 46:42 | 41:37 | 36:32 | 31:0 |
+| ----------------- | ----- | ----- | ----- | ---- |
+| op_id (-64 to 63) | rs2   | rs1   | rd    | imm  |
 
 The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
 

@@ -23,8 +23,6 @@ reset:
 
     op add RAM_END {{RAM_START}} RAM_SIZE
 
-    op idiv ICACHE_START_VAR RAM_SIZE 4
-
     # loop until the power switch is linked and enabled
     sensor enabled {{POWER_SWITCH}} @enabled
     jump reset equal enabled false
@@ -170,30 +168,44 @@ main__slow_instruction_fetch:
     set decode_address null
     
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
-    op add decode_ret @counter 14
+    op add decode_ret @counter 10
     jump decode always
 
 main__access_icache:
-    op add _address ICACHE_START_VAR pc
+    # the icache is stored in RAM cells immediately after the end of RAM with the same density as regular memory
+    # icache address = RAM_END + pc = RAM_START + RAM_SIZE + pc
+    # _address @ access_ram_raw = address - RAM_START
+    #                           = RAM_START + RAM_SIZE + pc - RAM_START
+    #                           = RAM_SIZE + pc
+    # so just calculate that and skip the extra subtraction
+    op add _address RAM_SIZE pc
     op add access_ram__ret @counter 1
     jump access_ram_raw always
     set icache_ram ram
     set icache_var variable
-    # load instruction and arguments
+
 main__read_icache:
-    read op_id icache_ram icache_var
+    # load instruction and unpack arguments
+    read icache_payload icache_ram icache_var
     read icache_var {{INCR}} icache_var
-    read arg1 icache_ram icache_var
-    read icache_var {{INCR}} icache_var
-    read arg2 icache_ram icache_var
-    read icache_var {{INCR}} icache_var
-    read arg3 icache_ram icache_var
-    read icache_var {{INCR}} icache_var
+    op and imm icache_payload 0xffffffff
+    op shr op_id icache_payload 47
+    # decode_ret jumps here for the slow path
+    # we can't jump any later because decode doesn't fully isolate the register fields
+
+    op shr rd_id icache_payload 32
+    op and rd_id rd_id 0b11111
+    
+    op shr rs1_id icache_payload 37
+    op and rs1_id rs1_id 0b11111
+    
+    op shr rs2_id icache_payload 42
+    op and rs2_id rs2_id 0b11111
 
     # read rs1 and rs2
     # this wastes 1 cycle for I-type and 2 cycles for U-type and J-type, but it saves a huge amount of space
-    read rs1 {{REGISTERS}} arg1
-    read rs2 {{REGISTERS}} arg2
+    read rs1 {{REGISTERS}} rs1_id
+    read rs2 {{REGISTERS}} rs2_id
     
     # pause if in single-stepping mode, or if we hit the configured breakpoint
     sensor enabled {{SINGLE_STEP_SWITCH}} @enabled
@@ -203,15 +215,13 @@ done_pause_step:
 
     # jump to instruction handler
     # TODO: we could save space by using a symbol table, but that would make updating the code a pain
-    op add @counter @counter op_id
+    op add jump op_id 64 # op_id is in the range [-64, 63]
+    op add @counter @counter jump
 
-    jump illegal_instruction always
-    jump LUI always
-    jump AUIPC always
-    jump JAL always
-    jump JALR always
     jump BEQ always
     jump BNE always
+    jump JAL always
+    jump JALR always
     jump BLT always
     jump BGE always
     jump BLTU always
@@ -219,46 +229,12 @@ done_pause_step:
     jump LB always
     jump LH always
     jump LW always
+    jump LUI always
     jump LBU always
     jump LHU always
     jump SB always
     jump SH always
     jump SW always
-    jump ADDI always
-    jump SLTI always
-    jump SLTIU always
-    jump XORI always
-    jump ORI always
-    jump ANDI always
-    jump SLLI always
-    jump SRLI always
-    jump SRAI always
-    jump ADD always
-    jump SLL always
-    jump SLT always
-    jump SLTU always
-    jump XOR always
-    jump SRL always
-    jump OR always
-    jump AND always
-    jump SUB always
-    jump SRA always
-    jump FENCE always
-    jump PRIV always
-    jump CSRRW always
-    jump CSRRS always
-    jump CSRRC always
-    jump CSRRWI always
-    jump CSRRSI always
-    jump CSRRCI always
-    jump MUL always
-    jump MULH always
-    jump MULHSU always
-    jump MULHU always
-    jump DIV always
-    jump DIVU always
-    jump REM always
-    jump REMU always
     jump AMOADD.W always
     jump AMOSWAP.W always
     jump LR.W always
@@ -270,6 +246,43 @@ done_pause_step:
     jump AMOMAX.W always
     jump AMOMINU.W always
     jump AMOMAXU.W always
+    jump ADDI always
+    jump SUB always
+    jump SLTI always
+    jump SLTIU always
+    jump XORI always
+    jump SRA always
+    jump ORI always
+    jump ANDI always
+    jump ADD always
+    jump SLL always
+    jump SLT always
+    jump SLTU always
+    jump XOR always
+    jump SRL always
+    jump OR always
+    jump AND always
+    jump MUL always
+    jump MULH always
+    jump MULHSU always
+    jump MULHU always
+    jump DIV always
+    jump DIVU always
+    jump REM always
+    jump REMU always
+    jump PRIV always
+    jump CSRRW always
+    jump CSRRS always
+    jump CSRRC always
+    jump AUIPC always
+    jump CSRRWI always
+    jump CSRRSI always
+    jump CSRRCI always
+    jump FENCE always
+    jump SLLI always
+    jump SRLI always
+    jump SRAI always
+    jump illegal_instruction always # null + 64 would jump here
     jump MLOGSYS always
     jump MLOGDRAW always
 
@@ -288,10 +301,10 @@ pause_step__loop:
     jump done_pause_step always
 
 # most instructions with an output register jump here after completing successfully
-# writes result to register arg3 (rd) if rd is not x0
+# writes result to register rd_id if rd_id is not x0
 end_instruction_with_result:
-    jump end_instruction equal arg3 0
-    write result {{REGISTERS}} arg3
+    jump end_instruction equal rd_id 0
+    write result {{REGISTERS}} rd_id
 
 # all instructions jump here after completing successfully
 end_instruction:
@@ -407,26 +420,15 @@ unsigned_to_signed__done_2:
 
     set @counter ret
 
-# get the variable name in CSRS for the specified CSR, and also check if it's read-only
-# csr -> variable, readonly
-access_csr:
-    # the top two bits of csr indicate whether the register is read/write (00, 01, 10) or read-only (11)
-    op and readonly csr 0b110000000000
-    op equal readonly readonly 0b110000000000
-
-    set _address csr
-    set lookup_variable__ret ret
-    jump lookup_variable always
-
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 access_ram:
     op sub _address address {{RAM_START}}
 
+access_ram_raw:
     # we store 4 bytes in each value
     op idiv _address _address 4
 
-access_ram_raw:
     # get the ram proc containing this address
     op idiv _ram_index _address {{RAM_PROC_VARS}}
     op add _ram_index _ram_index RAM_START_PROC
@@ -641,19 +643,9 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 
 # instruction decoder
 
-# canonical arg order: rs1, rs2, imm, rd
-# this allows us to save a lot of space at the expense of a bit of speed by always reading rs1 and rs2 from arg1 and arg2
-
-# R-type: arg1=rs1, arg2=rs2, arg3=rd
-# I-type: arg1=rs1, arg2=imm, arg3=rd
-# S-type: arg1=rs1, arg2=rs2, arg3=imm
-# B-type: arg1=rs1, arg2=rs2, arg3=imm
-# U-type: arg1=null, arg2=imm, arg3=rd
-# J-type: arg1=null, arg2=imm, arg3=rd
-
 # decoder entry point: decodes a single instruction and writes it to the icache
 # the caller MUST set decode_var to null before the first consecutive call to this function
-# instruction, decode_address -> op_id, arg1, arg2, arg3
+# instruction, decode_address -> op_id, imm, payload
 # ret: decode_ret
 decode:
     # the lowest 2 bits are always "11" for non-compressed instructions
@@ -670,30 +662,31 @@ decode:
     jump decode_illegal_instruction greaterThanEq opcode 0b1110111 # OP-VE
 decode__ok:
 
-    # decode common fields to save space
-    # we assume arg1=rs1, arg2=rs2, arg3=rd, which is close enough to most of the formats to save space
-    # rs1
-    op shr arg1 instruction 15
-    op and arg1 arg1 0b11111
+    # decode and pack registers into the payload
+    # we do it in this order because instruction_24_15 is used for I-type and instruction_11_7 is used for S-type
+    op and instruction_24_15 instruction 0b1111111111000000000000000
+    op and instruction_11_7 instruction  0b0000000000000111110000000
 
-    # rs2
-    op shr arg2 instruction 20
-    op and arg2 arg2 0b11111
+    op shl icache_payload_rs2_rs1 instruction_24_15 22 # instruction[24:15] -> icache_payload[46:37]
+    op shl icache_payload_rd instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
 
-    # rd
-    op shr arg3 instruction 7
-    op and arg3 arg3 0b11111
+    # we put the registers into the icache_payload variable here so that we don't have to fully pack the payload if decoding during instruction fetch
+    op add icache_payload icache_payload_rs2_rs1 icache_payload_rd
 
+    # this is used in both S-type and B-type
+    op shr imm_4_0 instruction_11_7 7 # instruction[11:7] -> imm[4:0]
+
+    # this is used in a bunch of places
+    # NOTE: this is unsafe if instruction is longer than 32 bits, but that should never happen. hopefully.
+    op shr funct12 instruction 20
+
+    # decode common fields
     # funct3
     op shr funct3 instruction 12
     op and funct3 funct3 0b111
 
-    # many decoders use funct3 * 2 as a counter array jump, so calculate that here to save space
-    op mul funct3_x2 funct3 2
-
     # funct7
-    op shr funct7 instruction 25
-    op and funct7 funct7 0b1111111
+    op shr funct7 funct12 5
 
     # counter array based on (opcode >> 2), since the low 2 bits don't matter
     op shr jump opcode 2
@@ -739,122 +732,116 @@ decode__before_OP-32:
     # >=80b
 
 decode_LUI:
-    set op_id 1 # LUI
+    set op_id -53 # LUI
     jump decode_U-type always
 
 decode_AUIPC:
-    set op_id 2 # AUIPC
+    set op_id -8 # AUIPC
     
 decode_U-type:
-    # U-type: arg1=null, arg2=imm, arg3=rd
-    set arg1 null
-
+    # U-type: imm, rd_id
     # imm
-    op and arg2 instruction 0b11111111111111111111000000000000
-
+    op and imm instruction 0b11111111111111111111000000000000
     jump end_decode always
 
 decode_JAL:
-    # J-type: arg1=null, arg2=imm, arg3=rd
-    set arg1 null
-
+    # J-type: imm, rd_id
     # imm
     op shr imm_20 instruction 11 # instruction[31] -> imm[20]
+    # instruction: instruction[19:12] -> imm[19:12]
     op shr imm_11 instruction 9 # instruction[20] -> imm[11]
-    op shr imm_10_1 instruction 20 # instruction[30:21] -> imm[10:1]
+    # funct12: instruction[30:21] -> imm[10:1]
 
     op and imm_20 imm_20         0b100000000000000000000
-    op and imm_19_12 instruction 0b011111111000000000000 # instruction[19:12] -> imm[19:12]
+    op and imm_19_12 instruction 0b011111111000000000000
     op and imm_11 imm_11         0b000000000100000000000
-    op and imm_10_1 imm_10_1     0b000000000011111111110
+    op and imm_10_1 funct12      0b000000000011111111110
 
-    op add arg2 imm_20 imm_19_12
-    op add arg2 arg2 imm_11
-    op add arg2 arg2 imm_10_1
+    op add imm imm_20 imm_19_12
+    op add imm imm imm_11
+    op add imm imm imm_10_1
 
     # extend sign
-    op xor arg2 arg2 0b100000000000000000000
-    op sub arg2 arg2 0b100000000000000000000
-    op and arg2 arg2 0xffffffff
+    op xor imm imm 0b100000000000000000000
+    op sub imm imm 0b100000000000000000000
 
-    set op_id 3 # JAL
+    set op_id -62 # JAL
     jump end_decode always
 
 decode_JALR:
-    set op_id 4 # JALR
+    set op_id -61 # JALR
     jump decode_I-type always
 
 decode_BRANCH:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
+    jump decode_illegal_instruction equal funct3 2
+    jump decode_illegal_instruction equal funct3 3
+
     # imm
     op shr imm_12 instruction 19 # instruction[31] -> imm[12]
     op shl imm_11 instruction 4 # instruction[7] -> imm[11]
-    op shr imm_10_5 instruction 20 # instruction[30:25] -> imm[10:5]
-    # arg3/rd: instruction[11:8] -> imm[4:1]
+    # funct12: instruction[30:25] -> imm[10:5]
+    # imm_4_0/rd: instruction[11:8] -> imm[4:1]
 
-    op and imm_12 imm_12     0b1000000000000
-    op and imm_11 imm_11     0b0100000000000
-    op and imm_10_5 imm_10_5 0b0011111100000
-    op and imm_4_1 arg3      0b0000000011110
+    op and imm_12 imm_12    0b1000000000000
+    op and imm_11 imm_11    0b0100000000000
+    op and imm_10_5 funct12 0b0011111100000
+    op and imm_4_1 imm_4_0  0b0000000011110
 
-    op add arg3 imm_12 imm_11
-    op add arg3 arg3 imm_10_5
-    op add arg3 arg3 imm_4_1
+    op add imm imm_12 imm_11
+    op add imm imm imm_10_5
+    op add imm imm imm_4_1
 
     # extend sign
-    op xor arg3 arg3 0b1000000000000
-    op sub arg3 arg3 0b1000000000000
-    op and arg3 arg3 0xffffffff
+    op xor imm imm 0b1000000000000
+    op sub imm imm 0b1000000000000
 
-    # 5: BEQ
-    # 6: BNE
-    # illegal_instruction
-    # illegal_instruction
-    # 7: BLT
-    # 8: BGE
-    # 9: BLTU
-    # 10: BGEU
-    op add op_id funct3 5
-    jump end_decode lessThan funct3 2
-    jump decode_illegal_instruction lessThan funct3 4
-    op sub op_id op_id 2
+    # -64: BEQ
+    # -63: BNE
+    # -62: (JAL)
+    # -61: (JALR)
+    # -60: BLT
+    # -59: BGE
+    # -58: BLTU
+    # -57: BGEU
+    op add op_id -64 funct3
     jump end_decode always
 
 decode_LOAD:
     jump decode_illegal_instruction equal funct3 3
     jump decode_illegal_instruction greaterThanEq funct3 6
 
-    # 11: LB
-    # 12: LH
-    # 13: LW
-    # illegal_instruction
-    # 14: LBU
-    # 15: LHU
-    op add op_id 11 funct3
-    op greaterThan offset funct3 3 # subtract 1 if funct3 > 3
-    op sub op_id op_id offset
+    # -56: LB
+    # -55: LH
+    # -54: LW
+    # -53: (LUI)
+    # -52: LBU
+    # -51: LHU
+    op add op_id -56 funct3
     jump decode_I-type always
 
 decode_STORE:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
-    # imm
-    op shl imm_11_5 funct7 5 # instruction[31:25] -> imm[11:5]
-    # arg3/rd: instruction[11:7] -> imm[4:0]
-
-    op add arg3 imm_11_5 arg3
-
-    # extend sign
-    op xor arg3 arg3 0b100000000000
-    op sub arg3 arg3 0b100000000000
-    op and arg3 arg3 0xffffffff
-
+    # S-type: rs1, rs2, imm
     jump decode_illegal_instruction greaterThanEq funct3 3
 
-    op add op_id 16 funct3 # 16 (SB) to 18 (SW)
+    # imm
+    op shl imm_11_5 funct7 5 # instruction[31:25] -> imm[11:5]
+    # imm_4_0: instruction[11:7] -> imm[4:0]
+
+    op add imm imm_11_5 imm_4_0
+
+    # extend sign
+    op xor imm imm 0b100000000000
+    op sub imm imm 0b100000000000
+
+    # -50: SB
+    # -49: SH
+    # -48: SW
+    op add op_id -50 funct3
     jump end_decode always
 
 decode_AMO:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     jump decode_illegal_instruction notEqual funct3 0b010
 
     # funct5
@@ -866,7 +853,11 @@ decode_AMO:
     jump decode_AMO__high greaterThan funct5 0b11
 
     # low bits
-    op add op_id 54 funct5 # 54 (AMOADD.W) to 57 (SC.W)
+    # -47: AMOADD.W
+    # -46: AMOSWAP.W
+    # -45: LR.W
+    # -44: SC.W
+    op add op_id -47 funct5
     jump end_decode always
 
 decode_AMO__high:
@@ -874,52 +865,96 @@ decode_AMO__high:
     op and low funct5 0b11
     jump decode_illegal_instruction notEqual low 0b00
 
-    # note: funct5 >> 2 starts at 1, not 0
+    # -43: AMOXOR.W
+    # -42: AMOOR.W
+    # -41: AMOAND.W
+    # -40: AMOMIN.W
+    # -39: AMOMAX.W
+    # -38: AMOMINU.W
+    # -37: AMOMAXU.W
     op shr funct5 funct5 2
-    op add op_id 57 funct5 # 58 (AMOXOR.W) to 64 (AMOMAXU.W)
+    op add op_id -44 funct5 # funct5 >> 2 starts at 1, not 0
     jump end_decode always
 
 decode_OP-IMM:
-    op add @counter @counter funct3_x2
+    jump decode_SLLI equal funct3 1
+    jump decode_SRLI_SRAI equal funct3 5
 
-    set op_id 19; jump decode_I-type always # ADDI
-    jump decode_SLLI equal funct7 0; jump decode_illegal_instruction always
-    set op_id 20; jump decode_I-type always # SLTI
-    set op_id 21; jump decode_I-type always # SLTIU
-    set op_id 22; jump decode_I-type always # XORI
-    set op_id 26; jump decode_SRLI_SRAI always # 26: SRLI
-    set op_id 23; jump decode_I-type always # ORI
-    set op_id 24; jump decode_I-type always # ANDI
+    # -36: ADDI
+    # -35: (SUB)
+    # -34: SLTI
+    # -33: SLTIU
+    # -32: XORI
+    # -31: (SRA)
+    # -30: ORI
+    # -29: ANDI
+    op add op_id -36 funct3
+    # continue into decode_I-type
+
+# common decoder for I-type instructions
+# this should be called AFTER setting op_id
+decode_I-type:
+    # I-type: rs1, imm, rd_id
+    # imm is just funct12 but sign-extended
+    op xor funct12 funct12 0b100000000000
+    op sub funct12 funct12 0b100000000000
+    # continue into decode_I-type_no_extend_sign
+
+# common decoder for I-type instructions without a sign-extended immediate
+decode_I-type_no_extend_sign:
+    # I-type: rs1, imm, rd_id
+    # imm
+    # NOTE: SRAI and decode_I-type both mutate funct12
+    set imm funct12
+    jump end_decode always
 
 decode_SLLI:
     # shamt is encoded in the low 5 bits of imm, so sign extension is redundant
-    set op_id 25 # SLLI
+    jump decode_illegal_instruction notEqual funct7 0b0000000
+    set op_id -3 # SLLI
     jump decode_I-type_no_extend_sign always
 
 decode_SRLI_SRAI:
-    # SRLI (op_id set above)
+    # SRLI
+    set op_id -2 # SRLI
     jump decode_I-type_no_extend_sign equal funct7 0b0000000
 
     # SRAI
     jump decode_illegal_instruction notEqual funct7 0b0100000
-    set funct7 0 # HACK: zero out funct7 so it's not included in imm
-    set op_id 27 # SRAI
+    op and funct12 funct12 0b11111 # HACK: zero out the high bits of funct12 so funct7 isn't included in imm
+    set op_id -1 # SRAI
     jump decode_I-type_no_extend_sign always
 
 decode_OP:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op add op_id 28 funct3 # 28 (ADD) to 35 (AND)
+    # R-type: rs1, rs2, rd_id
+    # -28: ADD
+    # -27: SLL
+    # -26: SLT
+    # -25: SLTU
+    # -24: XOR
+    # -23: SRL
+    # -22: OR
+    # -21: AND
+    op add op_id -28 funct3
     jump end_decode equal funct7 0b0000000
 
-    op add op_id 46 funct3 # 46 (MUL) to 53 (REMU)
+    # -20: MUL
+    # -19: MULH
+    # -18: MULHSU
+    # -17: MULHU
+    # -16: DIV
+    # -15: DIVU
+    # -14: REM
+    # -13: REMU
+    op add op_id -20 funct3
     jump end_decode equal funct7 0b0000001
 
     jump decode_illegal_instruction notEqual funct7 0b0100000
 
-    set op_id 36 # SUB
+    set op_id -35 # SUB
     jump end_decode equal funct3 0b000
 
-    set op_id 37 # SRA
+    set op_id -31 # SRA
     jump end_decode equal funct3 0b101
 
     jump decode_illegal_instruction always
@@ -927,81 +962,68 @@ decode_OP:
 decode_MISC-MEM:
     jump decode_illegal_instruction greaterThan funct3 1 # FENCE=0, FENCE.I=1
 
-    set op_id 38 # FENCE/FENCE.I
+    # NOTE: we put FENCE at -4 because -3 to -1 are placed manually, not by a funct3 addition
+    # so we can move them to different op_ids if we want to add a separate handler for FENCE.I
+    set op_id -4 # FENCE/FENCE.I
     jump decode_I-type_no_extend_sign always
 
 decode_SYSTEM:
     jump decode_illegal_instruction equal funct3 4
 
-    # 39: PRIV
-    # 40: CSRRW
-    # 41: CSRRS
-    # 42: CSRRC
-    # illegal_instruction
-    # 43: CSRRWI
-    # 44: CSRRSI
-    # 45: CSRRCI
-    op add op_id 39 funct3
-    op greaterThan offset funct3 4 # subtract 1 if funct3 > 4
-    op sub op_id op_id offset
+    # -12: PRIV
+    # -11: CSRRW
+    # -10: CSRRS
+    # -9: CSRRC
+    # -8: (AUIPC)
+    # -7: CSRRWI
+    # -6: CSRRSI
+    # -5: CSRRCI
+    op add op_id -12 funct3
     jump decode_I-type_no_extend_sign always
 
 decode_custom-0:
     # Xmlogsys
-    jump decode_illegal_instruction greaterThanEq funct3 2
-
-    op add op_id 65 funct3 # 65 (MLOGSYS) to 66 (MLOGDRAW)
-    jump decode_I-type_no_extend_sign always
-
-# common decoder for I-type instructions
-# this should be called AFTER setting op_id
-decode_I-type:
-    set decode_I-type__extend_sign true
-decode_I-type_no_extend_sign:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    # imm
-    # build this from rs2 and funct7 so that SRAI doesn't need to mutate the instruction
-    op shl imm_11_5 funct7 5
-    op add arg2 imm_11_5 arg2
-
-    # if we jumped to no_extend_sign, this value will always be null, so skip sign extension
-    # otherwise, set it back to null and perform sign extension
-    jump end_decode notEqual decode_I-type__extend_sign true
-    set decode_I-type__extend_sign null
-
-    # extend sign of imm
-    op xor arg2 arg2 0b100000000000
-    op sub arg2 arg2 0b100000000000
-    op and arg2 arg2 0xffffffff
-
-    jump end_decode always
+    # 1: MLOGSYS
+    # 2: MLOGDRAW
+    op add op_id 1 funct3
+    jump decode_I-type_no_extend_sign lessThan funct3 2
+    # continue into decode_illegal_instruction if funct3 >= 2
 
 # must stay directly before end_decode
 decode_illegal_instruction:
     # use 0 as the illegal instruction id because null coerces to 0
     set op_id 0
+    # this is required to prevent the op_id field from theoretically being corrupted if we jump here before setting icache_payload in decode
+    set icache_payload 0
+    # continue into end_decode
 
 # all decoders jump here after completing successfully
 end_decode:
+    # do this here because several decoders need to do it for sign extension
+    # and to make sure the immediate doesn't corrupt the registers
+    op and imm imm 0xffffffff
+
+    # this branch is taken if decoding during instruction fetch
     jump end_decode__no_write_icache strictEqual decode_address null
 
     # get the current instruction cache processor and variable
     jump end_decode__decode_var_valid notEqual decode_var null
-    op add _address ICACHE_START_VAR decode_address
+    op add _address RAM_SIZE decode_address
     op add access_ram__ret @counter 1
     jump access_ram_raw always
     set decode_ram ram
     set decode_var variable
 end_decode__decode_var_valid:
 
+    # pack op_id, registers (already in icache_payload), and imm into a single double
+    # this is skipped if decoding for instruction fetch because op_id and imm are already in variables
+    # IMPORTANT: use or instead of add because op_id may be negative
+    op shl icache_payload_op_id op_id 47
+    op or icache_payload icache_payload icache_payload_op_id
+    op or icache_payload icache_payload imm
+
     # write to the icache
-    write op_id decode_ram decode_var
-    read decode_var {{INCR}} decode_var
-    write arg1 decode_ram decode_var
-    read decode_var {{INCR}} decode_var
-    write arg2 decode_ram decode_var
-    read decode_var {{INCR}} decode_var
-    write arg3 decode_ram decode_var
+    write icache_payload decode_ram decode_var
     read decode_var {{INCR}} decode_var
 
 end_decode__no_write_icache:
@@ -1010,62 +1032,62 @@ end_decode__no_write_icache:
 # instruction handlers
 
 LUI:
-    # U-type: arg1=null, arg2=imm, arg3=rd
-    set result arg2
+    # U-type: imm, rd_id
+    set result imm
     jump end_instruction_with_result always
 
 AUIPC:
-    # U-type: arg1=null, arg2=imm, arg3=rd
-    op add result arg2 pc
+    # U-type: imm, rd_id
+    op add result imm pc
     op mod result result 0x100000000 # trunc 32
     jump end_instruction_with_result always
 
 JAL:
-    # J-type: arg1=null, arg2=imm, arg3=rd
-    op add target pc arg2
+    # J-type: imm, rd_id
+    op add target pc imm
     jump unconditional_jump always
 
 JALR:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op add target rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op add target rs1 imm
     op and target target 0xfffffffe # clear LSB
     jump unconditional_jump always
 
 BEQ:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     jump conditional_branch equal rs1 rs2
     jump end_instruction always
 
 BNE:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     jump conditional_branch notEqual rs1 rs2
     jump end_instruction always
 
 BLT:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     op add ret @counter 1
     jump unsigned_to_signed_rs1_rs2 always
     # continue into BLTU
 
 BLTU:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     jump conditional_branch lessThan rs1 rs2
     jump end_instruction always
 
 BGE:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     op add ret @counter 1
     jump unsigned_to_signed_rs1_rs2 always
     # continue into BGEU
 
 BGEU:
-    # B-type: arg1=rs1, arg2=rs2, arg3=imm
+    # B-type: rs1, rs2, imm
     jump end_instruction lessThan rs1 rs2
     # continue into conditional_branch if rs1 >= rs2
 
 conditional_branch:
-    op add target pc arg3
-    set arg3 0 # prevent end_instruction_with_result from writing to a register
+    op add target pc imm
+    set rd_id 0 # prevent end_instruction_with_result from writing to a register
     # continue into unconditional_jump
 
 unconditional_jump:
@@ -1087,29 +1109,29 @@ unconditional_jump:
     jump end_instruction_with_result always
 
 LB:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     set length 8
     set is_signed true
     jump load_value always
 
 LH:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     set length 16
     set is_signed true
     jump load_value always
 
 LW:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     set length 32
     jump load_value_unsigned always
 
 LBU:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     set length 8
     jump load_value_unsigned always
 
 LHU:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     set length 16
     # continue into load_value_unsigned
 
@@ -1119,9 +1141,9 @@ load_value_unsigned:
 
 # helper for LOAD instructions to load a value with a specified length in bits (8, 16, or 32) from memory
 # raises a misaligned-load exception if the address is misaligned for the specified length
-# rs1 (address), arg2 (offset), arg3 (rd), length, is_signed ->
+# rs1 (address), imm (offset), rd_id, length, is_signed ->
 load_value:
-    op add address rs1 arg2
+    op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
     # check alignment
@@ -1155,26 +1177,26 @@ load_value:
     jump end_instruction_with_result always
 
 SB:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    # S-type: rs1, rs2, imm
     set length 8
     jump store_value always
 
 SH:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    # S-type: rs1, rs2, imm
     set length 16
     jump store_value always
 
 SW:
-    # S-type: arg1=rs1, arg2=rs2, arg3=imm
+    # S-type: rs1, rs2, imm
     set length 32
     # continue into store_value
 
 # helper for STORE instructions to store a value with a specified length in bits (8, 16, or 32) to memory
 # raises a misaligned-store exception if the address is misaligned for the specified length
 # TODO: the 32-bit case could be optimized a lot
-# rs1 (address), rs2 (value), arg3 (offset), length ->
+# rs1 (address), rs2 (value), imm (offset), length ->
 store_value:
-    op add address rs1 arg3
+    op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
     jump store_value__syscon equal address {{SYSCON}}
@@ -1311,7 +1333,7 @@ store_value__syscon:
     jump end_instruction always
 
 LR.W:
-    # R-type: arg1=rs1, arg2=0, arg3=rd
+    # R-type: rs1, rs2=0, rd_id
 
     # check address and alignment
     set mcause 4 # load address misaligned
@@ -1342,7 +1364,7 @@ atomic_validate_address:
     set @counter ret
 
 SC.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
 
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
@@ -1356,9 +1378,9 @@ SC.W:
     set reservation_set null
 
     # write 0 to rd if successful, else write 1
-    jump SC.W__no_write_rd equal arg3 0
+    jump SC.W__no_write_rd equal rd_id 0
     op notEqual result success true
-    write result {{REGISTERS}} arg3
+    write result {{REGISTERS}} rd_id
 SC.W__no_write_rd:
 
     # conditionally write value
@@ -1371,7 +1393,7 @@ SC.W__no_write_rd:
     jump store_ram_word_unchecked always
 
 AMOSWAP.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 0 # swap
     
 amo:
@@ -1385,8 +1407,8 @@ amo:
     jump load_ram_word_unchecked always
     
     # put value in rd
-    jump amo__no_write_rd equal arg3 0
-    write result {{REGISTERS}} arg3
+    jump amo__no_write_rd equal rd_id 0
+    write result {{REGISTERS}} rd_id
 amo__no_write_rd:
 
     # modify
@@ -1428,164 +1450,160 @@ amo__done_modify:
     jump store_ram_word_unchecked always
 
 AMOADD.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 2 # add
     jump amo always
 
 AMOAND.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 4 # and
     jump amo always
 
 AMOOR.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 6 # or
     jump amo always
 
 AMOXOR.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 8 # xor
     jump amo always
 
 AMOMIN.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 10 # min
     jump amo always
 
 AMOMINU.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 12 # minu
     jump amo always
 
 AMOMAX.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 14 # max
     jump amo always
 
 AMOMAXU.W:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set amo_op 16 # maxu
     jump amo always
 
 # most of the register-register instructions are identical to their register-immediate counterparts
 # so just set imm to rs2 and reuse the existing logic, placing them directly before to save space
 
+SUB:
+    # R-type: rs1, rs2, rd_id
+    # apply two's complement to negate the value in rs2
+    op sub rs2 0x100000000 rs2
+    op mod rs2 rs2 0x100000000
+    # continue into ADD
+
 ADD:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
+    # R-type: rs1, rs2, rd_id
+    set imm rs2
     # continue into ADDI
 
 ADDI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op add result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op add result rs1 imm
     op mod result result 0x100000000 # 2^32 (trunc 32)
     jump end_instruction_with_result always
 
-SLT:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
-    # continue into SLTI
-
 SLTI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    set rs2 arg2
+    # I-type: rs1, imm, rd_id
+    set rs2 imm
+    # continue into SLT
+
+SLT:
+    # R-type: rs1, rs2, rd_id
     op add ret @counter 1
     jump unsigned_to_signed_rs1_rs2 always
-
-    op lessThan result rs1 rs2
-
-    jump end_instruction_with_result always
+    # continue into SLTU
 
 SLTU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
+    # R-type: rs1, rs2, rd_id
+    set imm rs2
     # continue into SLTIU
 
 SLTIU:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op lessThan result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op lessThan result rs1 imm
     jump end_instruction_with_result always
 
 XOR:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
+    # R-type: rs1, rs2, rd_id
+    set imm rs2
     # continue into XORI
 
 XORI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op xor result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op xor result rs1 imm
     jump end_instruction_with_result always
 
 OR:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
+    # R-type: rs1, rs2, rd_id
+    set imm rs2
     # continue into ORI
 
 ORI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op or result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op or result rs1 imm
     jump end_instruction_with_result always
 
 AND:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    set arg2 rs2
+    # R-type: rs1, rs2, rd_id
+    set imm rs2
     # continue into ANDI
 
 ANDI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op and result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op and result rs1 imm
     jump end_instruction_with_result always
 
 SLL:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # R-type: rs1, rs2, rd_id
+    op mod imm rs2 32 # 2^5 (trunc 5)
     # continue into SLLI
 
 SLLI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     # truncate before shifting to avoid overflowing 52 integer bits in double
-    op sub length 32 arg2
+    op sub length 32 imm
     op pow divisor 2 length
 
     op mod result rs1 divisor
-    op shl result result arg2
+    op shl result result imm
 
     jump end_instruction_with_result always
 
 SRL:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # R-type: rs1, rs2, rd_id
+    op mod imm rs2 32 # 2^5 (trunc 5)
     # continue into SRLI
 
 SRLI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op shr result rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op shr result rs1 imm
     jump end_instruction_with_result always
 
 SRA:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    op mod arg2 rs2 32 # 2^5 (trunc 5)
+    # R-type: rs1, rs2, rd_id
+    op mod imm rs2 32 # 2^5 (trunc 5)
     # continue into SRAI
 
 SRAI:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    op shr value rs1 arg2
+    # I-type: rs1, imm, rd_id
+    op shr value rs1 imm
 
-    op sub length 32 arg2
+    op sub length 32 imm
     op add ret @counter 1
     jump extend_sign always
 
     jump end_instruction_with_result always
 
-SUB:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
-    # apply two's complement to negate the value in rs2 and put it into imm
-    op sub arg2 0x100000000 rs2
-    op mod arg2 arg2 0x100000000
-    jump ADDI always
-
 MUL:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     op add ret @counter 1
     jump mul_decomp always
 
@@ -1613,7 +1631,7 @@ mul_decomp:
     set @counter ret
 
 MULH:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     op greaterThanEq rs1_negative rs1 0x80000000 # check if the sign bit is set
     op greaterThanEq rs2_negative rs2 0x80000000
 
@@ -1642,25 +1660,25 @@ mulh_s_u__rs2_positive:
     jump end_instruction_with_result always
 
 MULHSU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     op greaterThanEq rs1_negative rs1 0x80000000
     set rs2_negative false
     jump mulh_s_u always
 
 MULHU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     set rs1_negative false
     set rs2_negative false
     jump mulh_s_u always
 
 DIV:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     op add ret @counter 1
     jump unsigned_to_signed_rs1_rs2 always
     # continue into DIVU
 
 DIVU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     jump div_by_zero equal rs2 0
 
     # use div instead of idiv and then cast to long so that it rounds towards zero
@@ -1676,14 +1694,14 @@ div_by_zero:
     jump end_instruction_with_result always
 
 REM:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     op add ret @counter 1
     jump unsigned_to_signed_rs1_rs2 always
     # continue into REMU
 
 # reimu?
 REMU:
-    # R-type: arg1=rs1, arg2=rs2, arg3=rd
+    # R-type: rs1, rs2, rd_id
     jump rem_by_zero equal rs2 0
 
     op mod result rs1 rs2
@@ -1697,14 +1715,14 @@ rem_by_zero:
     jump end_instruction_with_result always
 
 FENCE:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
+    # I-type: rs1, imm, rd_id
     # note: this currently also handles FENCE.I, but that will need to change if we want either of them to not be a no-op
 
     # PAUSE
     # TODO: there's probably a better way to do this
-    jump FENCE__not_pause notEqual arg1 0
-    jump FENCE__not_pause notEqual arg2 0b000000010000
-    jump FENCE__not_pause notEqual arg3 0
+    jump FENCE__not_pause notEqual rs1_id 0
+    jump FENCE__not_pause notEqual imm 0b000000010000
+    jump FENCE__not_pause notEqual rd_id 0
 
     wait 0.00001
 
@@ -1713,13 +1731,13 @@ FENCE__not_pause:
     jump end_instruction always
 
 PRIV:
-    # I-type: arg1=rs1/uimm, arg2=funct12/csr, arg3=rd
+    # I-type: rs1, rs1_id=uimm, imm=funct12/csr, rd_id
     # we partially decode this at runtime to simplify the decoding logic
     # privilege mode changes should be relatively rare, so it should be fine for them to be a bit slower
-    jump ECALL equal arg2 0
-    jump EBREAK equal arg2 1
-    jump MRET equal arg2 0b001100000010
-    jump end_instruction equal arg2 0b000100000101 # WFI (no-op, ignore TW bit)
+    jump ECALL equal imm 0
+    jump EBREAK equal imm 1
+    jump MRET equal imm 0b001100000010
+    jump end_instruction equal imm 0b000100000101 # WFI (no-op, ignore TW bit)
     jump illegal_instruction always
 
 ECALL:
@@ -1760,39 +1778,43 @@ MRET:
     jump end_instruction always
 
 CSRRWI:
-    # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
-    set rs1 arg1
+    # CSRI-type: rs1_id=uimm, imm=csr, rd_id
+    set rs1 rs1_id
     # continue into CSRRW
 
 CSRRW:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
+    # CSR-type: rs1, imm=csr, rd_id
     set csr_op 0 # read/write
     jump read_modify_write_csr always
 
 CSRRSI:
-    # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
-    set rs1 arg1
+    # CSRI-type: rs1_id=uimm, imm=csr, rd_id
+    set rs1 rs1_id
     # continue into CSRRS
 
 CSRRS:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
+    # CSR-type: rs1, imm=csr, rd_id
     set csr_op 2 # read and set bits
     jump read_modify_write_csr always
 
 CSRRCI:
-    # CSRI-type: arg1=uimm, arg2=csr, arg3=rd
-    set rs1 arg1
+    # CSRI-type: rs1_id=uimm, imm=csr, rd_id
+    set rs1 rs1_id
     # continue into CSRRC
 
 CSRRC:
-    # CSR-type: arg1=rs1, arg2=csr, arg3=rd
+    # CSR-type: rs1, imm=csr, rd_id
     set csr_op 4 # read and clear bits
     # continue into read_modify_write_csr
 
 read_modify_write_csr:
-    set csr arg2
-    op add ret @counter 1
-    jump access_csr always
+    # the top two bits of csr (imm) indicate whether the register is read/write (00, 01, 10) or read-only (11)
+    op and readonly imm 0b110000000000
+    op equal readonly readonly 0b110000000000
+
+    set _address imm
+    op add lookup_variable__ret @counter 1
+    jump lookup_variable always
 
     # read
 
@@ -1815,7 +1837,9 @@ read_modify_write_csr:
     # write
 
 read_modify_write_csr__conditional_write:
-    jump end_instruction_with_result equal arg1 0
+    # we don't throw an exception if uimm is 0 or rs1 is x0
+    # but we do if rs1 is some other register that happens to contain 0
+    jump end_instruction_with_result equal rs1_id 0
 
 read_modify_write_csr__always_write:
     jump illegal_instruction equal readonly true
@@ -1926,10 +1950,11 @@ read_modify_write_csr__minstreth:
     jump end_instruction_with_result always
 
 MLOGSYS:
-    # I-type: arg1=rs1, arg2=funct12, arg3=rd
-    jump illegal_instruction greaterThan arg2 3
+    # I-type: rs1, imm=funct12, rd_id
+    jump illegal_instruction greaterThan imm 3
     
-    op mul jump arg2 2
+    # TODO: we could save an instruction if we used B-type instead of I-type
+    op mul jump imm 2
     op add @counter @counter jump
 
     # init icache
@@ -1967,8 +1992,8 @@ MLOGSYS__init_icache__loop:
     jump end_instruction always
 
 MLOGDRAW:
-    # I-type: arg1=rs1, arg2=imm, arg3=rd
-    jump illegal_instruction greaterThan arg2 15
+    # I-type: rs1, imm=funct12, rd_id
+    jump illegal_instruction greaterThan imm 15
 
     read a1 {{REGISTERS}} 11
     read a2 {{REGISTERS}} 12
@@ -1976,7 +2001,7 @@ MLOGDRAW:
     read a4 {{REGISTERS}} 14
     read a5 {{REGISTERS}} 15
 
-    op mul jump arg2 2
+    op mul jump imm 2
     op add @counter @counter jump
 
     # draw_clear

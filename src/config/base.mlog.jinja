@@ -11,7 +11,7 @@
 
     set ROM_SIZE    {{# '%#0x'|format(ROM_ROWS * MEMORY_WIDTH * 16384) }}  # ROM size in bytes (rx)
     set RAM_SIZE    {{# '%#0x'|format(RAM_ROWS * MEMORY_WIDTH * 16384) }}  # RAM size in bytes (rwx)
-    set ICACHE_SIZE {{# '%#0x'|format(ICACHE_ROWS * MEMORY_WIDTH * 4096) }}  # icache size in variables, or bytes of memory it can represent; 4x less dense than ROM/RAM
+    set ICACHE_SIZE {{# '%#0x'|format(ICACHE_ROWS * MEMORY_WIDTH * 16384) }}  # icache size in bytes
 
     set UART_FIFO_CAPACITY {{#UART_FIFO_CAPACITY}}  # UART TX/RX FIFO capacity in bytes (max 253)
 

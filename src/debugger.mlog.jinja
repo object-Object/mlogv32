@@ -112,7 +112,6 @@ loop:
     read RAM_END CPU "RAM_END"
 
     set ICACHE_START RAM_END
-    op mul ICACHE_SIZE ICACHE_SIZE 4
     op add ICACHE_END ICACHE_START ICACHE_SIZE
 
     read x0_zero REGISTERS 0
@@ -181,9 +180,10 @@ loop:
     read state CPU "STATE"
     read pc CPU "pc"
     read op_id CPU "op_id"
-    read arg1 CPU "arg1"
-    read arg2 CPU "arg2"
-    read arg3 CPU "arg3"
+    read rs1 CPU "rs1_id"
+    read rs2 CPU "rs2_id"
+    read rd CPU "rd_id"
+    read imm CPU "imm"
 
     set address pc
     op add ret @counter 1
@@ -380,14 +380,19 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_op_id always
 
-    print "arg1        = {0}\n"
-    format arg1
+    print "rs1         = {0}\n"
+    format rs1
 
-    print "arg2        = {0}\n"
-    format arg2
+    print "rs2         = {0}\n"
+    format rs2
 
-    print "arg3        = {0}\n\n"
-    format arg3
+    print "rd          = {0}\n"
+    format rd
+
+    print "imm         = {0}\n\n"
+    set n imm
+    op add ret @counter 1
+    jump format_hex always
 
     print "mscratch = {0}\n"
     set n mscratch
@@ -443,7 +448,7 @@ loop__no_mark_icache:
     print "instret  = {0}\n\n"
     format instret
 
-    #{{'\n'}} {{ print(0, 33) }}
+    #{{'\n'}} {{ print(0, 34) }}
 
     # column 2
 
@@ -653,18 +658,16 @@ format_bin__next:
     set @counter ret
 
 format_op_id:
+    op add n n 64
     jump format_null strictEqual n null
     jump format_op_id__unknown lessThan n 0
     jump format_op_id__unknown greaterThan n 66
     op mul n n 2
     op add @counter @counter n
-    format "illegal_instruction"; set @counter ret
-    format "LUI"; set @counter ret
-    format "AUIPC"; set @counter ret
-    format "JAL"; set @counter ret
-    format "JALR"; set @counter ret
     format "BEQ"; set @counter ret
     format "BNE"; set @counter ret
+    format "JAL"; set @counter ret
+    format "JALR"; set @counter ret
     format "BLT"; set @counter ret
     format "BGE"; set @counter ret
     format "BLTU"; set @counter ret
@@ -672,46 +675,12 @@ format_op_id:
     format "LB"; set @counter ret
     format "LH"; set @counter ret
     format "LW"; set @counter ret
+    format "LUI"; set @counter ret
     format "LBU"; set @counter ret
     format "LHU"; set @counter ret
     format "SB"; set @counter ret
     format "SH"; set @counter ret
     format "SW"; set @counter ret
-    format "ADDI"; set @counter ret
-    format "SLTI"; set @counter ret
-    format "SLTIU"; set @counter ret
-    format "XORI"; set @counter ret
-    format "ORI"; set @counter ret
-    format "ANDI"; set @counter ret
-    format "SLLI"; set @counter ret
-    format "SRLI"; set @counter ret
-    format "SRAI"; set @counter ret
-    format "ADD"; set @counter ret
-    format "SLL"; set @counter ret
-    format "SLT"; set @counter ret
-    format "SLTU"; set @counter ret
-    format "XOR"; set @counter ret
-    format "SRL"; set @counter ret
-    format "OR"; set @counter ret
-    format "AND"; set @counter ret
-    format "SUB"; set @counter ret
-    format "SRA"; set @counter ret
-    format "FENCE"; set @counter ret
-    jump format_op_id__priv always; stop
-    format "CSRRW"; set @counter ret
-    format "CSRRS"; set @counter ret
-    format "CSRRC"; set @counter ret
-    format "CSRRWI"; set @counter ret
-    format "CSRRSI"; set @counter ret
-    format "CSRRCI"; set @counter ret
-    format "MUL"; set @counter ret
-    format "MULH"; set @counter ret
-    format "MULHSU"; set @counter ret
-    format "MULHU"; set @counter ret
-    format "DIV"; set @counter ret
-    format "DIVU"; set @counter ret
-    format "REM"; set @counter ret
-    format "REMU"; set @counter ret
     format "AMOADD.W"; set @counter ret
     format "AMOSWAP.W"; set @counter ret
     format "LR.W"; set @counter ret
@@ -723,6 +692,43 @@ format_op_id:
     format "AMOMAX.W"; set @counter ret
     format "AMOMINU.W"; set @counter ret
     format "AMOMAXU.W"; set @counter ret
+    format "ADDI"; set @counter ret
+    format "SUB"; set @counter ret
+    format "SLTI"; set @counter ret
+    format "SLTIU"; set @counter ret
+    format "XORI"; set @counter ret
+    format "SRA"; set @counter ret
+    format "ORI"; set @counter ret
+    format "ANDI"; set @counter ret
+    format "ADD"; set @counter ret
+    format "SLL"; set @counter ret
+    format "SLT"; set @counter ret
+    format "SLTU"; set @counter ret
+    format "XOR"; set @counter ret
+    format "SRL"; set @counter ret
+    format "OR"; set @counter ret
+    format "AND"; set @counter ret
+    format "MUL"; set @counter ret
+    format "MULH"; set @counter ret
+    format "MULHSU"; set @counter ret
+    format "MULHU"; set @counter ret
+    format "DIV"; set @counter ret
+    format "DIVU"; set @counter ret
+    format "REM"; set @counter ret
+    format "REMU"; set @counter ret
+    jump format_op_id__priv always; stop
+    format "CSRRW"; set @counter ret
+    format "CSRRS"; set @counter ret
+    format "CSRRC"; set @counter ret
+    format "AUIPC"; set @counter ret
+    format "CSRRWI"; set @counter ret
+    format "CSRRSI"; set @counter ret
+    format "CSRRCI"; set @counter ret
+    format "FENCE"; set @counter ret
+    format "SLLI"; set @counter ret
+    format "SRLI"; set @counter ret
+    format "SRAI"; set @counter ret
+    format "illegal_instruction"; set @counter ret
     format "MLOGSYS"; set @counter ret
     format "MLOGDRAW"; set @counter ret
 
@@ -731,13 +737,13 @@ format_op_id__unknown:
 
 format_op_id__priv:
     set name "ECALL"
-    jump format_op_id__priv__ok equal arg2 0
+    jump format_op_id__priv__ok equal imm 0
     set name "EBREAK"
-    jump format_op_id__priv__ok equal arg2 1
+    jump format_op_id__priv__ok equal imm 1
     set name "MRET"
-    jump format_op_id__priv__ok equal arg2 0b001100000010
+    jump format_op_id__priv__ok equal imm 0b001100000010
     set name "WFI"
-    jump format_op_id__priv__ok equal arg2 0b000100000101
+    jump format_op_id__priv__ok equal imm 0b000100000101
     jump format_op_id__unknown always
 format_op_id__priv__ok:
     format name

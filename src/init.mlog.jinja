@@ -9,7 +9,6 @@
 
 # the lookup table must be linked first
 
-    set LOOKUP_START 0
     set EXPECTED_LINKS 21
 
     # wait until ready
@@ -42,10 +41,8 @@ reset:
     
     op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
 
-    op idiv TOTAL_VARS RAM_SIZE 4
-    op add TOTAL_VARS TOTAL_VARS ICACHE_SIZE
-
-    op idiv RAM_END_PROC TOTAL_VARS {{RAM_PROC_VARS}}
+    op add RAM_END_PROC RAM_SIZE ICACHE_SIZE
+    op idiv RAM_END_PROC RAM_END_PROC {{RAM_PROC_BYTES}}
     op add RAM_END_PROC RAM_END_PROC RAM_START_PROC
 
     set i 0
@@ -126,7 +123,6 @@ init_incr:
 # address -> variable
 lookup_variable:
     op idiv _lookup address {{LOOKUP_PROC_SIZE}}
-    op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
 
     op mod variable address {{LOOKUP_PROC_SIZE}}
@@ -142,6 +138,7 @@ lookup_variable:
 # preprocessor variable definitions
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
+set {{RAM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{UART_RX_RPTR}} null
 set {{UART_RX_WPTR}} null

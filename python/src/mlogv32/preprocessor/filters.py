@@ -5,6 +5,17 @@ from jinja2.runtime import Context
 
 from mlogv32.scripts.ram_proc import VariableFormat
 
+# https://sourceware.org/binutils/docs/ld/Constants.html#Constants
+MEMORY_K = 1024
+MEMORY_M = 1024 * 1024
+
+FILTERS = dict[str, Callable[..., Any]]()
+
+
+def register_filter[**P, R](f: Callable[P, R]) -> Callable[P, R]:
+    FILTERS[f.__name__] = f
+    return f
+
 
 # from hexdoc.jinja.filters
 def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable[P, R]:
@@ -25,11 +36,13 @@ def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable
 
 
 @make_jinja_exceptions_suck_a_bit_less
+@register_filter
 def ram_variable(index: int):
     return VariableFormat.min.get_variable(index)
 
 
 @make_jinja_exceptions_suck_a_bit_less
+@register_filter
 def csr(name: str | int):
     match name:
         case str():
@@ -41,8 +54,19 @@ def csr(name: str | int):
 
 
 @make_jinja_exceptions_suck_a_bit_less
+@register_filter
 def quote(value: Any):
     return f'"{value}"'
+
+
+@make_jinja_exceptions_suck_a_bit_less
+@register_filter
+def memory_size(size: int):
+    if size % MEMORY_M == 0:
+        return f"{size // MEMORY_M}M"
+    if size % MEMORY_K == 0:
+        return f"{size // MEMORY_K}K"
+    return hex(size)
 
 
 CSRS: dict[str, int] = {

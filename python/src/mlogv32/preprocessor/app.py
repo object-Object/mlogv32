@@ -7,7 +7,7 @@ from typer import Option, Typer
 
 from mlogv32.preprocessor.extensions import CommentStatement
 
-from . import filters
+from .filters import FILTERS
 
 app = Typer(
     pretty_exceptions_show_locals=False,
@@ -42,7 +42,7 @@ def configs(yaml_path: Path):
     template = env.get_template(data["template"])
 
     for name, args in data["configs"].items():
-        result = template.render(**data["defaults"], **args)
+        result = template.render(**(data["defaults"] | args))
         (output_dir / name).with_suffix(".mlog").write_text(result, "utf-8")
 
 
@@ -59,11 +59,7 @@ def create_jinja_env(template_dir: Path):
             CommentStatement,
         ],
     )
-    env.filters |= {  # pyright: ignore[reportAttributeAccessIssue]
-        "ram_variable": filters.ram_variable,
-        "quote": filters.quote,
-        "csr": filters.csr,
-    }
+    env.filters |= FILTERS
     return env
 
 

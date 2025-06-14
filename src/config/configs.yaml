@@ -3,6 +3,7 @@ template: base.mlog.jinja
 defaults:
   TARGET_IPT: 500000
   BREAKPOINT_ADDRESS: '0x'
+  UART_FIFO_CAPACITY: 253
 
 configs:
   riscv-arch-test:
@@ -12,12 +13,12 @@ configs:
     ROM_ROWS: 9
     RAM_ROWS: 9
     ICACHE_ROWS: 6
-    UART_FIFO_CAPACITY: 253
-  webserver:
+
+  micro:
+    TARGET_IPT: 250000 # we're running two of these at once, so underclock it
     MEMORY_X_OFFSET: -9
-    MEMORY_Y_OFFSET: -23
-    MEMORY_WIDTH: 32
-    ROM_ROWS: 1
-    RAM_ROWS: 19
-    ICACHE_ROWS: 1
-    UART_FIFO_CAPACITY: 253
+    MEMORY_Y_OFFSET: -32
+    MEMORY_WIDTH: 16
+    ROM_ROWS: 2
+    RAM_ROWS: 12
+    ICACHE_ROWS: 2

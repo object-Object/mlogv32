@@ -9,9 +9,13 @@
     set MEMORY_Y_OFFSET {{#MEMORY_Y_OFFSET}}  # y offset from this proc to bottom left memory proc
     set MEMORY_WIDTH {{#MEMORY_WIDTH}}  # physical width of the memory procs
 
-    set ROM_SIZE    {{# '%#0x'|format(ROM_ROWS * MEMORY_WIDTH * 16384) }}  # ROM size in bytes (rx)
-    set RAM_SIZE    {{# '%#0x'|format(RAM_ROWS * MEMORY_WIDTH * 16384) }}  # RAM size in bytes (rwx)
-    set ICACHE_SIZE {{# '%#0x'|format(ICACHE_ROWS * MEMORY_WIDTH * 16384) }}  # icache size in bytes
+#%+ set ROM_SIZE = ROM_ROWS * MEMORY_WIDTH * 16384
+#% set RAM_SIZE = RAM_ROWS * MEMORY_WIDTH * 16384
+#% set ICACHE_SIZE = ICACHE_ROWS * MEMORY_WIDTH * 16384
+
+    set ROM_SIZE    {{# '%#0x'|format(ROM_SIZE) }}  # ROM size in bytes ({{ ROM_SIZE|memory_size }})
+    set RAM_SIZE    {{# '%#0x'|format(RAM_SIZE) }}  # RAM size in bytes ({{ RAM_SIZE|memory_size }})
+    set ICACHE_SIZE {{# '%#0x'|format(ICACHE_SIZE) }}  # icache size in bytes ({{ ICACHE_SIZE|memory_size }})
 
     set UART_FIFO_CAPACITY {{#UART_FIFO_CAPACITY}}  # UART TX/RX FIFO capacity in bytes (max 253)
 

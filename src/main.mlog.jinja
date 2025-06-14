@@ -1816,16 +1816,25 @@ CSRRC:
     # continue into read_modify_write_csr
 
 read_modify_write_csr:
-    # the top two bits of csr (imm) indicate whether the register is read/write (00, 01, 10) or read-only (11)
+    # csr is stored in imm
+    # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
     op and readonly imm 0b110000000000
     op equal readonly readonly 0b110000000000
+
+    # csr[9:8] encodes the lowest privilege level that can access the CSR
+    op and required_privilege imm 0b1100000000
+    op shr required_privilege required_privilege 8
+    jump illegal_instruction lessThan privilege_mode required_privilege
+
+    # 0x7b0-0x7bf are only visible to debug mode
+    op shr csr_11_4 imm 4
+    jump illegal_instruction equal csr_11_4 0x7b
+
+    # read
 
     set _address imm
     op add lookup_variable__ret @counter 1
     jump lookup_variable always
-
-    # read
-
     read result {{CSRS}} variable
 
     # modify

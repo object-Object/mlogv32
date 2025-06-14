@@ -23,6 +23,8 @@ reset:
     set CPU processor19
     set UART0 bank1
     set UART1 bank2
+    set UART2 bank3
+    set UART3 bank4
 
     op div wait {{LOOKUP_PROC_SIZE}} 120 # micro proc instructions/sec
     op ceil wait wait
@@ -115,6 +117,14 @@ init_incr:
     write 0 UART1 {{UART_RX_WPTR}}
     write 0 UART1 {{UART_TX_RPTR}}
     write 0 UART1 {{UART_TX_WPTR}}
+    write 0 UART2 {{UART_RX_RPTR}}
+    write 0 UART2 {{UART_RX_WPTR}}
+    write 0 UART2 {{UART_TX_RPTR}}
+    write 0 UART2 {{UART_TX_WPTR}}
+    write 0 UART3 {{UART_RX_RPTR}}
+    write 0 UART3 {{UART_RX_WPTR}}
+    write 0 UART3 {{UART_TX_RPTR}}
+    write 0 UART3 {{UART_TX_WPTR}}
 
     setrate 1
     stop

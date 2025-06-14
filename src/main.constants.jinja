@@ -1,6 +1,11 @@
 {#- preprocessor constants for main.mlog.jinja -#}
 
 {#- linked buildings -#}
+{#- IMPORTANT: the buildings must be linked in the order shown here -#}
+{#- ie. lookups (not shown), then UART0 to 3, then REGISTERS, etc -#}
+
+{% set UART_START_LINK = 16 %}
+
 {% set REGISTERS = 'cell1' %}
 {% set CSRS = 'processor17' %}
 {% set INCR = 'processor18' %}
@@ -10,9 +15,6 @@
 {% set POWER_SWITCH = 'switch1' %}
 {% set PAUSE_SWITCH = 'switch2' %}
 {% set SINGLE_STEP_SWITCH = 'switch3' %}
-
-{% set UART0 = 'bank1' %}
-{% set UART1 = 'bank2' %}
 
 {% set DISPLAY = 'display1' %}
 
@@ -27,10 +29,10 @@
 {% set MMIO_START = '0xf0000000' %}
 {% set SYSCON     = '0xfffffff0' %}
 
-{% set UART_RX_RPTR = 254 %}
-{% set UART_RX_WPTR = 255 %}
+{% set UART_RX_READ = 254 %}
+{% set UART_RX_WRITE = 255 %}
 {% set UART_TX_START = 256 %}
-{% set UART_TX_RPTR = 510 %}
-{% set UART_TX_WPTR = 511 %}
+{% set UART_TX_READ = 510 %}
+{% set UART_TX_WRITE = 511 %}
 
 {% block contents %}{% endblock %}

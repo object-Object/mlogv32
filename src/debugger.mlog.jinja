@@ -8,6 +8,7 @@
 #% endmacro
     
     setrate 5000
+    set MARKER_START_ID 0
 
     set LOOKUP_PROC_SIZE 260
     set ROM_BYTE_OFFSET 174
@@ -21,6 +22,9 @@
     draw color 255 255 255 255
 
 reset:
+    sensor enabled switch1 @enabled
+    jump reset equal enabled false
+
     wait 0.00001
 
     set CPU processor17
@@ -32,6 +36,8 @@ reset:
 
     set UART0 bank1
     set UART1 bank2
+    set UART2 bank3
+    set UART3 bank4
 
     # wait until everything is properly initialized
     jump reset strictEqual CPU null
@@ -40,6 +46,8 @@ reset:
     jump reset strictEqual DISPLAY null
     jump reset strictEqual UART0 null
     jump reset strictEqual UART1 null
+    jump reset strictEqual UART2 null
+    jump reset strictEqual UART3 null
 
     set i -1
 reset__find_lookup_start:
@@ -99,7 +107,7 @@ loop:
     sensor enabled switch1 @enabled
     jump reset equal enabled false
 
-    set mark_memory_id 0
+    set mark_memory_id MARKER_START_ID
 
     read MEMORY_X CPU "MEMORY_X"
     read MEMORY_Y CPU "MEMORY_Y"
@@ -196,44 +204,6 @@ loop:
 
     read UART_FIFO_MODULO CPU "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
-
-    read uart0_rx_rptr UART0 254
-    read uart0_rx_wptr_raw UART0 255
-    read uart0_tx_rptr UART0 510
-    read uart0_tx_wptr UART0 511
-
-    op and uart0_rx_wptr uart0_rx_wptr_raw 0xff
-
-    op sub uart0_rx_fifo_size uart0_rx_wptr uart0_rx_rptr
-    op add uart0_rx_fifo_size uart0_rx_fifo_size UART_FIFO_MODULO
-    op mod uart0_rx_fifo_size uart0_rx_fifo_size UART_FIFO_MODULO
-
-    op sub uart0_tx_fifo_size uart0_tx_wptr uart0_tx_rptr
-    op add uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
-    op mod uart0_tx_fifo_size uart0_tx_fifo_size UART_FIFO_MODULO
-
-    op equal uart0_rx_full uart0_rx_fifo_size UART_FIFO_CAPACITY
-    op notEqual uart0_rx_overflow_flag uart0_rx_wptr uart0_rx_wptr_raw
-    op land uart0_rx_overrun uart0_rx_full uart0_rx_overflow_flag
-
-    read uart1_rx_rptr UART1 254
-    read uart1_rx_wptr_raw UART1 255
-    read uart1_tx_rptr UART1 510
-    read uart1_tx_wptr UART1 511
-
-    op and uart1_rx_wptr uart1_rx_wptr_raw 0xff
-
-    op sub uart1_rx_fifo_size uart1_rx_wptr uart1_rx_rptr
-    op add uart1_rx_fifo_size uart1_rx_fifo_size UART_FIFO_MODULO
-    op mod uart1_rx_fifo_size uart1_rx_fifo_size UART_FIFO_MODULO
-
-    op sub uart1_tx_fifo_size uart1_tx_wptr uart1_tx_rptr
-    op add uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
-    op mod uart1_tx_fifo_size uart1_tx_fifo_size UART_FIFO_MODULO
-
-    op equal uart1_rx_full uart1_rx_fifo_size UART_FIFO_CAPACITY
-    op notEqual uart1_rx_overflow_flag uart1_rx_wptr uart1_rx_wptr_raw
-    op land uart1_rx_overrun uart1_rx_full uart1_rx_overflow_flag
 
     # markers
 
@@ -394,6 +364,20 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
+    print "mtimecmp = {0}\n"
+    format mtimecmp
+
+    print "time     = {0}\n"
+    format time
+
+    print "cycle    = {0}\n"
+    format cycle
+
+    print "instret  = {0}\n\n"
+    format instret
+
+    #{{'\n'}} {{ print(0, 17) }}
+
     print "mscratch = {0}\n"
     set n mscratch
     op add ret @counter 1
@@ -434,21 +418,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_bin always
 
-    #{{'\n'}} {{ print(0, 17) }}
-
-    print "mtimecmp = {0}\n"
-    format mtimecmp
-
-    print "time     = {0}\n"
-    format time
-
-    print "cycle    = {0}\n"
-    format cycle
-
-    print "instret  = {0}\n\n"
-    format instret
-
-    #{{'\n'}} {{ print(0, 34) }}
+    #{{'\n'}} {{ print(0, 30) }}
 
     # column 2
 
@@ -560,33 +530,25 @@ loop__no_mark_icache:
     format "machine"
 done_privilege_mode:
 
-    print "uart0_rx_size = {0} ({1} -> {2})"
-    jump uart0_rx_fifo_size__no_overrun notEqual uart0_rx_overrun true
-    print " !!"
-uart0_rx_fifo_size__no_overrun:
-    format uart0_rx_fifo_size
-    format uart0_rx_rptr
-    format uart0_rx_wptr
-    print "\n"
+    set uart UART0
+    set uart_index 0
+    op add ret @counter 1
+    jump format_uart always
 
-    print "uart0_tx_size = {0} ({1} -> {2})\n\n"
-    format uart0_tx_fifo_size
-    format uart0_tx_rptr
-    format uart0_tx_wptr
+    set uart UART1
+    set uart_index 1
+    op add ret @counter 1
+    jump format_uart always
 
-    print "uart1_rx_size = {0} ({1} -> {2})"
-    jump uart1_rx_fifo_size__no_overrun notEqual uart1_rx_overrun true
-    print " !!"
-uart1_rx_fifo_size__no_overrun:
-    format uart1_rx_fifo_size
-    format uart1_rx_rptr
-    format uart1_rx_wptr
-    print "\n"
+    set uart UART2
+    set uart_index 2
+    op add ret @counter 1
+    jump format_uart always
 
-    print "uart1_tx_size = {0} ({1} -> {2})\n"
-    format uart1_tx_fifo_size
-    format uart1_tx_rptr
-    format uart1_tx_wptr
+    set uart UART3
+    set uart_index 3
+    op add ret @counter 1
+    jump format_uart always
 
     #{{'\n'}} {{ print(35, 17) }}
 
@@ -753,6 +715,45 @@ format_null:
     format "null"
     set @counter ret
 
+# uart, uart_index ->
+format_uart:
+    read rx_rptr uart 254
+    read rx_wptr_raw uart 255
+    read tx_rptr uart 510
+    read tx_wptr uart 511
+
+    op and rx_wptr rx_wptr_raw 0xff
+
+    op sub rx_fifo_size rx_wptr rx_rptr
+    op add rx_fifo_size rx_fifo_size UART_FIFO_MODULO
+    op mod rx_fifo_size rx_fifo_size UART_FIFO_MODULO
+
+    op sub tx_fifo_size tx_wptr tx_rptr
+    op add tx_fifo_size tx_fifo_size UART_FIFO_MODULO
+    op mod tx_fifo_size tx_fifo_size UART_FIFO_MODULO
+
+    op equal rx_full rx_fifo_size UART_FIFO_CAPACITY
+    op notEqual rx_overflow_flag rx_wptr rx_wptr_raw
+    op land rx_overrun rx_full rx_overflow_flag
+
+    print "uart{0}_rx_size = {1} ({2} -> {3})"
+    jump format_uart__rx_fifo_size__no_overrun notEqual rx_overrun true
+    print " !!"
+format_uart__rx_fifo_size__no_overrun:
+    format uart_index
+    format rx_fifo_size
+    format rx_rptr
+    format rx_wptr
+    print "\n"
+
+    print "uart{0}_tx_size = {1} ({2} -> {3})\n\n"
+    format uart_index
+    format tx_fifo_size
+    format tx_rptr
+    format tx_wptr
+
+    set @counter ret
+
 # creates a marker on the ram proc containing a given address
 # the caller should print a format string with a placeholder for the address
 # address ->
@@ -796,6 +797,7 @@ mark_memory__found:
     setmarker remove mark_memory_id
     makemarker shapeText mark_memory_id x y false
     op sub layer 120 mark_memory_id
+    op add layer layer MARKER_START_ID
     setmarker drawLayer mark_memory_id layer
     setmarker flushText mark_memory_id false
 

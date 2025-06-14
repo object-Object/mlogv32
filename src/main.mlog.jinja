@@ -548,18 +548,11 @@ load_rom_word__loop:
 load_mmio_word:
     op sub _offset address {{MMIO_START}}
     op and _offset _offset 0xfffffffc
-    jump trap greaterThanEq _offset 0x50
+    jump trap greaterThanEq _offset 0x90
 
-    set _uart {{UART0}}
-    jump load_mmio_word__uart0 lessThan _offset 0x30
-    set _uart {{UART1}}
-    op sub _offset _offset 0x20 # hack
-load_mmio_word__uart0:
-
-    # read these here to save space, since we need them in multiple UART handlers
-    read _rx_rptr _uart {{UART_RX_RPTR}}
-    read _rx_wptr_raw _uart {{UART_RX_WPTR}}
-    op and _rx_wptr _rx_wptr_raw 0xff
+    # if we're in UART range, look it up
+    op add access_uart_ret @counter 1
+    jump access_uart greaterThanEq _offset 0x10
 
     # MCR, MSR, and SPR are all hardwired to zero
     set result 0
@@ -585,12 +578,13 @@ load_mmio_word__not_zero:
     set @counter ret
     # UART
     # Receiver Holding Register: character received, or 0 if RX FIFO is empty
-    jump load_mmio_word__uart_rhr notEqual _rx_rptr _rx_wptr
+    jump load_mmio_word__uart_rhr notEqual _rx_read _rx_write
     set @counter ret
     # Interrupt Enable Register: 0 (not supported)
     set result 0b00000000
     set @counter ret
     # Interrupt Status Register: both FIFOs enabled, no interrupt pending, other flags 0
+    # TODO: we should return 0 for FIFOs enabled until they actually get enabled
     set result 0b11000001
     set @counter ret
     # Line Control Register: word length = 8 bits, other flags 0
@@ -599,16 +593,16 @@ load_mmio_word__not_zero:
 
 load_mmio_word__uart_rhr:
     # read one byte from the FIFO
-    read result _uart _rx_rptr
+    read result _uart _rx_read
     op and result result 0xff
 
     # HACK: if mcause is 7, we're loading this word as part of a store instruction, so don't modify UART state
     jump load_mmio_word__uart_rhr__empty equal mcause 7
 
-    # else, advance rptr
-    op add _rx_rptr _rx_rptr 1
-    op mod _rx_rptr _rx_rptr UART_FIFO_MODULO
-    write _rx_rptr _uart {{UART_RX_RPTR}}
+    # else, advance read
+    op add _rx_read _rx_read 1
+    op mod _rx_read _rx_read UART_FIFO_MODULO
+    write _rx_read _uart {{UART_RX_READ}}
 
 load_mmio_word__uart_rhr__empty:
     set @counter ret
@@ -617,29 +611,50 @@ load_mmio_word__uart_lsr:
     # Line Status Register: transmitter/THR empty = TX FIFO empty, overrun error = RX FIFO overflowed, data ready = RX FIFO not empty, other flags 0
 
     # transmitter empty and THR empty
-    read _tx_rptr _uart {{UART_TX_RPTR}}
-    read _tx_wptr _uart {{UART_TX_WPTR}}
-    jump load_mmio_word__uart_lsr__tx_not_empty notEqual _tx_rptr _tx_wptr
+    jump load_mmio_word__uart_lsr__tx_not_empty notEqual _tx_read _tx_write
     set result 0b01100000
 load_mmio_word__uart_lsr__tx_not_empty:
 
     # rx overrun error
-    # we know an overrun occurred if rptr == wrap(wptr + 1) (ie. rx is full)
-    op add _next_rx_wptr _rx_wptr 1
-    op mod _next_rx_wptr _next_rx_wptr UART_FIFO_MODULO
-    jump load_mmio_word__uart_lsr__no_rx_overrun notEqual _next_rx_wptr _rx_rptr
+    # we know an overrun occurred if read == wrap(write + 1) (ie. rx is full)
+    op add _next_rx_write _rx_write 1
+    op mod _next_rx_write _next_rx_write UART_FIFO_MODULO
+    jump load_mmio_word__uart_lsr__no_rx_overrun notEqual _next_rx_write _rx_read
 
-    # AND if _rx_wptr_raw != _rx_wptr (ie. overflow flag is set)
-    jump load_mmio_word__uart_lsr__no_rx_overrun equal _rx_wptr_raw _rx_wptr
+    # AND if _rx_write_raw != _rx_write (ie. overflow flag is set)
+    jump load_mmio_word__uart_lsr__no_rx_overrun equal _rx_write_raw _rx_write
 
     op or result result 0b10
 load_mmio_word__uart_lsr__no_rx_overrun:
 
     # rx data ready
-    op notEqual _rx_data_ready _rx_rptr _rx_wptr
+    op notEqual _rx_data_ready _rx_read _rx_write
     op or result result _rx_data_ready
 
     set @counter ret
+
+# caller must ensure offset is 4-byte aligned and in uart range
+# _offset, access_uart_ret -> _offset, _uart, _rx_read, _rx_write_raw, _rx_write, _tx_read, _tx_write
+access_uart:
+    op sub _offset _offset 0x10
+    
+    op idiv _uart _offset 0x20
+    op add _uart _uart {{UART_START_LINK}}
+    getlink _uart _uart
+
+    op mod _offset _offset 0x20
+    op add _offset _offset 0x10
+
+    read _rx_read _uart {{UART_RX_READ}}
+
+    read _rx_write_raw _uart {{UART_RX_WRITE}}
+    op and _rx_write _rx_write_raw 0xff
+
+    read _tx_read _uart {{UART_TX_READ}}
+
+    read _tx_write _uart {{UART_TX_WRITE}}
+
+    set @counter access_uart_ret
 
 # instruction decoder
 
@@ -1266,12 +1281,9 @@ store_mmio_word_unchecked:
     set last_time_update @time
 store_mmio_word_unchecked__not_mtime:
 
-    # check if we're accessing uart0 or uart1
-    set _uart {{UART0}}
-    jump store_mmio_word_unchecked__uart0 lessThan _offset 0x30
-    set _uart {{UART1}}
-    op sub _offset _offset 0x20 # hack
-store_mmio_word_unchecked__uart0:
+    # if we're in UART range, look it up
+    op add access_uart_ret @counter 1
+    jump access_uart greaterThanEq _offset 0x10
 
     # ignore writes to UART registers other than THR and FCR
     jump store_mmio_word_unchecked__uart_fcr equal _offset 0x18
@@ -1297,15 +1309,14 @@ store_mmio_word_unchecked__uart0:
     # Transmitter Holding Register
     # append value to queue
     # NOTE: we don't check for overflow here, see readme
-    read _tx_wptr _uart {{UART_TX_WPTR}}
-    op add _index _tx_wptr {{UART_TX_START}}
+    op add _index _tx_write {{UART_TX_START}}
     op and value value 0xff
     write value _uart _index
 
-    # advance wptr
-    op add _tx_wptr _tx_wptr 1
-    op mod _tx_wptr _tx_wptr UART_FIFO_MODULO
-    write _tx_wptr _uart {{UART_TX_WPTR}}
+    # advance write
+    op add _tx_write _tx_write 1
+    op mod _tx_write _tx_write UART_FIFO_MODULO
+    write _tx_write _uart {{UART_TX_WRITE}}
 
     jump end_instruction always
 
@@ -1314,15 +1325,12 @@ store_mmio_word_unchecked__uart_fcr:
 
     op and reset_rx value 0b11
     jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal reset_rx 0
-    read _rx_rptr _uart {{UART_RX_WPTR}}
-    op and _rx_rptr _rx_rptr 0xff # don't copy the overflow flag
-    write _rx_rptr _uart {{UART_RX_RPTR}}
+    write _rx_write _uart {{UART_RX_READ}}
 store_mmio_word_unchecked__uart_fcr__no_reset_rx:
 
     op and reset_tx value 0b101
     jump store_mmio_word_unchecked__uart_fcr__no_reset_tx equal reset_tx 0
-    read _tx_wptr _uart {{UART_TX_RPTR}}
-    write _tx_wptr _uart {{UART_TX_WPTR}}
+    write _tx_read _uart {{UART_TX_WRITE}}
 store_mmio_word_unchecked__uart_fcr__no_reset_tx:
 
     jump end_instruction always
@@ -2078,6 +2086,7 @@ MLOGDRAW_draw_image__end:
 # {% raw %}
 # preprocessor variable definitions
 set {{ null
+set {{UART_START_LINK}} null
 set {{REGISTERS}} null
 set {{CSRS}} null
 set {{INCR}} null
@@ -2087,13 +2096,11 @@ set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{SINGLE_STEP_SWITCH}} null
 set {{DISPLAY}} null
-set {{UART0}} null
-set {{UART1}} null
-set {{UART_RX_RPTR}} null
-set {{UART_RX_WPTR}} null
+set {{UART_RX_READ}} null
+set {{UART_RX_WRITE}} null
 set {{UART_TX_START}} null
-set {{UART_TX_RPTR}} null
-set {{UART_TX_WPTR}} null
+set {{UART_TX_READ}} null
+set {{UART_TX_WRITE}} null
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_BYTE_OFFSET}} null
 set {{ROM_PROC_BYTES}} null

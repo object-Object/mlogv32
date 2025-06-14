@@ -30,6 +30,8 @@ The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-b
 | `0xf000000c` | `0x4`        | R/W         | `mtimecmph` |
 | `0xf0000010` | `0x20`       | R/W         | UART0       |
 | `0xf0000030` | `0x20`       | R/W         | UART1       |
+| `0xf0000050` | `0x20`       | R/W         | UART2       |
+| `0xf0000070` | `0x20`       | R/W         | UART3       |
 | `0xfffffff0` | `0x4`        | W           | Syscon      |
 
 \* Atomic instructions are only supported in RAM.
@@ -40,7 +42,7 @@ Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as M
 
 ### UART
 
-Addresses `0xf0000010` and `0xf0000030` contain emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
+The processor includes four identical emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
 
 - Configurable FIFO capacity (up to 253 bytes) for TX and RX, stored as a variable in the CONFIG processor.
 - Theoretical maximum transfer rate of 121440 bits/sec (253 bytes/tick).

@@ -22,8 +22,16 @@
     draw color 255 255 255 255
 
 reset:
+
+    op add i MARKER_START_ID 6
+reset_markers:
+    op sub i i 1
+    setmarker remove i
+    jump reset_markers greaterThan i MARKER_START_ID
+
+reset_loop:
     sensor enabled switch1 @enabled
-    jump reset equal enabled false
+    jump reset_loop equal enabled false
 
     wait 0.00001
 

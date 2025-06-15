@@ -52,8 +52,7 @@ reset:
 
     # clear mstatus
     # technically we're only supposed to clear MPRV and MIE, but the other bits are explicitly unspecified, so this is allowed
-    set mstatus 0
-    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
+    set csr_mstatus 0
     
     # set pc to reset vector
     set pc 0
@@ -68,22 +67,22 @@ reset:
     set STATE "running"
 
 main:
+    # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
+    op add next_pc pc 4
+
     jump main__skip_time_update lessThan @time next_time_update
 
     # update time
     # TODO: handle mtimeh/mcycleh overflow
     op sub delta_ms @time last_time_update
 
-    op add mtime mtime delta_ms
-    op floor mtime mtime
+    op add csr_mtime csr_mtime delta_ms
+    op floor csr_mtime csr_mtime
 
-    op shr mtime_overflow mtime 32
-    op add mtimeh mtimeh mtime_overflow
+    op shr overflow csr_mtime 32
+    op add csr_mtimeh csr_mtimeh overflow
 
-    op mod mtime mtime 0x100000000
-
-    write mtime {{CSRS}} "{{ 'time'|csr }}"
-    write mtimeh {{CSRS}} "{{ 'timeh'|csr }}"
+    op mod csr_mtime csr_mtime 0x100000000
 
     # update cycle
     # we define the rate of increase of cycle as "@ipt * ticks"
@@ -91,18 +90,13 @@ main:
     op sub delta_cycles @tick last_cycle_update
     op mul delta_cycles delta_cycles @ipt
 
-    op add mcycle mcycle delta_cycles
-    op floor mcycle mcycle
+    op add csr_mcycle csr_mcycle delta_cycles
+    op floor csr_mcycle csr_mcycle
 
-    op shr mcycle_overflow mcycle 32
-    op add mcycleh mcycleh mcycle_overflow
+    op shr overflow csr_mcycle 32
+    op add csr_mcycleh csr_mcycleh overflow
 
-    op mod mcycle mcycle 0x100000000
-
-    write mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
-    write mcycle {{CSRS}} "{{ 'cycle'|csr }}"
-    write mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
-    write mcycleh {{CSRS}} "{{ 'cycleh'|csr }}"
+    op mod csr_mcycle csr_mcycle 0x100000000
 
     set last_time_update @time
     set last_cycle_update @tick
@@ -113,32 +107,28 @@ main:
     # and time_update is effectively only called when the processor has crossed an IPT boundary
     
     # timer interrupt
-    op greaterThan mtimeh_gt_mtimecmph mtimeh mtimecmph
-    op equal mtimeh_eq_mtimecmph mtimeh mtimecmph
-    op greaterThanEq mtime_ge_mtimecmp mtime mtimecmp
+    op greaterThan high_gt csr_mtimeh csr_mtimecmph
+    op equal high_eq csr_mtimeh csr_mtimecmph
+    op greaterThanEq low_ge csr_mtime csr_mtimecmp
 
-    op and mip.mtip mtimeh_eq_mtimecmph mtime_ge_mtimecmp
-    op or mip.mtip mip.mtip mtimeh_gt_mtimecmph
+    op and mip.mtip high_eq low_ge
+    op or mip.mtip mip.mtip high_gt
     op shl mip.mtip mip.mtip 7
 
-    read mip {{CSRS}} "{{ 'mip'|csr }}"
-    op and mip mip 0b11111111111111111111111101111111
-    op or mip mip mip.mtip
-    write mip {{CSRS}} "{{ 'mip'|csr }}"
+    op and csr_mip csr_mip 0b11111111111111111111111101111111
+    op or csr_mip csr_mip mip.mtip
 
     # check if interrupts should fire
 
     jump main__interrupts_user_mode lessThan privilege_mode 0b11
-    op and mstatus.mie mstatus 0b1000
+    op and mstatus.mie csr_mstatus 0b1000
     jump main__skip_interrupts equal mstatus.mie 0
 main__interrupts_user_mode:
 
     # timer interrupt
-    read mie {{CSRS}} "{{ 'mie'|csr }}"
-    op and mie.mtie mie mip.mtip
+    op and mie.mtie csr_mie mip.mtip
     set mcause 0x80000007 # machine timer interrupt
-    set mtval 0
-    jump trap notEqual mie.mtie 0
+    jump trap_without_mtval notEqual mie.mtie 0
 
 main__skip_interrupts:
 main__skip_time_update:
@@ -300,32 +290,35 @@ pause_step__loop:
 
     jump done_pause_step always
 
+# this is a normal length for a label
+end_instruction_with_rd_and_time_update:
+    set next_time_update @time
+    # continue into end_instruction_with_rd
+
 # most instructions with an output register jump here after completing successfully
-# writes result to register rd_id if rd_id is not x0
-end_instruction_with_result:
+# writes value rd to register rd_id if rd_id is not x0
+end_instruction_with_rd:
     jump end_instruction equal rd_id 0
-    write result {{REGISTERS}} rd_id
+    write rd {{REGISTERS}} rd_id
+    # continue into end_instruction
 
 # all instructions jump here after completing successfully
 end_instruction:
     # increment instret
-    op add minstret minstret 1
-    jump end_instruction__no_overflow lessThan minstret 0x100000000
-
-    set minstret 0
-
-    op add minstreth minstreth 1
-    write minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
-    write minstreth {{CSRS}} "{{ 'instreth'|csr }}"
-
+    op add csr_minstret csr_minstret 1
+    jump end_instruction__no_overflow lessThan csr_minstret 0x100000000
+    set csr_minstret 0
+    op add csr_minstreth csr_minstreth 1
 end_instruction__no_overflow:
-    write minstret {{CSRS}} "{{ 'minstret'|csr }}"
-    write minstret {{CSRS}} "{{ 'instret'|csr }}"
-
-    # if we're in the icache, icache_var was already incremented
-    op add pc pc 4
 
 end_instruction_trap:
+    # next_pc is set to pc + 4 at the start of main
+    # if we're in the icache, icache_var was already incremented
+    # if next_pc was modified, icache_var should have also been set to null
+    # TODO: should we check if next_pc was modified and invalidate icache_var here?
+    # (probably not - would add performance cost)
+    set pc next_pc
+
     # halt if the power switch was manually disabled
     sensor enabled {{POWER_SWITCH}} @enabled
     jump main equal enabled true
@@ -348,16 +341,15 @@ trap_without_mtval:
     # continue into trap
 
 trap:
-    # set MPIE to MIE, set MIE to 0, and set MPP to privilege_mode
-    op and mie mstatus 0b1000
-    op shl mpie mie 4
+    # set mstatus.MPIE to mstatus.MIE, set mstatus.MIE to 0, and set mstatus.MPP to privilege_mode
+    op and mstatus.mpie csr_mstatus 0b1000
+    op shl mstatus.mpie mstatus.mpie 4
 
-    op shl mpp privilege_mode 11
+    op shl mstatus.mpp privilege_mode 11
 
-    op and mstatus mstatus 0b11111111111111111110011101110111
-    op or mstatus mstatus mpie
-    op or mstatus mstatus mpp
-    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
+    op and csr_mstatus csr_mstatus 0b11111111111111111110011101110111
+    op or csr_mstatus csr_mstatus mstatus.mpie
+    op or csr_mstatus csr_mstatus mstatus.mpp
 
     # set mcause
     write mcause {{CSRS}} "{{ 'mcause'|csr }}"
@@ -365,17 +357,17 @@ trap:
     # set mtval
     write mtval {{CSRS}} "{{ 'mtval'|csr }}"
 
-    # set mepc to pc
+    # set mepc to current pc
     write pc {{CSRS}} "{{ 'mepc'|csr }}"
 
-    # we only support direct mode, so set pc to mtvec
-    read pc {{CSRS}} "{{ 'mtvec'|csr }}"
+    # we only support direct mode, so set next_pc to mtvec
+    read next_pc {{CSRS}} "{{ 'mtvec'|csr }}"
     set icache_var null
 
     # we don't have S-mode, so always trap into M-mode
     set privilege_mode 0b11
 
-    # don't increment pc or instret
+    # don't increment instret
     jump end_instruction_trap always
 
 # helper functions
@@ -391,16 +383,17 @@ reload_config:
 
     set @counter ret
 
-# sign extension function
-# value, length -> result
-extend_sign:
+# in-place variable length sign extension function for rd
+# if length is known statically, a sequence of xor-sub-and can be used instead
+# rd, length -> rd
+extend_sign_rd:
     # https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
     op sub _mask length 1
     op shl _mask 1 _mask
 
-    op xor result value _mask
-    op sub result result _mask
-    op and result result 0xffffffff # convert signed to unsigned
+    op xor rd rd _mask
+    op sub rd rd _mask
+    op and rd rd 0xffffffff # convert signed to unsigned
 
     set @counter ret
 
@@ -566,16 +559,16 @@ load_mmio_word__not_zero:
     op add @counter @counter _jump
 
     # mtime
-    set result mtime
+    set result csr_mtime
     set @counter ret
     # mtimeh
-    set result mtimeh
+    set result csr_mtimeh
     set @counter ret
     # mtimecmp
-    set result mtimecmp
+    set result csr_mtimecmp
     set @counter ret
     # mtimecmph
-    set result mtimecmph
+    set result csr_mtimecmph
     set @counter ret
     # UART
     # Receiver Holding Register: character received, or 0 if RX FIFO is empty
@@ -1049,24 +1042,23 @@ end_decode__no_write_icache:
 
 LUI:
     # U-type: imm, rd_id
-    set result imm
-    jump end_instruction_with_result always
+    set rd imm
+    jump end_instruction_with_rd always
 
 AUIPC:
     # U-type: imm, rd_id
-    op add result imm pc
-    op mod result result 0x100000000 # trunc 32
-    jump end_instruction_with_result always
+    op add rd imm pc
+    op mod rd rd 0x100000000 # trunc 32
+    jump end_instruction_with_rd always
 
 JAL:
     # J-type: imm, rd_id
-    op add target pc imm
-    jump unconditional_jump always
+    jump unconditional_pc_relative_jump always
 
 JALR:
     # I-type: rs1, imm, rd_id
-    op add target rs1 imm
-    op and target target 0xfffffffe # clear LSB
+    op add next_pc rs1 imm
+    op and next_pc next_pc 0xfffffffe # clear LSB
     jump unconditional_jump always
 
 BEQ:
@@ -1102,27 +1094,28 @@ BGEU:
     # continue into conditional_branch if rs1 >= rs2
 
 conditional_branch:
-    op add target pc imm
-    set rd_id 0 # prevent end_instruction_with_result from writing to a register
+    set rd_id 0 # prevent end_instruction_with_rd from writing to a register
+    # continue into unconditional_pc_relative_jump
+
+unconditional_pc_relative_jump:
+    op add next_pc pc imm
     # continue into unconditional_jump
 
 unconditional_jump:
-    op mod target target 0x100000000 # trunc 32
+    op and next_pc next_pc 0xffffffff
 
-    op mod remainder target 4
+    op mod remainder next_pc 4
     set mcause 0 # instruction address misaligned
-    set mtval target
+    set mtval next_pc
     jump trap notEqual remainder 0
 
     # write pc+4 to rd
-    op add result pc 4
-    op mod result result 0x100000000 # trunc 32
+    op add rd pc 4
 
     # jump to target
-    op sub pc target 4 # HACK: end_instruction always increments the pc, so set the new pc to target - 4
     set icache_var null
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 LB:
     # I-type: rs1, imm, rd_id
@@ -1177,20 +1170,18 @@ load_value:
     # right shift by (address % 4) bits
     op mod _shift address 4
     op mul _shift _shift 8
-    op shr result result _shift
+    op shr rd result _shift
 
     # truncate to the specified number of bits
     op pow _divisor 2 length
-    op mod result result _divisor
+    op mod rd rd _divisor
 
     # extend the sign of the value if it's signed
-    # NOTE: we can't remove the set by changing variable names because we need the final value to be in result in both cases
-    set value result
     op add ret @counter 1
-    jump extend_sign equal is_signed true
+    jump extend_sign_rd equal is_signed true
 
     # write result to rd
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 SB:
     # S-type: rs1, rs2, imm
@@ -1212,6 +1203,10 @@ SW:
 # TODO: the 32-bit case could be optimized a lot
 # rs1 (address), rs2 (value), imm (offset), length ->
 store_value:
+    # we also use parts of this procedure for atomic operations, so it jumps to end_instruction_with_rd at the end
+    # so if we jump to store_value, set rd_id to 0 so we don't write garbage to a random register
+    set rd_id 0
+
     op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
@@ -1269,13 +1264,12 @@ store_ram_word_unchecked:
     op add decode_ret @counter 1
     jump decode lessThan decode_address ICACHE_SIZE
 
-    jump end_instruction always
+    jump end_instruction_with_rd always
 
+    # atomics are not supported for MMIO, so we don't need to write to rd here
+    # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
 store_mmio_word_unchecked:
     op sub _offset decode_address {{MMIO_START}}
-
-    # trigger a time update
-    set next_time_update @time
 
     # reset last_time_update if writing to mtime or mtimeh
     jump store_mmio_word_unchecked__not_mtime greaterThanEq _offset 0x08
@@ -1295,17 +1289,17 @@ store_mmio_word_unchecked__not_mtime:
     op add @counter @counter _jump
 
     # mtime
-    set mtime value
-    jump end_instruction always
+    set csr_mtime value
+    jump end_instruction_with_rd_and_time_update always
     # mtimeh
-    set mtimeh value
-    jump end_instruction always
+    set csr_mtimeh value
+    jump end_instruction_with_rd_and_time_update always
     # mtimecmp
-    set mtimecmp value
-    jump end_instruction always
+    set csr_mtimecmp value
+    jump end_instruction_with_rd_and_time_update always
     # mtimecmph
-    set mtimecmph value
-    jump end_instruction always
+    set csr_mtimecmph value
+    jump end_instruction_with_rd_and_time_update always
     # UART
     # Transmitter Holding Register
     # append value to queue
@@ -1352,12 +1346,13 @@ LR.W:
     # load value
     op add ret @counter 1
     jump load_ram_word_unchecked always
+    set rd result
 
     # register reservation set
     # TODO: implement Za64rs?
     set reservation_set address
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 atomic_validate_address:
     set address rs1
@@ -1387,13 +1382,10 @@ SC.W:
     set reservation_set null
 
     # write 0 to rd if successful, else write 1
-    jump SC.W__no_write_rd equal rd_id 0
-    op notEqual result success true
-    write result {{REGISTERS}} rd_id
-SC.W__no_write_rd:
+    op notEqual rd success true
 
     # conditionally write value
-    jump end_instruction notEqual success true
+    jump end_instruction_with_rd notEqual success true
 
     op add lookup_variable_ret @counter 1
     jump access_ram always
@@ -1415,10 +1407,8 @@ amo:
     op add ret @counter 1
     jump load_ram_word_unchecked always
     
-    # put value in rd
-    jump amo__no_write_rd equal rd_id 0
-    write result {{REGISTERS}} rd_id
-amo__no_write_rd:
+    # put original value in rd
+    set rd result
 
     # modify
     set rs1 result # hack
@@ -1515,9 +1505,9 @@ ADD:
 
 ADDI:
     # I-type: rs1, imm, rd_id
-    op add result rs1 imm
-    op mod result result 0x100000000 # 2^32 (trunc 32)
-    jump end_instruction_with_result always
+    op add rd rs1 imm
+    op mod rd rd 0x100000000 # 2^32 (trunc 32)
+    jump end_instruction_with_rd always
 
 SLTI:
     # I-type: rs1, imm, rd_id
@@ -1537,8 +1527,8 @@ SLTU:
 
 SLTIU:
     # I-type: rs1, imm, rd_id
-    op lessThan result rs1 imm
-    jump end_instruction_with_result always
+    op lessThan rd rs1 imm
+    jump end_instruction_with_rd always
 
 XOR:
     # R-type: rs1, rs2, rd_id
@@ -1547,8 +1537,8 @@ XOR:
 
 XORI:
     # I-type: rs1, imm, rd_id
-    op xor result rs1 imm
-    jump end_instruction_with_result always
+    op xor rd rs1 imm
+    jump end_instruction_with_rd always
 
 OR:
     # R-type: rs1, rs2, rd_id
@@ -1557,8 +1547,8 @@ OR:
 
 ORI:
     # I-type: rs1, imm, rd_id
-    op or result rs1 imm
-    jump end_instruction_with_result always
+    op or rd rs1 imm
+    jump end_instruction_with_rd always
 
 AND:
     # R-type: rs1, rs2, rd_id
@@ -1567,8 +1557,8 @@ AND:
 
 ANDI:
     # I-type: rs1, imm, rd_id
-    op and result rs1 imm
-    jump end_instruction_with_result always
+    op and rd rs1 imm
+    jump end_instruction_with_rd always
 
 SLL:
     # R-type: rs1, rs2, rd_id
@@ -1581,10 +1571,10 @@ SLLI:
     op sub length 32 imm
     op pow divisor 2 length
 
-    op mod result rs1 divisor
-    op shl result result imm
+    op mod rd rs1 divisor
+    op shl rd rd imm
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 SRL:
     # R-type: rs1, rs2, rd_id
@@ -1593,8 +1583,8 @@ SRL:
 
 SRLI:
     # I-type: rs1, imm, rd_id
-    op shr result rs1 imm
-    jump end_instruction_with_result always
+    op shr rd rs1 imm
+    jump end_instruction_with_rd always
 
 SRA:
     # R-type: rs1, rs2, rd_id
@@ -1603,26 +1593,26 @@ SRA:
 
 SRAI:
     # I-type: rs1, imm, rd_id
-    op shr value rs1 imm
+    op shr rd rs1 imm
 
     op sub length 32 imm
     op add ret @counter 1
-    jump extend_sign always
+    jump extend_sign_rd always
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 MUL:
     # R-type: rs1, rs2, rd_id
     op add ret @counter 1
     jump mul_decomp always
 
-    op add result high_low low_high
-    op shl result result 16
-    op add result result low_low
+    op add rd high_low low_high
+    op shl rd rd 16
+    op add rd rd low_low
 
-    op and result result 0xffffffff
+    op and rd rd 0xffffffff
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 mul_decomp:
     # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
@@ -1649,24 +1639,24 @@ mulh_s_u:
     jump mul_decomp always
 
     # https://github.com/scala-js/scala-js/blob/7e9dbfcd5c9a9eb3fe065db568c4c96ef4e19a81/linker-private-library/src/main/scala/org/scalajs/linker/runtime/RuntimeLong.scala#L422
-    op shr result low_low 16
-    op add result result low_high
-    op add result result high_low
-    op shr result result 16
-    op add result result high_high
+    op shr rd low_low 16
+    op add rd rd low_high
+    op add rd rd high_low
+    op shr rd rd 16
+    op add rd rd high_high
 
     # https://stackoverflow.com/a/22847373
     jump mulh_s_u__rs1_positive notEqual rs1_negative true
-    op sub result result rs2
+    op sub rd rd rs2
 mulh_s_u__rs1_positive:
 
     jump mulh_s_u__rs2_positive notEqual rs2_negative true
-    op sub result result rs1
+    op sub rd rd rs1
 mulh_s_u__rs2_positive:
 
-    op and result result 0xffffffff
+    op and rd rd 0xffffffff
 
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 MULHSU:
     # R-type: rs1, rs2, rd_id
@@ -1688,19 +1678,17 @@ DIV:
 
 DIVU:
     # R-type: rs1, rs2, rd_id
-    jump div_by_zero equal rs2 0
+
+    # division by zero returns all bits set
+    set rd 0xffffffff
+    jump end_instruction_with_rd equal rs2 0
 
     # use div instead of idiv and then cast to long so that it rounds towards zero
     # https://stackoverflow.com/a/8387377
-    op div result rs1 rs2
-    op and result result 0xffffffff
+    op div rd rs1 rs2
+    op and rd rd 0xffffffff
 
-    jump end_instruction_with_result always
-
-div_by_zero:
-    # all bits set
-    set result 0xffffffff
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 REM:
     # R-type: rs1, rs2, rd_id
@@ -1711,17 +1699,15 @@ REM:
 # reimu?
 REMU:
     # R-type: rs1, rs2, rd_id
-    jump rem_by_zero equal rs2 0
+    
+    # modulo by zero returns dividend
+    set rd rs1
+    jump end_instruction_with_rd equal rs2 0
 
-    op mod result rs1 rs2
-    op and result result 0xffffffff # only necessary for signed
+    op mod rd rs1 rs2
+    op and rd rd 0xffffffff # only necessary for signed
 
-    jump end_instruction_with_result always
-
-rem_by_zero:
-    # dividend
-    set result rs1
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd always
 
 FENCE:
     # I-type: rs1, imm, rd_id
@@ -1763,25 +1749,23 @@ EBREAK:
 MRET:
     jump illegal_instruction lessThan privilege_mode 0b11
 
-    # set MIE to MPIE, set MPIE to 1, set privilege_mode to MPP, and set MPP to U
-    op and mpie mstatus 0b10000000
-    op shr mie mpie 4
+    # set mstatus.MIE to mstatus.MPIE, set mstatus.MPIE to 1, set privilege_mode to mstatus.MPP, and set mstatus.MPP to U
+    op and mstatus.mie csr_mstatus 0b10000000
+    op shr mstatus.mie mstatus.mie 4
 
-    op and privilege_mode mstatus 0b1100000000000
+    op and privilege_mode csr_mstatus 0b1100000000000
     op shr privilege_mode privilege_mode 11
 
-    op and mstatus mstatus 0b11111111111111111110011111110111
-    op or mstatus mstatus mie
-    op or mstatus mstatus 0b10000000 # MPIE
-    write mstatus {{CSRS}} "{{ 'mstatus'|csr }}"
+    op and csr_mstatus csr_mstatus 0b11111111111111111110011111110111
+    op or csr_mstatus csr_mstatus mstatus.mie
+    op or csr_mstatus csr_mstatus 0b10000000 # MPIE
 
-    # set pc to MEPC
-    # sub 4 because end_instruction will increment it
-    read pc {{CSRS}} "{{ 'mepc'|csr }}"
-    op sub pc pc 4
+    # set next_pc to MEPC
+    read next_pc {{CSRS}} "{{ 'mepc'|csr }}"
     set icache_var null
 
     # check for interrupts
+    # don't use end_instruction_with_rd_and_time_update because rd_id could theoretically be non-zero
     set next_time_update @time
 
     jump end_instruction always
@@ -1793,8 +1777,8 @@ CSRRWI:
 
 CSRRW:
     # CSR-type: rs1, imm=csr, rd_id
-    set csr_op 0 # read/write
-    jump read_modify_write_csr always
+    set modify_csr_op 1 # read/write
+    jump modify_csr always
 
 CSRRSI:
     # CSRI-type: rs1_id=uimm, imm=csr, rd_id
@@ -1803,8 +1787,8 @@ CSRRSI:
 
 CSRRS:
     # CSR-type: rs1, imm=csr, rd_id
-    set csr_op 2 # read and set bits
-    jump read_modify_write_csr always
+    set modify_csr_op 3 # read and set bits
+    jump modify_csr always
 
 CSRRCI:
     # CSRI-type: rs1_id=uimm, imm=csr, rd_id
@@ -1813,19 +1797,52 @@ CSRRCI:
 
 CSRRC:
     # CSR-type: rs1, imm=csr, rd_id
-    set csr_op 4 # read and clear bits
-    # continue into read_modify_write_csr
+    set modify_csr_op 5 # read and clear bits
+    # continue into modify_csr
 
-read_modify_write_csr:
+modify_csr:
+    # control flow:
+    # - trap if the CSR requires a higher privilege level than the current one
+    # - set modify_csr_op and modify_csr_write
+    # - jump to modify_csr__read
+    # - ignore access permissions at this point
+    # - read rd (tentative) from the CSR in {{CSRS}}
+    # - if there's a special handler for the CSR:
+    #   - jump to that handler
+    #   - if the CSR is not stored in {{CSRS}}, set rd to the current value
+    #   - if special write handling is required, set modify_csr_write to return to this handler
+    #   - set @counter to modify_csr_op
+    # - elif the CSR is marked as writable in the spec but we want it to be read-only:
+    #   - jump to end_instruction_with_rd
+    # - else:
+    #   - set @counter to modify_csr_op
+    # - set new_value based on rd (original value), rs1 (op input), and which argument was used
+    # - jump to end_instruction_with_rd if using RC/RS with input 0
+    # - trap if the CSR is read-only
+    # - set @counter to modify_csr_write
+    # - if a special handler previously set modify_csr_write:
+    #   - assume it's legal to write to the CSR
+    #   - apply any necessary modifications to WARL fields in new_value
+    #   - write new_value to the CSR
+    #   - jump to end_instruction_with_rd
+    # - else:
+    #   - assume it's legal to write to the CSR
+    #   - write new_value to the CSR in {{CSRS}}
+    #   - jump to end_instruction_with_rd
+
     # csr is stored in imm
     # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
     op and readonly imm 0b110000000000
     op equal readonly readonly 0b110000000000
 
     # csr[9:8] encodes the lowest privilege level that can access the CSR
-    op and required_privilege imm 0b1100000000
-    op shr required_privilege required_privilege 8
+    op shr csr_11_8 imm 8
+    op and required_privilege csr_11_8 0b1100000000
     jump illegal_instruction lessThan privilege_mode required_privilege
+
+    # disable all supervisor and hypervisor CSRs
+    jump illegal_instruction equal required_privilege 0b01
+    jump illegal_instruction equal required_privilege 0b10
 
     # 0x7b0-0x7bf are only visible to debug mode
     op shr csr_11_4 imm 4
@@ -1833,139 +1850,218 @@ read_modify_write_csr:
 
     # read
 
-    set _address imm
-    op add lookup_variable_ret @counter 1
-    jump lookup_variable always
-    read result {{CSRS}} variable
+    # IMPORTANT: the values of modify_csr_op and modify_csr_write need to be updated if anything after this line is changed
+    # -----------------
+    op add modify_csr_write @counter 11
+    op add modify_csr_op @counter modify_csr_op
+    jump modify_csr__read always
 
     # modify
-
-    op add @counter @counter csr_op
+    # the old value is stored in the variable rd by this point
 
     # read/write (always write)
     set new_value rs1
-    jump read_modify_write_csr__always_write always
+    jump modify_csr__always_write always
     # read and set bits (conditional write)
-    op or new_value rs1 result
-    jump read_modify_write_csr__conditional_write always
+    op or new_value rs1 rd
+    jump modify_csr__conditional_write always
     # read and clear bits (conditional write)
     op not new_value rs1
-    op and new_value new_value result
+    op and new_value new_value rd
 
     # write
 
-read_modify_write_csr__conditional_write:
+modify_csr__conditional_write:
     # we don't throw an exception if uimm is 0 or rs1 is x0
     # but we do if rs1 is some other register that happens to contain 0
-    jump end_instruction_with_result equal rs1_id 0
+    jump end_instruction_with_rd equal rs1_id 0
 
-read_modify_write_csr__always_write:
+modify_csr__always_write:
     jump illegal_instruction equal readonly true
 
-    # handlers for specific CSRs
-    jump end_instruction_with_result equal variable "{{ 'misa'|csr }}" # read-only
-    jump read_modify_write_csr__mstatus equal variable "{{ 'mstatus'|csr }}"
-    jump read_modify_write_csr__mip equal variable "{{ 'mip'|csr }}"
-    jump read_modify_write_csr__mie equal variable "{{ 'mie'|csr }}"
-    jump read_modify_write_csr__mepc equal variable "{{ 'mepc'|csr }}"
-    jump read_modify_write_csr__mtvec equal variable "{{ 'mtvec'|csr }}"
-    jump read_modify_write_csr__mcycle equal variable "{{ 'mcycle'|csr }}"
-    jump read_modify_write_csr__mcycleh equal variable "{{ 'mcycleh'|csr }}"
-    jump read_modify_write_csr__minstret equal variable "{{ 'minstret'|csr }}"
-    jump read_modify_write_csr__minstreth equal variable "{{ 'minstreth'|csr }}"
-read_modify_write_csr__end_handler:
+    set @counter modify_csr_write
+    # -----------------
+    # end of jump section
 
+modify_csr__write:
+    # if modify_csr_write still points here, we should write the modified value back to {{CSRS}}
     write new_value {{CSRS}} variable
-    jump end_instruction_with_result always
 
-read_modify_write_csr__mstatus:
+    jump end_instruction_with_rd always
+
+# determine if we should use a CSR-specific handler, or read from {{CSRS}}
+modify_csr__read:
+    set _address imm
+    op add lookup_variable_ret @counter 1
+    jump lookup_variable always
+    read rd {{CSRS}} variable
+
+    jump modify_csr__read__not_machine notEqual csr_11_8 0x3
+
+    jump modify_csr__mstatus equal imm 0x300
+    jump modify_csr__readonly equal imm 0x301 # misa
+    jump modify_csr__mie equal imm 0x304
+    jump modify_csr__align_4B equal imm 0x305 # mtvec
+    jump modify_csr__readonly_zero equal imm 0x306 # mcounteren
+    jump modify_csr__readonly_zero equal imm 0x310 # mstatush
+    jump modify_csr__readonly_zero equal imm 0x320 # mcountinhibit
+    jump modify_csr__align_4B equal imm 0x341 # mepc
+    jump modify_csr__mip equal imm 0x344
+
+modify_csr__read__not_machine:
+
+    op and csr_7_0 imm 0xff
+
+    # all of the user/machine timer CSRs start with 0xb or 0xc
+    jump modify_csr__read__not_timer lessThan csr_11_8 0xb
+    jump modify_csr__read__not_timer greaterThan csr_11_8 0xc
+
+    # and follow the pattern 0b10011111
+    op and tmp imm 0b1100000
+    jump modify_csr__read__not_timer notEqual tmp 0
+
+    # mcounteren is hardwired zero, so now that we know it's a timer, trap if we're not in M-mode
+    jump illegal_instruction lessThan privilege_mode 0b11
+    
+    jump modify_csr__mcycle equal csr_7_0 0x00
+    jump modify_csr__time equal imm 0xc01 # mtime doesn't exist
+    jump modify_csr__minstret equal csr_7_0 0x02
+    
+    jump modify_csr__mcycleh equal csr_7_0 0x80
+    jump modify_csr__timeh equal imm 0xc81
+    jump modify_csr__minstreth equal csr_7_0 0x82
+
+    # hardwire all of the hpmcounter registers to 0
+    jump modify_csr__readonly_zero always
+
+modify_csr__read__not_timer:
+
+    # none of the CSRs matched, so fallback to {{CSRS}}
+    set @counter modify_csr_op
+
+modify_csr__readonly_zero:
+    set rd 0
+modify_csr__readonly:
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
+    jump end_instruction_with_rd always
+
+modify_csr__align_4B:
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
+    op and new_value new_value 0xfffffffc
+    jump modify_csr__write always
+
+modify_csr__time:
+    set rd csr_mtime
+    set @counter modify_csr_op
+
+modify_csr__timeh:
+    set rd csr_mtimeh
+    set @counter modify_csr_op
+
+modify_csr__mstatus:
+    set rd csr_mstatus
+
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
     # clear WPRI and read-only zero fields
-    # SD/XS/FS/VS                -              ----  --
-    # WPRI                        --------                  - - -
-    # S-mode                              - ---         -  -   -
-    # UBE                                                 -
-    op and mstatus new_value 0b00000000001000100001100010001000
+    # SD/XS/FS/VS                  -              ----  --
+    # WPRI                          --------                  - - -
+    # S-mode                                - ---         -  -   -
+    # UBE                                                   -
+    op and csr_mstatus new_value 0b00000000001000100001100010001000
 
     # if MPP was set to 10 (reserved) or 01 (S), set it to 0
-    op and mpp mstatus 0b1100000000000
-    jump read_modify_write_csr__mstatus__mpp_m equal mpp 0b1100000000000
-    op and mstatus mstatus 0b11111111111111111110011111111111
-read_modify_write_csr__mstatus__mpp_m:
+    op and mstatus.mpp csr_mstatus 0b1100000000000
+    jump modify_csr__mstatus__mpp_m equal mstatus.mpp 0b1100000000000
+    op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
+modify_csr__mstatus__mpp_m:
 
-    # check for interrupts
-    set next_time_update @time
+    jump end_instruction_with_rd_and_time_update always
 
-    jump read_modify_write_csr__end_handler always
+modify_csr__mip:
+    set rd csr_mip
 
-read_modify_write_csr__mip:
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
+    # get current read-only non-zero fields
+    # MEIP                                   -
+    # MTIP                                       -
+    op and tmp csr_mip 0b00000000000000000000100010000000
+
     # clear read-only fields
-    # 0                                          -- - - - - - - -
-    # LCOFIP                                       -
-    # read-only                                      -   -
-    # S-mode                                           -   -   -
-    # MSIP                                                   -
-    op and new_value new_value 0b11111111111111110000100010000000
+    # 0                                        -- - - - - - - -
+    # LCOFIP                                     -
+    # read-only                                    -   -
+    # S-mode                                         -   -   -
+    # MSIP                                                 -
+    op and csr_mip new_value 0b11111111111111110000100010000000
 
     # enforce read-only non-zero fields
-    # MEIP                                  -
-    # MTIP                                      -
-    op and tmp result 0b00000000000000000000100010000000
-    op or new_value new_value tmp
+    op or csr_mip csr_mip tmp
 
-    # check for interrupts
-    set next_time_update @time
+    jump end_instruction_with_rd_and_time_update always
 
-    jump read_modify_write_csr__end_handler always
+modify_csr__mie:
+    set rd csr_mie
 
-read_modify_write_csr__mie:
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
     # clear read-only zero fields
-    # 0                                          -- - - - - - - -
-    # LCOFIE                                       -
-    # S-mode                                           -   -   -
-    # MSIE                                                   -
-    op and new_value new_value 0b11111111111111110000100010000000
+    # 0                                        -- - - - - - - -
+    # LCOFIE                                     -
+    # S-mode                                         -   -   -
+    # MSIE                                                 -
+    op and csr_mie new_value 0b11111111111111110000100010000000
 
-    # check for interrupts
-    set next_time_update @time
+    jump end_instruction_with_rd_and_time_update always
 
-    jump read_modify_write_csr__end_handler always
+modify_csr__mcycle:
+    set rd csr_mcycle
 
-read_modify_write_csr__mepc:
-    # IALIGN=32, so the two low bits of mepc are always zero
-    op and new_value new_value 0xfffffffc
-    jump read_modify_write_csr__end_handler always
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
 
-read_modify_write_csr__mtvec:
-    # only allow direct mode
-    op and new_value new_value 0xfffffffc
-    jump read_modify_write_csr__end_handler always
+    set csr_mcycle new_value
+    jump modify_csr__mcycleh__done always # hack
 
-read_modify_write_csr__mcycle:
-    set mcycle new_value
+modify_csr__mcycleh:
+    set rd csr_mcycleh
+
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
+    set csr_mcycleh new_value
+modify_csr__mcycleh__done:
     set last_cycle_update @tick
-    set next_time_update @time
-    jump end_instruction_with_result always
+    jump end_instruction_with_rd_and_time_update always
 
-read_modify_write_csr__mcycleh:
-    set mcycleh new_value
-    set next_time_update @time
-    jump end_instruction_with_result always
+modify_csr__minstret:
+    set rd csr_minstret
 
-read_modify_write_csr__minstret:
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
     # a value written to instret by one instruction should be the value read by the following instruction
-    op sub minstret new_value 1
-    jump end_instruction_with_result always
+    op sub csr_minstret new_value 1
+    jump end_instruction_with_rd always
 
-read_modify_write_csr__minstreth:
+modify_csr__minstreth:
+    set rd csr_minstreth
+
+    op add modify_csr_write @counter 1
+    set @counter modify_csr_op
+
     # if minstret is going to overflow on this increment, minstreth should be new_value - 1 so that it has the expected value for the next instruction
-    op equal is_minstret_overflowing minstret 0xffffffff
-    op sub minstreth new_value is_minstret_overflowing
-
-    # we need to write this in case minstreth doesn't update this tick
-    write minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
-    write minstreth {{CSRS}} "{{ 'instreth'|csr }}"
-    
-    jump end_instruction_with_result always
+    op equal is_minstret_overflowing csr_minstret 0xffffffff
+    op sub csr_minstreth new_value is_minstret_overflowing
+    jump end_instruction_with_rd always
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id

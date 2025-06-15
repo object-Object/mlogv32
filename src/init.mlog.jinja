@@ -89,16 +89,10 @@ init_incr:
     # ISA           ZYXWVUTSRQPONMLKJIHGFEDCBA
     write   0b01000000100100000001000100000001 CSRS "{{ 'misa'|csr }}"
 
-    # mstatush
-    # WPRI  --------------------------  ----
-    # MBE                             -
-    # SBE                              -
-    write 0b00000000000000000000000000000000 CSRS "{{ 'mstatush'|csr }}"
-
     # mlogv32 only has one hart, so mhartid is required to be zero
     write 0 CSRS "{{ 'mhartid'|csr }}"
 
-    # unimplemented fields
+    # unimplemented CSRs
     write 0 CSRS "{{ 'mvendorid'|csr }}"
     write 0 CSRS "{{ 'marchid'|csr }}"
     write 0 CSRS "{{ 'mimpid'|csr }}"
@@ -106,25 +100,26 @@ init_incr:
     # default values for writable CSRs
     write 0 CSRS "{{ 'mepc'|csr }}"
     write 0 CSRS "{{ 'mscratch'|csr }}"
-    write 0 CSRS "{{ 'mie'|csr }}"
+    write 0 CSRS "{{ 'mcause'|csr }}"
+    write 0 CSRS "{{ 'mtval'|csr }}"
 
     # init UARTs
-    write 0 UART0 {{UART_RX_RPTR}}
-    write 0 UART0 {{UART_RX_WPTR}}
-    write 0 UART0 {{UART_TX_RPTR}}
-    write 0 UART0 {{UART_TX_WPTR}}
-    write 0 UART1 {{UART_RX_RPTR}}
-    write 0 UART1 {{UART_RX_WPTR}}
-    write 0 UART1 {{UART_TX_RPTR}}
-    write 0 UART1 {{UART_TX_WPTR}}
-    write 0 UART2 {{UART_RX_RPTR}}
-    write 0 UART2 {{UART_RX_WPTR}}
-    write 0 UART2 {{UART_TX_RPTR}}
-    write 0 UART2 {{UART_TX_WPTR}}
-    write 0 UART3 {{UART_RX_RPTR}}
-    write 0 UART3 {{UART_RX_WPTR}}
-    write 0 UART3 {{UART_TX_RPTR}}
-    write 0 UART3 {{UART_TX_WPTR}}
+    write 0 UART0 {{UART_RX_READ}}
+    write 0 UART0 {{UART_RX_WRITE}}
+    write 0 UART0 {{UART_TX_READ}}
+    write 0 UART0 {{UART_TX_WRITE}}
+    write 0 UART1 {{UART_RX_READ}}
+    write 0 UART1 {{UART_RX_WRITE}}
+    write 0 UART1 {{UART_TX_READ}}
+    write 0 UART1 {{UART_TX_WRITE}}
+    write 0 UART2 {{UART_RX_READ}}
+    write 0 UART2 {{UART_RX_WRITE}}
+    write 0 UART2 {{UART_TX_READ}}
+    write 0 UART2 {{UART_TX_WRITE}}
+    write 0 UART3 {{UART_RX_READ}}
+    write 0 UART3 {{UART_RX_WRITE}}
+    write 0 UART3 {{UART_TX_READ}}
+    write 0 UART3 {{UART_TX_WRITE}}
 
     setrate 1
     stop
@@ -150,8 +145,8 @@ set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
-set {{UART_RX_RPTR}} null
-set {{UART_RX_WPTR}} null
-set {{UART_TX_RPTR}} null
-set {{UART_TX_WPTR}} null
+set {{UART_RX_READ}} null
+set {{UART_RX_WRITE}} null
+set {{UART_TX_READ}} null
+set {{UART_TX_WRITE}} null
 # {% endraw %}

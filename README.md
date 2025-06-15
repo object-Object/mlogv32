@@ -176,6 +176,36 @@ Returns 1 if the id was successfully looked up, or 0 if the lookup returned null
 
 Only alignment `topLeft` is supported.
 
+## CSRs
+
+CSR values are stored either in a RAM processor (CSRS) or in a variable in the CPU, depending on the CSR. Following is a table of CSRs, their storage location, and any relevant notes (eg. supported fields).
+
+| CSR               | Location | Notes                                                                                   |
+| ----------------- | -------- | --------------------------------------------------------------------------------------- |
+| `cycle[h]`        | CPU      | Frequency: ticks \* ipt. Traps in U-mode.                                               |
+| `time[h]`         | CPU      | Frequency: ms. Traps in U-mode.                                                         |
+| `instret[h]`      | CPU      | Traps in U-mode.                                                                        |
+| `hpmcounter*[h]`  | CSRS     | Not implemented.                                                                        |
+| `mvendorid`       | CSRS     | Read-only zero.                                                                         |
+| `marchid`         | CSRS     | Read-only zero.                                                                         |
+| `mimpid`          | CSRS     | Read-only zero.                                                                         |
+| `mhartid`         | CSRS     | Read-only zero.                                                                         |
+| `mstatus`         | CPU      |                                                                                         |
+| `mstatush`        | CSRS     | Read-only zero.                                                                         |
+| `misa`            | CSRS     | Read-only.                                                                              |
+| `mie`             | CPU      |                                                                                         |
+| `mtvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
+| `mcounteren`      | CSRS     | Read-only zero.                                                                         |
+| `mscratch`        | CSRS     |                                                                                         |
+| `mepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
+| `mcause`          | CSRS     | Stored in CSRS because the CPU often speculatively sets the corresponding CPU variable. |
+| `mtval`           | CSRS     | Same reasoning as `mcause`.                                                             |
+| `mip`             | CPU      |                                                                                         |
+| `mcycle[h]`       | CPU      | See `cycle[h]`.                                                                         |
+| `minstret[h]`     | CPU      | See `instret[h]`.                                                                       |
+| `mhpmcounter*[h]` | CSRS     | See `hpmcounter*[h]`.                                                                   |
+| `mcountinhibit`   | CSRS     | Not implemented.                                                                        |
+
 ## riscv-arch-test
 
 mlogv32 currently passes all compliance tests for the `RV32IMAUZicsr_Zifencei` ISA.

@@ -155,30 +155,30 @@ loop:
     read x30_t5 REGISTERS 30
     read x31_t6 REGISTERS 31
     
-    read cycle CSRS "{{ 'cycle'|csr }}"
-    read cycleh CSRS "{{ 'cycleh'|csr }}"
-    op shl cycleh cycleh 32
-    op add cycle cycle cycleh
+    read mcycle CPU "csr_mcycle"
+    read mcycleh CPU "csr_mcycleh"
+    op shl mcycleh mcycleh 32
+    op add mcycle mcycle mcycleh
     
-    read time CSRS "{{ 'time'|csr }}"
-    read timeh CSRS "{{ 'timeh'|csr }}"
-    op shl timeh timeh 32
-    op add time time timeh
+    read mtime CPU "csr_mtime"
+    read mtimeh CPU "csr_mtimeh"
+    op shl mtimeh mtimeh 32
+    op add mtime mtime mtimeh
     
-    read mtimecmp CPU "mtimecmp"
-    read mtimecmph CPU "mtimecmph"
+    read mtimecmp CPU "csr_mtimecmp"
+    read mtimecmph CPU "csr_mtimecmph"
     op shl mtimecmph mtimecmph 32
     op add mtimecmp mtimecmp mtimecmph
     
-    read instret CSRS "{{ 'instret'|csr }}"
-    read instreth CSRS "{{ 'instreth'|csr }}"
-    op shl instreth instreth 32
-    op add instret instret instreth
+    read minstret CPU "csr_minstret"
+    read minstreth CPU "csr_minstreth"
+    op shl minstreth minstreth 32
+    op add minstret minstret minstreth
 
-    read mstatus CSRS "{{ 'mstatus'|csr }}"
+    read mstatus CPU "csr_mstatus"
     read mtvec CSRS "{{ 'mtvec'|csr }}"
-    read mip CSRS "{{ 'mip'|csr }}"
-    read mie CSRS "{{ 'mie'|csr }}"
+    read mip CPU "csr_mip"
+    read mie CPU "csr_mie"
     read mscratch CSRS "{{ 'mscratch'|csr }}"
     read mepc CSRS "{{ 'mepc'|csr }}"
     read mcause CSRS "{{ 'mcause'|csr }}"
@@ -367,14 +367,14 @@ loop__no_mark_icache:
     print "mtimecmp = {0}\n"
     format mtimecmp
 
-    print "time     = {0}\n"
-    format time
+    print "mtime    = {0}\n"
+    format mtime
 
-    print "cycle    = {0}\n"
-    format cycle
+    print "mcycle   = {0}\n"
+    format mcycle
 
-    print "instret  = {0}\n\n"
-    format instret
+    print "minstret = {0}\n\n"
+    format minstret
 
     #{{'\n'}} {{ print(0, 17) }}
 

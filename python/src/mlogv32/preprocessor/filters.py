@@ -37,7 +37,7 @@ def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable
 
 @make_jinja_exceptions_suck_a_bit_less
 @register_filter
-def ram_variable(index: int):
+def ram_var(index: int):
     return VariableFormat.min.get_variable(index)
 
 
@@ -48,9 +48,9 @@ def csr(name: str | int):
         case str():
             if name not in CSRS:
                 raise KeyError(f"Invalid CSR: {name}")
-            return ram_variable(CSRS[name])
+            return ram_var(CSRS[name])
         case int():
-            return ram_variable(name)
+            return ram_var(name)
 
 
 @make_jinja_exceptions_suck_a_bit_less

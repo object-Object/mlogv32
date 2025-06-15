@@ -2,7 +2,7 @@ ASM_PROGRAMS = $(patsubst asm/%.s,%,$(wildcard asm/*.s))
 
 RUST_PROGRAMS = $(filter-out webserver,$(patsubst rust/examples/%,%,$(wildcard rust/examples/*)))
 
-MLOG_PROGRAMS = $(patsubst src/%.mlog.jinja,%,$(wildcard src/*.mlog.jinja))
+MLOG_PROGRAMS = $(patsubst src/%.mlog.jinja,%,$(filter-out src/config/base.mlog.jinja,$(wildcard src/*.mlog.jinja) $(wildcard src/*/*.mlog.jinja)))
 
 .PHONY: all
 all: asm rust

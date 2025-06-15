@@ -11,6 +11,7 @@ debug.json
 /src/main.mlog
 /src/debugger.mlog
 /src/config/*.mlog
+/src/peripherals/scrolling_display.mlog
 
 node_modules/
 

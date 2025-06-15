@@ -1,0 +1,217 @@
+# display controller for printing text from a UART port, with automatic scrolling
+
+#%# link the lookup tables first, then these blocks in this order, then the display
+#% set BUFFER = 'processor17'
+#% set INCR = 'processor18'
+#% set DECR = 'processor19'
+#% set CONFIG = 'processor20'
+#% set DISPLAY_POWER = 'switch1'
+#% set CPU_POWER = 'switch2'
+#% set UART = 'bank1'
+#% set LF_CHAR = 10
+#% set SPACE_CHAR = 32
+#% set TERM_WIDTH_CHARS = 70
+#% set TERM_HEIGHT_CHARS = 38
+#% set CHAR_WIDTH = 7
+#% set CHAR_HEIGHT = 13
+#% set BASE_X = 11
+#% set BASE_Y = 9
+#% set MAX_X = BASE_X + (TERM_WIDTH_CHARS - 1) * CHAR_WIDTH
+#% set MAX_Y = BASE_Y + (TERM_HEIGHT_CHARS - 1) * CHAR_HEIGHT
+#% set BUFFER_MAX_SIZE = TERM_WIDTH_CHARS * TERM_HEIGHT_CHARS
+
+#% if false
+# {% raw %}
+set {{DISPLAY_POWER}} null
+set {{CPU_POWER}} null
+set {{BUFFER}} null
+set {{INCR}} null
+set {{DECR}} null
+set {{CONFIG}} null
+set {{UART}} null
+set {{LF_CHAR}} null
+set {{SPACE_CHAR}} null
+set {{TERM_WIDTH_CHARS}} null
+set {{CHAR_WIDTH}} null
+set {{CHAR_HEIGHT}} null
+set {{BASE_X}} null
+set {{BASE_Y}} null
+set {{MAX_X}} null
+set {{MAX_Y}} null
+set {{BUFFER_MAX_SIZE}} null
+# {% endraw %}
+#% endif
+
+# character dimensions: 7x13 px
+# screen area: 512x512 px
+# borders: 8 px
+# safe area: 496x496 px
+# terminal size: 70x38 characters
+# base offset: 11 9 bottomLeft
+
+# we can only do 256 draw instructions per tick, then the display buffer fills up
+
+# when scrolling, we have to clear the screen, and it will take up to ~10.3 ticks to fully redraw
+# so we want to draw the most recently printed line first
+# therefore, the routines to fill and print the buffer iterate in opposite directions
+
+reset:
+    draw clear 0 0 0
+    drawflush display1
+
+reset_loop:
+    sensor enabled {{DISPLAY_POWER}} @enabled
+    jump reset_loop notEqual enabled true
+
+    setrate 10000
+
+    read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
+
+    # init INCR and DECR
+
+    set prev "{{ (BUFFER_MAX_SIZE - 1)|ram_var }}"
+    set cur "{{ 0|ram_var }}"
+    set i 1
+incr_decr_loop:
+    op idiv lookup i 260
+    getlink lookup lookup
+    op mod next i 260
+    lookup block next next
+    sensor next next @name
+    read next lookup next
+
+    write prev {{DECR}} cur
+    write next {{INCR}} cur
+
+    set prev cur
+    set cur next
+    op add i i 1
+    op mod i i {{BUFFER_MAX_SIZE}}
+
+    jump incr_decr_loop notEqual cur "{{ 0|ram_var }}"
+
+    # init display state
+
+    draw reset
+    draw color 255 255 255 255
+    draw clear 0 0 0
+    drawflush display1
+
+    # buffer starts at 0, lines are 70-character aligned
+    set buffer_write "{{ 0|ram_var }}"
+    set buffer_write_col 0
+    set buffer_y {{BASE_Y}}
+
+    set buffer_read buffer_write
+    set print_x {{BASE_X}}
+    set print_y {{MAX_Y}} # don't print anything until the uart reader sets print_y
+
+    read rx_read {{UART}} 510
+
+main:
+    # start each iteration with a new tick
+    wait 0.0001
+
+    # move any new UART data to buffer
+    read rx_write {{UART}} 511
+    jump skip_uart_loop equal rx_read rx_write
+
+    set should_scroll false
+
+uart_loop:
+    op add index rx_read 256
+    read char {{UART}} index
+
+    op add rx_read rx_read 1
+    op mod rx_read rx_read UART_FIFO_MODULO
+    write rx_read {{UART}} 510
+
+    write char {{BUFFER}} buffer_write
+    read buffer_write {{INCR}} buffer_write
+    op add buffer_write_col buffer_write_col 1
+
+    # if the character is LF, fill the rest of this line with more LF characters so the printer skips them
+    jump uart_loop__not_lf notEqual char {{LF_CHAR}}
+    jump uart_loop__not_lf greaterThanEq buffer_write_col {{TERM_WIDTH_CHARS}}
+
+uart_loop__pad_lf:
+    write char {{BUFFER}} buffer_write
+    read buffer_write {{INCR}} buffer_write
+    op add buffer_write_col buffer_write_col 1
+    jump uart_loop__pad_lf lessThan buffer_write_col {{TERM_WIDTH_CHARS}}
+uart_loop__not_lf:
+    
+    jump uart_loop__same_line lessThan buffer_write_col {{TERM_WIDTH_CHARS}}
+    op add buffer_y buffer_y {{CHAR_HEIGHT}}
+    op min buffer_y buffer_y {{MAX_Y}}
+    set buffer_write_col 0
+    set should_scroll true
+uart_loop__same_line:
+    jump uart_loop notEqual rx_read rx_write
+
+    # if we need to scroll, clear the display
+    jump uart__no_scroll notEqual should_scroll true
+    draw clear 0 0 0
+uart__no_scroll:
+
+    # we received more characters, so redraw the text
+    read buffer_read {{DECR}} buffer_write
+    op sub print_x buffer_write_col 1
+    op mul print_x print_x {{CHAR_WIDTH}}
+    op add print_x print_x {{BASE_X}}
+    set print_y {{BASE_Y}}
+
+skip_uart_loop:
+
+    jump skip_print_loop greaterThan print_y buffer_y
+
+    sensor display_commands display1 @bufferUsage
+
+    # hack: if we're at the start of a new line, shift up immediately
+    jump print_loop__shift_up lessThan print_x {{BASE_X}}
+
+print_loop:
+    read char {{BUFFER}} buffer_read
+    read buffer_read {{DECR}} buffer_read
+
+    jump print_loop__no_print equal char {{LF_CHAR}}
+    jump print_loop__no_print equal char {{SPACE_CHAR}}
+    printchar char
+    draw print print_x print_y bottomLeft
+    op add display_commands display_commands 1
+print_loop__no_print:
+
+    op sub print_x print_x {{CHAR_WIDTH}}
+    jump print_loop__same_line greaterThanEq print_x {{BASE_X}}
+print_loop__shift_up:
+    set print_x {{MAX_X}}
+    op add print_y print_y {{CHAR_HEIGHT}}
+    jump skip_print_loop greaterThan print_y buffer_y
+print_loop__same_line:
+
+    jump print_loop lessThan display_commands 254
+
+skip_print_loop:
+
+    drawflush display1
+
+    sensor enabled {{DISPLAY_POWER}} @enabled
+    jump reset notEqual enabled true
+
+    # don't go into wait_for_cpu if we still need to finish printing the rest of the buffer
+    jump main lessThanEq print_y buffer_y
+
+    sensor enabled {{CPU_POWER}} @enabled
+    jump main equal enabled true
+
+# if the cpu is turned off, wait until it turns back on, then reset the display
+wait_for_cpu:
+    wait 0.0001
+
+    sensor enabled {{DISPLAY_POWER}} @enabled
+    jump reset notEqual enabled true
+
+    sensor enabled {{CPU_POWER}} @enabled
+    jump reset equal enabled true
+
+    jump wait_for_cpu always

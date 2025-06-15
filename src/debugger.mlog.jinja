@@ -755,18 +755,18 @@ format_uart__rx_fifo_size__no_overrun:
     set @counter ret
 
 format_mcause:
-    jump format_null strictEqual n null
+    jump format_mcause__reset strictEqual n null
     jump format_mcause__interrupt greaterThanEq n 0x80000000
     jump format_hex greaterThan n 19
     op mul jump n 2
     op add @counter @counter jump
-    format "instr addr align"; set @counter ret
+    format "instr misalign"; set @counter ret
     format "instr access fault"; set @counter ret
     format "illegal instr"; set @counter ret
     format "breakpoint"; set @counter ret
-    format "load addr align"; set @counter ret
+    format "load misalign"; set @counter ret
     format "load access fault"; set @counter ret
-    format "store/AMO addr align"; set @counter ret
+    format "store/AMO misalign"; set @counter ret
     format "store/AMO access fault"; set @counter ret
     format "ecall from U-mode"; set @counter ret
     format "ecall from S-mode"; set @counter ret
@@ -780,6 +780,10 @@ format_mcause:
     jump format_hex always; stop
     format "software check"; set @counter ret
     format "hardware check"; set @counter ret
+
+format_mcause__reset:
+    format "reset"
+    set @counter ret
 
 format_mcause__interrupt:
     op and n2 n 0x7fffffff

@@ -59,7 +59,8 @@ reset:
     set icache_var null
 
     # set mcause to 0, since we don't distinguish different reset conditions
-    write 0 {{CSRS}} "{{ 'mcause'|csr }}"
+    # use null so the debugger can tell if it's a reset or a misaligned instruction
+    write null {{CSRS}} "{{ 'mcause'|csr }}"
     
     # clear LR/SC reservation set
     set reservation_set null

@@ -396,7 +396,7 @@ loop__no_mark_icache:
     print "mcause   = {0}\n"
     set n mcause
     op add ret @counter 1
-    jump format_hex always
+    jump format_mcause always
 
     print "mtval    = {0}\n"
     set n mtval
@@ -753,6 +753,48 @@ format_uart__rx_fifo_size__no_overrun:
     format tx_wptr
 
     set @counter ret
+
+format_mcause:
+    jump format_null strictEqual n null
+    jump format_mcause__interrupt greaterThanEq n 0x80000000
+    jump format_hex greaterThan n 19
+    op mul jump n 2
+    op add @counter @counter jump
+    format "instr addr align"; set @counter ret
+    format "instr access fault"; set @counter ret
+    format "illegal instr"; set @counter ret
+    format "breakpoint"; set @counter ret
+    format "load addr align"; set @counter ret
+    format "load access fault"; set @counter ret
+    format "store/AMO addr align"; set @counter ret
+    format "store/AMO access fault"; set @counter ret
+    format "ecall from U-mode"; set @counter ret
+    format "ecall from S-mode"; set @counter ret
+    jump format_hex always; stop
+    format "ecall from M-mode"; set @counter ret
+    format "instr page fault"; set @counter ret
+    format "load page fault"; set @counter ret
+    jump format_hex always; stop
+    format "store/AMO page fault"; set @counter ret
+    jump format_hex always; stop
+    jump format_hex always; stop
+    format "software check"; set @counter ret
+    format "hardware check"; set @counter ret
+
+format_mcause__interrupt:
+    op and n2 n 0x7fffffff
+    op mod rem n2 2
+    jump format_hex notEqual rem 1
+    jump format_hex greaterThan n2 13
+    op sub jump n2 1
+    op add @counter @counter jump
+    format "S software int"; set @counter ret
+    format "M software int"; set @counter ret
+    format "S timer int"; set @counter ret
+    format "M timer int"; set @counter ret
+    format "S external int"; set @counter ret
+    format "M external int"; set @counter ret
+    format "cntr overflow int"; set @counter ret
 
 # creates a marker on the ram proc containing a given address
 # the caller should print a format string with a placeholder for the address

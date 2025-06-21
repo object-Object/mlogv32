@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
@@ -5,9 +6,9 @@ import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from typer import Option, Typer
 
-from mlogv32.preprocessor.extensions import CommentStatement
-
+from .extensions import CommentStatement
 from .filters import FILTERS
+from .parser.mlog import Label, Statement, parse_mlog
 
 app = Typer(
     pretty_exceptions_show_locals=False,
@@ -15,7 +16,7 @@ app = Typer(
 
 
 @app.command(name="file")
-def command_file(
+def file_command(
     path: Path,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
 ):
@@ -28,6 +29,37 @@ def command_file(
     if output:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(result, "utf-8")
+    else:
+        print(result)
+
+
+@app.command()
+def labels(
+    path: Path,
+    output: Annotated[Path | None, Option("-o", "--output")] = None,
+    filter_str: Annotated[str | None, Option("--filter")] = None,
+):
+    if filter_str:
+        filter_re = re.compile(filter_str)
+    else:
+        filter_re = None
+
+    with path.open("r", encoding="utf-8") as f:
+        lines = parse_mlog(f.read())
+
+    result_lines = list[str]()
+    line_num = 0
+    for line in lines:
+        match line:
+            case Label(name=name):
+                if not filter_re or filter_re.fullmatch(name):
+                    result_lines.append(f"set {name} {line_num}")
+            case Statement():
+                line_num += 1
+    result = "\n".join(result_lines)
+
+    if output:
+        output.write_text(result, encoding="utf-8")
     else:
         print(result)
 

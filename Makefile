@@ -54,6 +54,12 @@ build/%.o: asm/%.s | build
 src/%.mlog: src/%.mlog.jinja
 	python -m mlogv32.preprocessor file -o src/$*.mlog src/$*.mlog.jinja
 
+src/init.mlog: src/main.labels.mlog
+
+# only extract uppercase labels
+src/main.labels.mlog: src/main.mlog
+	python -m mlogv32.preprocessor labels --filter '[^a-z]+' -o src/main.labels.mlog src/main.mlog
+
 .PHONY: mlog-configs
 mlog-configs: src/config/configs.yaml
 	python -m mlogv32.preprocessor configs src/config/configs.yaml

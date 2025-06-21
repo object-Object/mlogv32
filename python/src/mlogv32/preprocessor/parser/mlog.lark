@@ -1,0 +1,19 @@
+start: (line? COMMENT? _NEWLINE)*
+
+?line: LABEL -> label
+     | statement
+
+statement: TOKEN (TOKEN | LABEL | STRING)*
+
+STRING.2: /"[^\n]*"/
+
+LABEL.1: /[^\n #\t;]+:/
+
+TOKEN: /[^\n #\t;]+/
+
+COMMENT: /#[^\n]*/
+
+_NEWLINE: /[\n;]+/
+
+%ignore /[ \t]+/
+%ignore COMMENT

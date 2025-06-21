@@ -273,7 +273,7 @@ done_pause_step:
     jump SLLI always
     jump SRLI always
     jump SRAI always
-    jump illegal_instruction always # null + 64 would jump here
+    jump ILLEGAL_INSTRUCTION always # null + 64 would jump here
     jump MLOGSYS always
     jump MLOGDRAW always
 
@@ -332,7 +332,7 @@ default_mtvec_handler:
     printflush {{ERROR_OUTPUT}}
     jump halt always
 
-illegal_instruction:
+ILLEGAL_INSTRUCTION:
     set mcause 2
     # TODO: return faulting instruction bits?
     # continue into trap_without_mtval
@@ -1734,7 +1734,7 @@ PRIV:
     jump EBREAK equal imm 1
     jump MRET equal imm 0b001100000010
     jump end_instruction equal imm 0b000100000101 # WFI (no-op, ignore TW bit)
-    jump illegal_instruction always
+    jump ILLEGAL_INSTRUCTION always
 
 ECALL:
     # 0b1000 (8) = ecall from U-mode
@@ -1748,7 +1748,7 @@ EBREAK:
     jump trap always
 
 MRET:
-    jump illegal_instruction lessThan privilege_mode 0b11
+    jump ILLEGAL_INSTRUCTION lessThan privilege_mode 0b11
 
     # set mstatus.MIE to mstatus.MPIE, set mstatus.MPIE to 1, set privilege_mode to mstatus.MPP, and set mstatus.MPP to U
     op and mstatus.mie csr_mstatus 0b10000000
@@ -1839,15 +1839,15 @@ modify_csr:
     # csr[9:8] encodes the lowest privilege level that can access the CSR
     op shr csr_11_8 imm 8
     op and required_privilege csr_11_8 0b1100000000
-    jump illegal_instruction lessThan privilege_mode required_privilege
+    jump ILLEGAL_INSTRUCTION lessThan privilege_mode required_privilege
 
     # disable all supervisor and hypervisor CSRs
-    jump illegal_instruction equal required_privilege 0b01
-    jump illegal_instruction equal required_privilege 0b10
+    jump ILLEGAL_INSTRUCTION equal required_privilege 0b01
+    jump ILLEGAL_INSTRUCTION equal required_privilege 0b10
 
     # 0x7b0-0x7bf are only visible to debug mode
     op shr csr_11_4 imm 4
-    jump illegal_instruction equal csr_11_4 0x7b
+    jump ILLEGAL_INSTRUCTION equal csr_11_4 0x7b
 
     # read
 
@@ -1878,7 +1878,7 @@ modify_csr__conditional_write:
     jump end_instruction_with_rd equal rs1_id 0
 
 modify_csr__always_write:
-    jump illegal_instruction equal readonly true
+    jump ILLEGAL_INSTRUCTION equal readonly true
 
     set @counter modify_csr_write
     # -----------------
@@ -1922,7 +1922,7 @@ modify_csr__read__not_machine:
     jump modify_csr__read__not_timer notEqual tmp 0
 
     # mcounteren is hardwired zero, so now that we know it's a timer, trap if we're not in M-mode
-    jump illegal_instruction lessThan privilege_mode 0b11
+    jump ILLEGAL_INSTRUCTION lessThan privilege_mode 0b11
     
     jump modify_csr__mcycle equal csr_7_0 0x00
     jump modify_csr__time equal imm 0xc01 # mtime doesn't exist
@@ -2066,7 +2066,7 @@ modify_csr__minstreth:
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id
-    jump illegal_instruction greaterThan imm 3
+    jump ILLEGAL_INSTRUCTION greaterThan imm 3
     
     # TODO: we could save an instruction if we used B-type instead of I-type
     op mul jump imm 2
@@ -2108,7 +2108,7 @@ MLOGSYS__init_icache__loop:
 
 MLOGDRAW:
     # I-type: rs1, imm=funct12, rd_id
-    jump illegal_instruction greaterThan imm 15
+    jump ILLEGAL_INSTRUCTION greaterThan imm 15
 
     read a1 {{REGISTERS}} 11
     read a2 {{REGISTERS}} 12

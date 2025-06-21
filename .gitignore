@@ -9,7 +9,7 @@ debug.json
 
 /src/init.mlog
 /src/main.mlog
-/src/debugger.mlog
+/src/peripherals/debugger.mlog
 /src/config/*.mlog
 /src/peripherals/scrolling_display.mlog
 *.labels.mlog

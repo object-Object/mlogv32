@@ -1,0 +1,387 @@
+#% extends 'constants.jinja'
+#% block contents
+
+#% set LABELS = 'cell1'
+#% set COSTS = 'cell2'
+
+#% set CSRS = 'processor17'
+#% set INCR = 'processor18'
+#% set CONFIG = 'processor19'
+
+#% set ERROR_OUTPUT = 'message1'
+
+#% set SINGLE_STEP_SWITCH = 'switch1'
+#% set POWER_SWITCH = 'switch2'
+#% set PAUSE_SWITCH = 'switch3'
+
+#% set DISPLAY = 'display1'
+
+# disable the power switch, then reset
+halt:
+    control enabled {{POWER_SWITCH}} false
+    control enabled {{PAUSE_SWITCH}} false
+
+# wait until the power switch is enabled, then reset/start
+reset:
+    setrate 1000
+
+    # tell workers to reset
+    set prev_proc @this
+    set state "reset"
+
+    # load config
+    read MEMORY_X {{CONFIG}} "MEMORY_X"
+    read MEMORY_Y {{CONFIG}} "MEMORY_Y"
+    read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
+    read ROM_SIZE {{CONFIG}} "ROM_SIZE"
+    read RAM_SIZE {{CONFIG}} "RAM_SIZE"
+    read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
+    read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
+
+    op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
+
+    op add RAM_END {{RAM_START}} RAM_SIZE
+
+    op add END_PROC RAM_SIZE ICACHE_SIZE
+    op idiv END_PROC END_PROC {{RAM_PROC_BYTES}}
+    op add END_PROC END_PROC RAM_START_PROC
+
+    # loop until the power switch is linked and enabled
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump reset equal enabled false
+
+    # initialize CPU
+
+    # align to tick
+    wait 1e-5
+
+    # set prev_proc and state again, just in case a worker changed them
+    set prev_proc @this
+    set state "reset"
+
+    # disable RAM procs
+
+    set i 0
+disable_ram:
+    op mod x i MEMORY_WIDTH
+    op add x x MEMORY_X
+
+    op idiv y i MEMORY_WIDTH
+    op add y y MEMORY_Y
+
+    getblock building ram x y
+
+    op lessThan enabled i RAM_START_PROC
+    control enabled ram enabled
+
+    op add i i 1
+    jump disable_ram lessThan i END_PROC
+
+    # initialize INCR
+
+    set address 0
+    op add ret @counter 1
+    jump lookup_variable always
+    set prev_variable variable
+
+    set address 1
+init_incr:
+    set variable null
+    op add ret @counter 1
+    jump lookup_variable lessThan address {{RAM_PROC_VARS}}
+
+    write variable {{INCR}} prev_variable
+    set prev_variable variable
+    op add address address 1
+    jump init_incr lessThanEq address {{RAM_PROC_VARS}}
+
+    # initialize label/cost tables
+
+#% for instruction in instructions
+    # {{ instruction.label }}
+    write {{labels[instruction.label]}} {{LABELS}} {{loop.index0}}
+    write {{instruction.cost}} {{COSTS}} {{loop.index0}}
+#% endfor
+
+    # initialize peripherals
+
+    # text output
+    printflush {{ERROR_OUTPUT}}
+
+    # display
+    draw reset
+    draw clear 0 0 0
+    drawflush {{DISPLAY}}
+
+    # UARTs
+#% for i in range(1, 4+1)
+    # UART{{ loop.index0 }}
+    write 0 bank{{i}} {{UART_RX_READ}}
+    write 0 bank{{i}} {{UART_RX_WRITE}}
+    write 0 bank{{i}} {{UART_TX_READ}}
+    write 0 bank{{i}} {{UART_TX_WRITE}}
+#% endfor
+
+    # icache
+    set __etext 0
+
+    # reset hart state as per machine-level ISA
+
+    # set privilege mode to M
+    set privilege_mode 0b11
+
+    # clear mstatus
+    # technically we're only supposed to clear MPRV and MIE, but the other bits are explicitly unspecified, so this is allowed
+    set csr_mstatus 0
+    
+    # set pc to reset vector
+    set pc 0
+    set icache_var null
+
+    # set mcause to 0, since we don't distinguish different reset conditions
+    # use null so the debugger can tell if it's a reset or a misaligned instruction
+    write null {{CSRS}} "{{ 'mcause'|csr }}"
+    
+    # clear LR/SC reservation set
+    set reservation_set null
+
+    # reset additional (unspecified) hart state
+
+    # clear timers
+    set csr_mtime 0
+    set csr_mtimeh 0
+    set csr_mtimecmp 0
+    set csr_mtimecmph 0
+    set csr_mcycle 0
+    set csr_mcycleh 0
+    set csr_minstret 0
+    set csr_minstreth 0
+
+    # clear pending/enabled interrupts
+    set csr_mip 0
+    set csr_mie 0
+    set interrupts_pending false
+
+    # reset mtvec to implementation-defined value to help catch bugs
+    write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
+
+    # misa
+    # XLEN=32 --
+    # 0         ----
+    # ISA           ZYXWVUTSRQPONMLKJIHGFEDCBA
+    write   0b01000000100100000001000100000001 {{CSRS}} "{{ 'misa'|csr }}"
+
+    # mlogv32 only has one hart, so mhartid is required to be zero
+    write 0 {{CSRS}} "{{ 'mhartid'|csr }}"
+
+    # read-only zero CSRs
+    write 0 {{CSRS}} "{{ 'mvendorid'|csr }}"
+    write 0 {{CSRS}} "{{ 'marchid'|csr }}"
+    write 0 {{CSRS}} "{{ 'mimpid'|csr }}"
+
+    # default values for writable CSRs
+    write 0 {{CSRS}} "{{ 'mepc'|csr }}"
+    write 0 {{CSRS}} "{{ 'mscratch'|csr }}"
+    write 0 {{CSRS}} "{{ 'mcause'|csr }}"
+    write 0 {{CSRS}} "{{ 'mtval'|csr }}"
+
+    # finally, tick-align again to be safe, finish any last-second initialization, then start the workers
+
+    wait 1e-5
+
+    # mtime/mcycle reference points
+    set last_time_update @time
+    set last_cycle_update @tick
+
+    set prev_proc @this
+    set state "running"
+
+next_tick:
+    wait 1e-5
+
+    # fetch current hart state
+    read state prev_proc "state"
+    read pc prev_proc "pc"
+    read icache_ram prev_proc "icache_ram"
+    read icache_var prev_proc "icache_var"
+    read decode_ram prev_proc "decode_ram"
+    read decode_var prev_proc "decode_var"
+    read __etext prev_proc "__etext"
+    read privilege_mode prev_proc "privilege_mode"
+    read reservation_set prev_proc "reservation_set"
+    read csr_mtime prev_proc "csr_mtime"
+    read csr_mtimeh prev_proc "csr_mtimeh"
+    read csr_mtimecmp prev_proc "csr_mtimecmp"
+    read csr_mtimecmph prev_proc "csr_mtimecmph"
+    read csr_mcycle prev_proc "csr_mcycle"
+    read csr_mcycleh prev_proc "csr_mcycleh"
+    read csr_minstret prev_proc "csr_minstret"
+    read csr_minstreth prev_proc "csr_minstreth"
+    read csr_mstatus prev_proc "csr_mstatus"
+    read csr_mip prev_proc "csr_mip"
+    read csr_mie prev_proc "csr_mie"
+    read interrupts_pending prev_proc "interrupts_pending"
+
+    # tell the next proc to fetch the hart state from us
+    set prev_proc @this
+
+    # perform any state transitions requested by the workers
+    jump halt equal state "halt"
+    jump reset equal state "reset"
+    jump pause equal state "pause"
+end_pause:
+
+    # poll hardware
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump halt equal enabled false
+
+    sensor enabled {{PAUSE_SWITCH}} @enabled
+    jump pause_once equal enabled true
+
+    # update time
+    # TODO: handle mtimeh/mcycleh overflow
+
+    op sub delta_ms @time last_time_update
+
+    op add csr_mtime csr_mtime delta_ms
+    op floor csr_mtime csr_mtime
+
+    op shr overflow csr_mtime 32
+    op add csr_mtimeh csr_mtimeh overflow
+
+    op mod csr_mtime csr_mtime 0x100000000
+
+    # update cycle
+    # we define the rate of increase of cycle as "@ipt * ticks"
+    # this should be a decent estimation of the number of mlog instructions executed
+
+    op sub delta_cycles @tick last_cycle_update
+    op mul delta_cycles delta_cycles @ipt
+
+    op add csr_mcycle csr_mcycle delta_cycles
+    op floor csr_mcycle csr_mcycle
+
+    op shr overflow csr_mcycle 32
+    op add csr_mcycleh csr_mcycleh overflow
+
+    op mod csr_mcycle csr_mcycle 0x100000000
+
+    set last_time_update @time
+    set last_cycle_update @tick
+
+    # check if interrupts should be pending
+    
+    # timer interrupt
+    op greaterThan high_gt csr_mtimeh csr_mtimecmph
+    op equal high_eq csr_mtimeh csr_mtimecmph
+    op greaterThanEq low_ge csr_mtime csr_mtimecmp
+
+    op and mip.mtip high_eq low_ge
+    op or mip.mtip mip.mtip high_gt
+    op shl mip.mtip mip.mtip 7
+
+    op and csr_mip csr_mip 0b11111111111111111111111101111111
+    op or csr_mip csr_mip mip.mtip
+
+    # general "please check interrupts" signal
+    # this is set by instructions that require interrupts to be checked immediately,
+    # and cleared by the first worker to handle it
+    op notEqual m_interrupts_pending csr_mip 0
+    op or interrupts_pending interrupts_pending m_interrupts_pending
+
+    # go to next tick
+
+    jump next_tick always
+
+pause:
+    control enabled {{SINGLE_STEP_SWITCH}} true
+pause_once:
+    control enabled {{PAUSE_SWITCH}} true
+
+pause__loop:
+    wait 1e-5
+
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump halt equal enabled false
+
+    sensor enabled {{PAUSE_SWITCH}} @enabled
+    jump pause__loop equal enabled true
+
+    jump end_pause always
+
+# given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
+# address -> variable
+lookup_variable:
+    op idiv _lookup address {{LOOKUP_PROC_SIZE}}
+    getlink _lookup _lookup
+
+    op mod variable address {{LOOKUP_PROC_SIZE}}
+    lookup block variable variable
+    sensor variable variable @name
+    read variable _lookup variable
+
+    set @counter ret
+
+#% endblock contents
+
+# disable mlogls warnings
+# {% raw %}
+# common preprocessor constants
+set {{LOOKUP_PROC_SIZE}} null
+set {{ROM_BYTE_OFFSET}} null
+set {{ROM_PROC_BYTES}} null
+set {{RAM_PROC_BYTES}} null
+set {{RAM_PROC_VARS}} null
+set {{RAM_START}} null
+set {{MMIO_START}} null
+set {{SYSCON}} null
+set {{UART_RX_READ}} null
+set {{UART_RX_WRITE}} null
+set {{UART_TX_START}} null
+set {{UART_TX_READ}} null
+set {{UART_TX_WRITE}} null
+set {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}} null
+# local preprocessor constants
+set {{LABELS}} null
+set {{COSTS}} null
+set {{CSRS}} null
+set {{INCR}} null
+set {{CONFIG}} null
+set {{ERROR_OUTPUT}} null
+set {{SINGLE_STEP_SWITCH}} null
+set {{POWER_SWITCH}} null
+set {{PAUSE_SWITCH}} null
+set {{DISPLAY}} null
+set {{labels[instruction.label]}} null
+set {{instruction.cost}} null
+set {{loop.index0}} null
+set bank{{i}} null
+# unused variables
+set _ {{ROM_BYTE_OFFSET}}
+set _ {{MMIO_START}}
+set _ {{UART_TX_START}}
+set _ {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}}
+set _ UART_FIFO_MODULO
+set _ RAM_END
+set _ state
+set _ pc
+set _ icache_ram
+set _ icache_var
+set _ decode_ram
+set _ decode_var
+set _ __etext
+set _ privilege_mode
+set _ reservation_set
+set _ csr_mtime
+set _ csr_mtimeh
+set _ csr_mtimecmp
+set _ csr_mtimecmph
+set _ csr_mcycle
+set _ csr_mcycleh
+set _ csr_minstret
+set _ csr_minstreth
+set _ csr_mstatus
+set _ csr_mip
+set _ csr_mie
+set _ interrupts_pending
+# {% endraw %}

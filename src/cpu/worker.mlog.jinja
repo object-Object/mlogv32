@@ -1965,6 +1965,15 @@ MLOGSYS:
     jump end_instruction always
 
 MLOGSYS__init_icache:
+    # FIXME: hack
+    setrate 500000
+    set state "decoding"
+
+    print "decoding @ {0} {1}"
+    format @thisx
+    format @thisy
+    printflush {{ERROR_OUTPUT}}
+
     op min __etext __etext ICACHE_SIZE
 
     # decode .text
@@ -1983,7 +1992,17 @@ MLOGSYS__init_icache__loop:
     op add decode_address decode_address 4
     jump MLOGSYS__init_icache__loop lessThan decode_address __etext
 
-    jump end_instruction always
+    # FIXME: hack 2
+    setrate 1000
+    wait 1e-5
+
+    read controller_state {{CONTROLLER}} "state"
+    jump state->halt equal controller_state "halt"
+
+    read prev_proc {{CONTROLLER}} "prev_proc"
+    write "running" prev_proc "state"
+    printflush {{ERROR_OUTPUT}}
+    jump next_tick always
 
 MLOGDRAW:
     # I-type: rs1, imm=funct12, rd_id

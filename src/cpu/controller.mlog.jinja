@@ -25,9 +25,9 @@ halt:
 reset:
     setrate 1000
 
-    # tell workers to reset
+    # tell workers to halt
     set prev_proc @this
-    set state "reset"
+    set state "halt"
 
     # load config
     read MEMORY_X {{CONFIG}} "MEMORY_X"
@@ -55,7 +55,7 @@ reset:
     # align to tick
     wait 1e-5
 
-    # set prev_proc and state again, just in case a worker changed them
+    # change state from halt to reset, and set prev_proc again in case a worker changed it
     set prev_proc @this
     set state "reset"
 
@@ -182,7 +182,6 @@ init_incr:
     # default values for writable CSRs
     write 0 {{CSRS}} "{{ 'mepc'|csr }}"
     write 0 {{CSRS}} "{{ 'mscratch'|csr }}"
-    write 0 {{CSRS}} "{{ 'mcause'|csr }}"
     write 0 {{CSRS}} "{{ 'mtval'|csr }}"
 
     # finally, tick-align again to be safe, finish any last-second initialization, then start the workers
@@ -234,9 +233,6 @@ end_pause:
     # poll hardware
     sensor enabled {{POWER_SWITCH}} @enabled
     jump halt equal enabled false
-
-    sensor enabled {{PAUSE_SWITCH}} @enabled
-    jump pause_once equal enabled true
 
     # update time
     # TODO: handle mtimeh/mcycleh overflow
@@ -295,7 +291,6 @@ end_pause:
 
 pause:
     control enabled {{SINGLE_STEP_SWITCH}} true
-pause_once:
     control enabled {{PAUSE_SWITCH}} true
 
 pause__loop:

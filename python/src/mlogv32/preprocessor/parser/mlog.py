@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from importlib import resources
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from lark import Lark, Token, Transformer
 
@@ -54,3 +54,13 @@ PARSER = Lark(
 def parse_mlog(text: str):
     tree = PARSER.parse(text)
     return MlogTransformer().transform(tree)
+
+
+def iter_labels(ast: list[Label | Statement]) -> Iterator[tuple[str, int]]:
+    line_num = 0
+    for line in ast:
+        match line:
+            case Label(name=name):
+                yield (name, line_num)
+            case Statement():
+                line_num += 1

@@ -184,14 +184,19 @@ init_incr:
     write 0 {{CSRS}} "{{ 'mscratch'|csr }}"
     write 0 {{CSRS}} "{{ 'mtval'|csr }}"
 
-    # finally, tick-align again to be safe, finish any last-second initialization, then start the workers
-
+    # get the worker count
+    # this is necessary for distributing parallel tasks, eg. the MLOGSYS.icache instruction
+    set prev_proc @this
+    set worker_id -1  # the first worker will have an id of -1 + 1 = 0
     wait 1e-5
+    read worker_count prev_proc "worker_id"
+    op add worker_count worker_count 1
 
-    # mtime/mcycle reference points
+    # set mtime/mcycle reference points
     set last_time_update @time
     set last_cycle_update @tick
 
+    # start the workers
     set prev_proc @this
     set state "running"
 
@@ -203,8 +208,6 @@ next_tick:
     read pc prev_proc "pc"
     read icache_ram prev_proc "icache_ram"
     read icache_var prev_proc "icache_var"
-    read decode_ram prev_proc "decode_ram"
-    read decode_var prev_proc "decode_var"
     read __etext prev_proc "__etext"
     read privilege_mode prev_proc "privilege_mode"
     read reservation_set prev_proc "reservation_set"
@@ -228,6 +231,7 @@ next_tick:
     jump halt equal state "halt"
     jump reset equal state "reset"
     jump pause equal state "pause"
+    jump decode equal state "decoding"
 end_pause:
 
     # poll hardware
@@ -302,7 +306,25 @@ pause__loop:
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause__loop equal enabled true
 
+    set prev_proc @this
+    set state "running"
     jump end_pause always
+
+decode:
+    set workers_done 0
+
+decode__loop:
+    wait 1e-5
+
+    sensor enabled {{POWER_SWITCH}} @enabled
+    jump halt equal enabled false
+
+    jump decode__loop lessThan workers_done worker_count
+
+    # signal that all workers are finished, then wait for the first decoding worker to increment pc
+    set prev_proc @this
+    set state "running"
+    jump next_tick always
 
 # given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # address -> variable
@@ -358,12 +380,11 @@ set _ {{UART_TX_START}}
 set _ {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}}
 set _ UART_FIFO_MODULO
 set _ RAM_END
+set _ worker_id
 set _ state
 set _ pc
 set _ icache_ram
 set _ icache_var
-set _ decode_ram
-set _ decode_var
 set _ __etext
 set _ privilege_mode
 set _ reservation_set

@@ -26,6 +26,9 @@
 reset:
     setrate 1000
 
+    # define this variable FIRST so that we can read other variables over it
+    set _rom null
+
     # load config
     read MEMORY_X {{CONFIG}} "MEMORY_X"
     read MEMORY_Y {{CONFIG}} "MEMORY_Y"
@@ -48,12 +51,14 @@ next_tick:
 
     # fetch current hart state
     read prev_proc {{CONTROLLER}} "prev_proc"
+
+    read worker_id prev_proc "worker_id"
+    op add worker_id worker_id 1
+
     read state prev_proc "state"
     read pc prev_proc "pc"
     read icache_ram prev_proc "icache_ram"
     read icache_var prev_proc "icache_var"
-    read decode_ram prev_proc "decode_ram"
-    read decode_var prev_proc "decode_var"
     read __etext prev_proc "__etext"
     read privilege_mode prev_proc "privilege_mode"
     read reservation_set prev_proc "reservation_set"
@@ -70,12 +75,14 @@ next_tick:
     read csr_mie prev_proc "csr_mie"
     read interrupts_pending prev_proc "interrupts_pending"
 
-    jump reset notEqual state "running"
-
-    # if we're executing instructions, tell the next proc to fetch the hart state from us
+    # tell the next proc to fetch the hart state from us
+    # we do this even if not running so that the worker id is accurate
     write @this {{CONTROLLER}} "prev_proc"
 
-    op sub accumulator @ipt 29
+    jump parallel_decode equal state "decoding"
+    jump reset notEqual state "running"
+
+    op sub accumulator @ipt 30
     jump main notEqual interrupts_pending true
 
 check_interrupts:
@@ -1952,7 +1959,7 @@ MLOGSYS:
     op add @counter @counter jump
 
     # init icache
-    op min __etext rs1 ROM_SIZE
+    set is_first_decoding_worker true
     jump MLOGSYS__init_icache always
     # printchar
     printchar rs1
@@ -1965,22 +1972,38 @@ MLOGSYS:
     jump end_instruction always
 
 MLOGSYS__init_icache:
-    # FIXME: hack
-    setrate 500000
     set state "decoding"
-
-    print "decoding @ {0} {1}"
-    format @thisx
-    format @thisy
-    printflush {{ERROR_OUTPUT}}
-
+    op min __etext rs1 ROM_SIZE
     op min __etext __etext ICACHE_SIZE
+    # continue into parallel_decode
 
-    # decode .text
-    set decode_address 0
+# we jump here from next_tick if state is "decoding"
+parallel_decode:
+    # wait one tick to allow the controller to calculate worker_count, in case this is the very first instruction executed
+    wait 1e-5
+
+    # https://stackoverflow.com/a/37414115
+
+    read worker_count {{CONTROLLER}} "worker_count"
+
+    op idiv n __etext 4
+
+    op idiv n/k n worker_count
+    op mod n%k n worker_count
+
+    op mul decode_address worker_id n/k
+    op min offset worker_id n%k
+    op add decode_address decode_address offset
+    op mul decode_address decode_address 4
+
+    op lessThan chunk_size worker_id n%k
+    op add chunk_size chunk_size n/k
+    op mul chunk_size chunk_size 4
+    op add end_decode_address decode_address chunk_size
+
     set decode_var null
 
-MLOGSYS__init_icache__loop:
+parallel_decode__loop:
     set address decode_address
     op add ret @counter 1
     jump load_rom_word_unchecked always
@@ -1989,20 +2012,33 @@ MLOGSYS__init_icache__loop:
     op add decode_ret @counter 1
     jump decode always
 
+    # bail out if the decode operation was cancelled
+    read state {{CONTROLLER}} "state"
+    jump next_tick notEqual state "decoding"
+
     op add decode_address decode_address 4
-    jump MLOGSYS__init_icache__loop lessThan decode_address __etext
+    jump parallel_decode__loop lessThan decode_address end_decode_address
 
-    # FIXME: hack 2
-    setrate 1000
+    # atomic increment
     wait 1e-5
+    read workers_done {{CONTROLLER}} "workers_done"
+    op add workers_done workers_done 1
+    write workers_done {{CONTROLLER}} "workers_done"
 
-    read controller_state {{CONTROLLER}} "state"
-    jump state->halt equal controller_state "halt"
+    # wait for the controller to signal that all workers are finished decoding
+parallel_decode__wait:
+    wait 1e-5
+    read state {{CONTROLLER}} "state"
+    jump parallel_decode__wait equal state "decoding"
 
-    read prev_proc {{CONTROLLER}} "prev_proc"
-    write "running" prev_proc "state"
-    printflush {{ERROR_OUTPUT}}
-    jump next_tick always
+    # if we're not the worker that initially encountered the decode instruction, go to the next tick
+    jump next_tick notEqual is_first_decoding_worker true
+
+    # otherwise, finish this instruction and then go to the next tick
+    set is_first_decoding_worker null
+    write @this {{CONTROLLER}} "prev_proc"
+    set accumulator 0
+    jump end_instruction always
 
 MLOGDRAW:
     # I-type: rs1, imm=funct12, rd_id

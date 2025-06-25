@@ -253,6 +253,8 @@ def build(
                 )
             )
 
+    schem.set_tag("name", "mlogv32")
+
     if output:
         schem.write_file(str(output))
     else:

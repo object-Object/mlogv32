@@ -1,27 +1,31 @@
+#% set LOOKUP_PROC_SIZE = 260
+#% set ROM_BYTE_OFFSET = 174
+#% set ROM_PROC_BYTES = 16384
+#% set RAM_PROC_VARS = 4096
+#% set ROM_START = '0x00000000'
+#% set RAM_START = '0x80000000'
+
+#% set CPU = 'processor17'
+#% set CSRS = 'processor18'
+#% set REGISTERS = 'cell1'
+#% set DISPLAY = 'display1'
+#% set UART0 = 'bank1'
+#% set UART1 = 'bank2'
+#% set UART2 = 'bank3'
+#% set UART3 = 'bank4'
+
 #% macro print(col, row)
    #{{'\n'}}    draw print {{ 8 + col * 7 }} {{ 508 - row * 13 }} topLeft
-    drawflush DISPLAY
+    drawflush {{DISPLAY}}
 #% endmacro
 
 #% macro rect(col, row, width, height)
    #{{'\n'}}    draw rect {{ 8 + col * 7 }} {{ 508 - row * 13 - 3 }} {{ width * 7 }} {{ height * -13 }}
 #% endmacro
-    
-    setrate 5000
-    set MARKER_START_ID 0
-
-    set LOOKUP_PROC_SIZE 260
-    set ROM_BYTE_OFFSET 174
-    set ROM_PROC_BYTES 16384
-    set RAM_PROC_VARS 4096
-
-    set ROM_START 0x00000000
-    set RAM_START 0x80000000
-
-    draw reset
-    draw color 255 255 255 255
 
 reset:
+    setrate 5000
+    set MARKER_START_ID 0
 
     op add i MARKER_START_ID 6
 reset_markers:
@@ -29,33 +33,9 @@ reset_markers:
     setmarker remove i
     jump reset_markers greaterThan i MARKER_START_ID
 
-reset_loop:
+    wait 1e-5
     sensor enabled switch1 @enabled
-    jump reset_loop equal enabled false
-
-    wait 0.00001
-
-    set CPU processor17
-
-    set REGISTERS cell1
-    set CSRS processor18
-
-    set DISPLAY display1
-
-    set UART0 bank1
-    set UART1 bank2
-    set UART2 bank3
-    set UART3 bank4
-
-    # wait until everything is properly initialized
-    jump reset strictEqual CPU null
-    jump reset strictEqual REGISTERS null
-    jump reset strictEqual CSRS null
-    jump reset strictEqual DISPLAY null
-    jump reset strictEqual UART0 null
-    jump reset strictEqual UART1 null
-    jump reset strictEqual UART2 null
-    jump reset strictEqual UART3 null
+    jump reset equal enabled false
 
     set i -1
 reset__find_lookup_start:
@@ -70,8 +50,10 @@ reset__find_lookup_start:
 
     control enabled switch1 true
 
+    draw reset
+    draw color 255 255 255 255
     draw clear 0 0 0
-    drawflush DISPLAY
+    drawflush {{DISPLAY}}
 
     print "x0  (zero)  =\n"
     print "x1  (ra)    =\n"
@@ -117,106 +99,105 @@ loop:
 
     set mark_memory_id MARKER_START_ID
 
-    read MEMORY_X CPU "MEMORY_X"
-    read MEMORY_Y CPU "MEMORY_Y"
-    read MEMORY_WIDTH CPU "MEMORY_WIDTH"
+    read MEMORY_X {{CPU}} "MEMORY_X"
+    read MEMORY_Y {{CPU}} "MEMORY_Y"
+    read MEMORY_WIDTH {{CPU}} "MEMORY_WIDTH"
 
-    read ROM_SIZE CPU "ROM_SIZE"
-    read ICACHE_SIZE CPU "ICACHE_SIZE"
+    read ROM_SIZE {{CPU}} "ROM_SIZE"
+    read ICACHE_SIZE {{CPU}} "ICACHE_SIZE"
 
-    read RAM_START_PROC CPU "RAM_START_PROC"
-    read RAM_END CPU "RAM_END"
+    read RAM_START_PROC {{CPU}} "RAM_START_PROC"
+    read RAM_END {{CPU}} "RAM_END"
 
     set ICACHE_START RAM_END
     op add ICACHE_END ICACHE_START ICACHE_SIZE
 
-    read x0_zero REGISTERS 0
-    read x1_ra REGISTERS 1
-    read x2_sp REGISTERS 2
-    read x3_gp REGISTERS 3
-    read x4_tp REGISTERS 4
-    read x5_t0 REGISTERS 5
-    read x6_t1 REGISTERS 6
-    read x7_t2 REGISTERS 7
-    read x8_s0_fp REGISTERS 8
-    read x9_s1 REGISTERS 9
-    read x10_a0 REGISTERS 10
-    read x11_a1 REGISTERS 11
-    read x12_a2 REGISTERS 12
-    read x13_a3 REGISTERS 13
-    read x14_a4 REGISTERS 14
-    read x15_a5 REGISTERS 15
-    read x16_a6 REGISTERS 16
-    read x17_a7 REGISTERS 17
-    read x18_s2 REGISTERS 18
-    read x19_s3 REGISTERS 19
-    read x20_s4 REGISTERS 20
-    read x21_s5 REGISTERS 21
-    read x22_s6 REGISTERS 22
-    read x23_s7 REGISTERS 23
-    read x24_s8 REGISTERS 24
-    read x25_s9 REGISTERS 25
-    read x26_s10 REGISTERS 26
-    read x27_s11 REGISTERS 27
-    read x28_t3 REGISTERS 28
-    read x29_t4 REGISTERS 29
-    read x30_t5 REGISTERS 30
-    read x31_t6 REGISTERS 31
+    read x0_zero {{REGISTERS}} 0
+    read x1_ra {{REGISTERS}} 1
+    read x2_sp {{REGISTERS}} 2
+    read x3_gp {{REGISTERS}} 3
+    read x4_tp {{REGISTERS}} 4
+    read x5_t0 {{REGISTERS}} 5
+    read x6_t1 {{REGISTERS}} 6
+    read x7_t2 {{REGISTERS}} 7
+    read x8_s0_fp {{REGISTERS}} 8
+    read x9_s1 {{REGISTERS}} 9
+    read x10_a0 {{REGISTERS}} 10
+    read x11_a1 {{REGISTERS}} 11
+    read x12_a2 {{REGISTERS}} 12
+    read x13_a3 {{REGISTERS}} 13
+    read x14_a4 {{REGISTERS}} 14
+    read x15_a5 {{REGISTERS}} 15
+    read x16_a6 {{REGISTERS}} 16
+    read x17_a7 {{REGISTERS}} 17
+    read x18_s2 {{REGISTERS}} 18
+    read x19_s3 {{REGISTERS}} 19
+    read x20_s4 {{REGISTERS}} 20
+    read x21_s5 {{REGISTERS}} 21
+    read x22_s6 {{REGISTERS}} 22
+    read x23_s7 {{REGISTERS}} 23
+    read x24_s8 {{REGISTERS}} 24
+    read x25_s9 {{REGISTERS}} 25
+    read x26_s10 {{REGISTERS}} 26
+    read x27_s11 {{REGISTERS}} 27
+    read x28_t3 {{REGISTERS}} 28
+    read x29_t4 {{REGISTERS}} 29
+    read x30_t5 {{REGISTERS}} 30
+    read x31_t6 {{REGISTERS}} 31
     
-    read mcycle CPU "csr_mcycle"
-    read mcycleh CPU "csr_mcycleh"
+    read mcycle {{CPU}} "csr_mcycle"
+    read mcycleh {{CPU}} "csr_mcycleh"
     op shl mcycleh mcycleh 32
     op add mcycle mcycle mcycleh
     
-    read mtime CPU "csr_mtime"
-    read mtimeh CPU "csr_mtimeh"
+    read mtime {{CPU}} "csr_mtime"
+    read mtimeh {{CPU}} "csr_mtimeh"
     op shl mtimeh mtimeh 32
     op add mtime mtime mtimeh
     
-    read mtimecmp CPU "csr_mtimecmp"
-    read mtimecmph CPU "csr_mtimecmph"
+    read mtimecmp {{CPU}} "csr_mtimecmp"
+    read mtimecmph {{CPU}} "csr_mtimecmph"
     op shl mtimecmph mtimecmph 32
     op add mtimecmp mtimecmp mtimecmph
     
-    read minstret CPU "csr_minstret"
-    read minstreth CPU "csr_minstreth"
+    read minstret {{CPU}} "csr_minstret"
+    read minstreth {{CPU}} "csr_minstreth"
     op shl minstreth minstreth 32
     op add minstret minstret minstreth
 
-    read mstatus CPU "csr_mstatus"
-    read mtvec CSRS "{{ 'mtvec'|csr }}"
-    read mip CPU "csr_mip"
-    read mie CPU "csr_mie"
-    read mscratch CSRS "{{ 'mscratch'|csr }}"
-    read mepc CSRS "{{ 'mepc'|csr }}"
-    read mcause CSRS "{{ 'mcause'|csr }}"
-    read mtval CSRS "{{ 'mtval'|csr }}"
+    read mstatus {{CPU}} "csr_mstatus"
+    read mtvec {{CSRS}} "{{ 'mtvec'|csr }}"
+    read mip {{CPU}} "csr_mip"
+    read mie {{CPU}} "csr_mie"
+    read mscratch {{CSRS}} "{{ 'mscratch'|csr }}"
+    read mepc {{CSRS}} "{{ 'mepc'|csr }}"
+    read mcause {{CSRS}} "{{ 'mcause'|csr }}"
+    read mtval {{CSRS}} "{{ 'mtval'|csr }}"
 
-    read ipt CPU "IPT"
-    read state CPU "state"
-    read pc CPU "pc"
-    read op_id CPU "op_id"
-    read rs1 CPU "rs1_id"
-    read rs2 CPU "rs2_id"
-    read rd CPU "rd_id"
-    read imm CPU "imm"
+    read state {{CPU}} "state"
+    read pc {{CPU}} "pc"
+    read op_id {{CPU}} "op_id"
+    read rs1 {{CPU}} "rs1_id"
+    read rs2 {{CPU}} "rs2_id"
+    read rd {{CPU}} "rd_id"
+    read imm {{CPU}} "imm"
 
     set address pc
     op add ret @counter 1
     jump load_word always
     set instruction result
 
-    read __etext CPU "__etext"
-    read reservation_set CPU "reservation_set"
-    read privilege_mode CPU "privilege_mode"
+    read __etext {{CPU}} "__etext"
+    read reservation_set {{CPU}} "reservation_set"
+    read privilege_mode {{CPU}} "privilege_mode"
 
-    read UART_FIFO_MODULO CPU "UART_FIFO_MODULO"
+    read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
 
     # markers
 
     print "ROM_START\n{0}"
-    set address ROM_START
+    set address {{ROM_START}}
     op add ret @counter 1
     jump mark_memory always
 
@@ -226,7 +207,7 @@ loop:
     jump mark_memory always
 
     print "RAM_START\n{0}"
-    set address RAM_START
+    set address {{RAM_START}}
     op add ret @counter 1
     jump mark_memory always
 
@@ -512,12 +493,8 @@ loop__no_mark_icache:
 
     #{{'\n'}} {{ print(47, 0) }}
 
-    print "@ipt            = {0}\n"
-    format ipt
-
     print "state           = {0}\n"
     format state
-    format ipt
 
     print "__etext         = {0}\n"
     set n __etext
@@ -538,22 +515,22 @@ loop__no_mark_icache:
     format "machine"
 done_privilege_mode:
 
-    set uart UART0
+    set uart {{UART0}}
     set uart_index 0
     op add ret @counter 1
     jump format_uart always
 
-    set uart UART1
+    set uart {{UART1}}
     set uart_index 1
     op add ret @counter 1
     jump format_uart always
 
-    set uart UART2
+    set uart {{UART2}}
     set uart_index 2
     op add ret @counter 1
     jump format_uart always
 
-    set uart UART3
+    set uart {{UART3}}
     set uart_index 3
     op add ret @counter 1
     jump format_uart always
@@ -628,8 +605,8 @@ format_bin__next:
     set @counter ret
 
 format_op_id:
-    op add n n 64
     jump format_null strictEqual n null
+    op add n n 64
     jump format_op_id__unknown lessThan n 0
     jump format_op_id__unknown greaterThan n 66
     op mul n n 2
@@ -814,15 +791,15 @@ format_mcause__interrupt:
 mark_memory:
     set mark_memory__ret ret
 
-    jump mark_memory__rom lessThan address RAM_START
+    jump mark_memory__rom lessThan address {{RAM_START}}
 
-    op sub _address address RAM_START
+    op sub _address address {{RAM_START}}
 
     # we store 4 bytes in each value
     op idiv _address _address 4
 
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_VARS
+    op idiv _ram_index _address {{RAM_PROC_VARS}}
     op add _ram_index _ram_index RAM_START_PROC
 
     op mod x _ram_index MEMORY_WIDTH
@@ -835,7 +812,7 @@ mark_memory:
 
 mark_memory__rom:
     # get rom proc data
-    op idiv _rom_index address ROM_PROC_BYTES
+    op idiv _rom_index address {{ROM_PROC_BYTES}}
 
     op mod x _rom_index MEMORY_WIDTH
     op add x x MEMORY_X
@@ -861,13 +838,13 @@ mark_memory__found:
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 access_ram:
-    op sub _address address RAM_START
+    op sub _address address {{RAM_START}}
 
     # we store 4 bytes in each value
     op idiv _address _address 4
 
     # get the ram proc containing this address
-    op idiv _ram_index _address RAM_PROC_VARS
+    op idiv _ram_index _address {{RAM_PROC_VARS}}
     op add _ram_index _ram_index RAM_START_PROC
 
     op mod _ram_x _ram_index MEMORY_WIDTH
@@ -879,17 +856,17 @@ access_ram:
     getblock building ram _ram_x _ram_y
 
     # get the variable within the ram proc containing this address
-    op mod _address _address RAM_PROC_VARS
+    op mod _address _address {{RAM_PROC_VARS}}
     set lookup_variable__ret access_ram__ret
 
 # given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
-    op idiv _lookup _address LOOKUP_PROC_SIZE
+    op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
     op add _lookup _lookup LOOKUP_START
     getlink _lookup _lookup
 
-    op mod variable _address LOOKUP_PROC_SIZE
+    op mod variable _address {{LOOKUP_PROC_SIZE}}
     lookup block variable variable
     sensor variable variable @name
     read variable _lookup variable
@@ -902,7 +879,7 @@ access_ram:
 load_word:
     jump load_rom_word_unchecked lessThan address ROM_SIZE
 
-    jump inaccessible_load lessThan address RAM_START
+    jump inaccessible_load lessThan address {{RAM_START}}
     jump inaccessible_load greaterThanEq address RAM_END
 
     # locate and read value from ram
@@ -946,7 +923,7 @@ load_rom_word_unchecked:
     op and _address address 0xfffffffc
 
     # get rom proc data
-    op idiv _rom_index _address ROM_PROC_BYTES
+    op idiv _rom_index _address {{ROM_PROC_BYTES}}
 
     op mod _rom_x _rom_index MEMORY_WIDTH
     op add _rom_x _rom_x MEMORY_X
@@ -960,11 +937,11 @@ load_rom_word_unchecked:
     # read word and convert to big endian
     set result 0
 
-    op mod _str_index _address ROM_PROC_BYTES
+    op mod _str_index _address {{ROM_PROC_BYTES}}
     set _shift 0 # leftmost byte in memory becomes rightmost byte in word
 load_rom_word__loop:
     read _byte _rom _str_index
-    op sub _byte _byte ROM_BYTE_OFFSET
+    op sub _byte _byte {{ROM_BYTE_OFFSET}}
     op max _byte _byte 0 # if we're reading out of bounds, default to 0
     op shl _byte _byte _shift
     op add result result _byte
@@ -979,3 +956,22 @@ load_rom_word__loop:
 inaccessible_load:
     set result null
     set @counter ret
+
+#% if false
+# {% raw %}
+set {{LOOKUP_PROC_SIZE}} null
+set {{ROM_BYTE_OFFSET}} null
+set {{ROM_PROC_BYTES}} null
+set {{RAM_PROC_VARS}} null
+set {{ROM_START}} null
+set {{RAM_START}} null
+set {{CPU}} null
+set {{CSRS}} null
+set {{REGISTERS}} null
+set {{DISPLAY}} null
+set {{UART0}} null
+set {{UART1}} null
+set {{UART2}} null
+set {{UART3}} null
+# {% endraw %}
+#% endif

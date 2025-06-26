@@ -123,37 +123,34 @@ def build(
         for y in lenrange(0, 16):
             schem.add_block(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
 
-    display_link = ProcessorLink(0, 0, "display1")
+    display_link = ProcessorLink(0, 0, "")
 
     schem.add_schem(lookups_schem, 0, 16)
-    lookup_links = [
-        ProcessorLink(x=i % 4, y=16 + i // 4, name=f"processor{i + 1}")
-        for i in range(16)
-    ]
+    lookup_links = [ProcessorLink(x=i % 4, y=16 + i // 4, name="") for i in range(16)]
 
     add_label(schem, 4, 19, right="UART0, UART2", down="LABELS")
     schem.add_block(simple_block(Content.WORLD_CELL, 4, 18))
     schem.add_block(simple_block(Content.WORLD_CELL, 4, 17))
     add_label(schem, 4, 16, up="COSTS", right="UART1, UART3")
 
-    labels_link = ProcessorLink(4, 18, "cell1")
-    costs_link = ProcessorLink(4, 17, "cell2")
+    labels_link = ProcessorLink(4, 18, "")
+    costs_link = ProcessorLink(4, 17, "")
 
     uart_links = list[ProcessorLink]()
     for x in lenrange(5, 4, 2):
         for y in lenrange(18, -4, -2):
             schem.add_block(simple_block(Content.MEMORY_BANK, x, y))
-            uart_links.append(ProcessorLink(x, y, f"bank{len(uart_links) + 1}"))
+            uart_links.append(ProcessorLink(x, y, ""))
 
     schem.add_block(simple_block(Content.MEMORY_CELL, 9, 19))
     schem.add_schem(ram_schem, 9, 18)
     schem.add_schem(ram_schem, 9, 17)
     schem.add_block(Block(Content.MICRO_PROCESSOR, 9, 16, ProcessorConfig("", []), 0))
 
-    registers_link = ProcessorLink(9, 19, "cell3")
-    csrs_link = ProcessorLink(9, 18, "processor17")
-    incr_link = ProcessorLink(9, 17, "processor18")
-    config_link = ProcessorLink(9, 16, "processor19")
+    registers_link = ProcessorLink(9, 19, "")
+    csrs_link = ProcessorLink(9, 18, "")
+    incr_link = ProcessorLink(9, 17, "")
+    config_link = ProcessorLink(9, 16, "")
 
     add_with_label(
         schem,
@@ -180,10 +177,10 @@ def build(
         right="SINGLE_STEP_SWITCH",
     )
 
-    error_output_link = ProcessorLink(11, 19, "message1")
-    power_switch_link = ProcessorLink(11, 18, "switch2")
-    pause_switch_link = ProcessorLink(11, 17, "switch3")
-    single_step_switch_link = ProcessorLink(11, 16, "switch1")
+    error_output_link = ProcessorLink(11, 19, "")
+    power_switch_link = ProcessorLink(11, 18, "")
+    pause_switch_link = ProcessorLink(11, 17, "")
+    single_step_switch_link = ProcessorLink(11, 16, "")
 
     # hack
     if cpu_only:
@@ -199,15 +196,16 @@ def build(
                 links=relative_links(
                     *lookup_links,
                     *uart_links,
+                    registers_link,
                     labels_link,
                     costs_link,
                     csrs_link,
                     incr_link,
                     config_link,
                     error_output_link,
-                    single_step_switch_link,
                     power_switch_link,
                     pause_switch_link,
+                    single_step_switch_link,
                     display_link,
                     x=16,
                     y=0,
@@ -217,7 +215,7 @@ def build(
         )
     )
 
-    controller_link = ProcessorLink(16, 0, "processor20")
+    controller_link = ProcessorLink(16, 0, "")
 
     for x in lenrange(16, width):
         for y in lenrange(0, height):
@@ -235,9 +233,9 @@ def build(
                         links=relative_links(
                             *lookup_links,
                             *uart_links,
+                            registers_link,
                             labels_link,
                             costs_link,
-                            registers_link,
                             csrs_link,
                             incr_link,
                             config_link,
@@ -252,8 +250,6 @@ def build(
                     rotation=0,
                 )
             )
-
-    schem.set_tag("name", "mlogv32")
 
     if output:
         schem.write_file(str(output))

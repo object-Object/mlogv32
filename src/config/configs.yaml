@@ -7,8 +7,8 @@ defaults:
 
 configs:
   riscv-arch-test:
-    MEMORY_X_OFFSET: -11
-    MEMORY_Y_OFFSET: -26
+    MEMORY_X_OFFSET: -9
+    MEMORY_Y_OFFSET: -40
     MEMORY_WIDTH: 32
     ROM_ROWS: 9
     RAM_ROWS: 9

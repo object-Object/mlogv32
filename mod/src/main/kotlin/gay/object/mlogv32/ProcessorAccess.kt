@@ -40,9 +40,13 @@ class ProcessorAccess(
     uartFifoModulo: Int,
     uart0: MemoryBuild,
     uart1: MemoryBuild,
+    uart2: MemoryBuild,
+    uart3: MemoryBuild,
 ) {
     val uart0 = UartAccess(uart0, uartFifoModulo - 1)
     val uart1 = UartAccess(uart1, uartFifoModulo - 1)
+    val uart2 = UartAccess(uart2, uartFifoModulo - 1)
+    val uart3 = UartAccess(uart3, uartFifoModulo - 1)
 
     val romEnd = ROM_START + romSize.toUInt()
     val ramEnd = RAM_START + ramSize.toUInt()
@@ -261,6 +265,8 @@ class ProcessorAccess(
                 uartFifoModulo = positiveIntVar(build, "UART_FIFO_MODULO") ?: return null,
                 uart0 = buildVar<MemoryBuild>(build, "bank1") ?: return null,
                 uart1 = buildVar<MemoryBuild>(build, "bank2") ?: return null,
+                uart2 = buildVar<MemoryBuild>(build, "bank3") ?: return null,
+                uart3 = buildVar<MemoryBuild>(build, "bank4") ?: return null,
             )
         }
 
@@ -383,6 +389,8 @@ data class WaitRequest(
 enum class UartDevice {
     uart0,
     uart1,
+    uart2,
+    uart3,
 }
 
 @Serializable
@@ -396,6 +404,8 @@ data class SerialRequest(
         val uart = when (device) {
             UartDevice.uart0 -> processor.uart0
             UartDevice.uart1 -> processor.uart1
+            UartDevice.uart2 -> processor.uart2
+            UartDevice.uart3 -> processor.uart3
         }
         while (true) {
             if (rx.isClosedForRead || tx.isClosedForWrite) {
@@ -476,9 +486,9 @@ data object StatusRequest : Request() {
             mepc = processor.getCSR(0x341),
             mcause = processor.getCSR(0x342),
             mtval = processor.getCSR(0x343),
-            mstatus = processor.getCSR(0x300),
-            mip = processor.getCSR(0x344),
-            mie = processor.getCSR(0x304),
+            mstatus = processor.build.executor.optionalVar("csr_mstatus")?.numu() ?: 0u,
+            mip = processor.build.executor.optionalVar("csr_mip")?.numu() ?: 0u,
+            mie = processor.build.executor.optionalVar("csr_mie")?.numu() ?: 0u,
         )
     }
 }

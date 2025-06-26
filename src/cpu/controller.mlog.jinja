@@ -1,8 +1,9 @@
 #% extends 'constants.jinja'
 #% block contents
 
-#% set LABELS = 'cell1'
-#% set COSTS = 'cell2'
+#% set REGISTERS = 'cell1'
+#% set LABELS = 'cell2'
+#% set COSTS = 'cell3'
 
 #% set CSRS = 'processor17'
 #% set INCR = 'processor18'
@@ -10,9 +11,9 @@
 
 #% set ERROR_OUTPUT = 'message1'
 
-#% set SINGLE_STEP_SWITCH = 'switch1'
-#% set POWER_SWITCH = 'switch2'
-#% set PAUSE_SWITCH = 'switch3'
+#% set POWER_SWITCH = 'switch1'
+#% set PAUSE_SWITCH = 'switch2'
+#% set SINGLE_STEP_SWITCH = 'switch3'
 
 #% set DISPLAY = 'display1'
 
@@ -112,15 +113,6 @@ init_incr:
     draw reset
     draw clear 0 0 0
     drawflush {{DISPLAY}}
-
-    # UARTs
-#% for i in range(1, 4+1)
-    # UART{{ loop.index0 }}
-    write 0 bank{{i}} {{UART_RX_READ}}
-    write 0 bank{{i}} {{UART_RX_WRITE}}
-    write 0 bank{{i}} {{UART_TX_READ}}
-    write 0 bank{{i}} {{UART_TX_WRITE}}
-#% endfor
 
     # icache
     set __etext 0
@@ -223,6 +215,14 @@ next_tick:
     read csr_mip prev_proc "csr_mip"
     read csr_mie prev_proc "csr_mie"
     read interrupts_pending prev_proc "interrupts_pending"
+
+    # for debug output
+    read instruction prev_proc "instruction"
+    read op_id prev_proc "op_id"
+    read rs1 prev_proc "rs1"
+    read rs2 prev_proc "rs2"
+    read rd prev_proc "rd"
+    read imm prev_proc "imm"
 
     # tell the next proc to fetch the hart state from us
     set prev_proc @this
@@ -345,19 +345,11 @@ lookup_variable:
 # {% raw %}
 # common preprocessor constants
 set {{LOOKUP_PROC_SIZE}} null
-set {{ROM_BYTE_OFFSET}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{RAM_START}} null
-set {{MMIO_START}} null
 set {{SYSCON}} null
-set {{UART_RX_READ}} null
-set {{UART_RX_WRITE}} null
-set {{UART_TX_START}} null
-set {{UART_TX_READ}} null
-set {{UART_TX_WRITE}} null
-set {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}} null
 # local preprocessor constants
 set {{LABELS}} null
 set {{COSTS}} null
@@ -372,12 +364,7 @@ set {{DISPLAY}} null
 set {{labels[instruction.label]}} null
 set {{instruction.cost}} null
 set {{loop.index0}} null
-set bank{{i}} null
 # unused variables
-set _ {{ROM_BYTE_OFFSET}}
-set _ {{MMIO_START}}
-set _ {{UART_TX_START}}
-set _ {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}}
 set _ UART_FIFO_MODULO
 set _ RAM_END
 set _ worker_id
@@ -400,4 +387,10 @@ set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
 set _ interrupts_pending
+set _ instruction
+set _ op_id
+set _ rs1
+set _ rs2
+set _ rd
+set _ imm
 # {% endraw %}

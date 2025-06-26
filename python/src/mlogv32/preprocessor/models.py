@@ -3,10 +3,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import yaml
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 _relative_path_root_var = ContextVar[Path]("_relative_path_root_var")
 
@@ -41,6 +41,13 @@ class BuildConfig(BaseModel):
     class Instruction(BaseModel):
         label: str
         cost: int = Field(ge=0)
+
+        @field_validator("cost", mode="before")
+        @classmethod
+        def _resolve_cost_math(cls, value: Any):
+            if isinstance(value, str):
+                return eval(value)  # CURSED
+            return value
 
     @classmethod
     def load(cls, path: str | Path):

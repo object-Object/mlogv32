@@ -660,22 +660,43 @@ ee_vsprintf(char *buf, const char *fmt, va_list args)
     return str - buf;
 }
 
-static unsigned int print_x = 7;
-static unsigned int print_y = 508;
+typedef struct {
+    unsigned char rhr_thr[4];
+    unsigned char ier[4];
+    unsigned char isr_fcr[4];
+    unsigned char lcr[4];
+    unsigned char mcr[4];
+    unsigned char lsr[4];
+    unsigned char msr[4];
+    unsigned char spr[4];
+} uart_mmio_t;
+
+#define UART0_BASE ((volatile uart_mmio_t*)(0xf0000010))
+
+#define UART_FIFO_CAPACITY 253
+
+static unsigned int uart0_fifo_size = 0;
 
 void
 uart_send_char(char c)
 {
-    MLOGSYS_printchar(c);
+    volatile uart_mmio_t* uart0 = UART0_BASE;
+
+    if (uart0_fifo_size >= UART_FIFO_CAPACITY) {
+        while ((uart0->lsr[0] & 0b1100000) != 0b1100000) {}
+        uart0_fifo_size = 0;
+    }
+
+    uart0->rhr_thr[0] = c;
+    uart0_fifo_size += 1;
 }
 
 void init_printf() {
-    print_x = 7;
-    print_y = 508;
-    MLOGDRAW_reset();
-    MLOGDRAW_clear(0, 0, 0);
-    MLOGDRAW_color(255, 255, 255, 255);
-    MLOGSYS_drawflush();
+    volatile uart_mmio_t* uart0 = UART0_BASE;
+    uart0->isr_fcr[0] = 0b00000111;
+    while (uart0->lsr[0] & 0b1) {
+        uart0->isr_fcr[0] = 0b00000111;
+    }
 }
 
 int
@@ -685,33 +706,16 @@ ee_printf(const char *fmt, ...)
     va_list args;
     int     n = 0;
 
-    int old_print_x = print_x;
-    int old_print_y = print_y;
-
     va_start(args, fmt);
     ee_vsprintf(buf, fmt, args);
     va_end(args);
     p = buf;
     while (*p)
     {
-        if (*p == '\n') {
-            print_x = 7;
-            print_y -= 13;
-        } else {
-            print_x += 7;
-            if (print_x > 504) {
-                uart_send_char('\n');
-                print_x = 7;
-                print_y -= 13;
-            }
-        }
         uart_send_char(*p);
         n++;
         p++;
     }
-
-    MLOGDRAW_print(old_print_x, old_print_y);
-    MLOGSYS_drawflush();
 
     return n;
 }

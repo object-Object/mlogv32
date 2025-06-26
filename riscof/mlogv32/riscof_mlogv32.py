@@ -123,6 +123,8 @@ class mlogv32(pluginTemplate):
             # we will iterate over each entry in the testlist. Each entry node will be refered to by the
             # variable testname.
             for testname in testlist:
+                logger.info(f"Building test: {testname}")
+
                 # for each testname we get all its fields (as described by the testlist format)
                 testentry = testlist[testname]
 
@@ -219,7 +221,7 @@ class mlogv32(pluginTemplate):
                     f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}"
                 )
 
-                logger.info(f"Starting test: {testname}")
+                logger.info(f"Running test: {testname}")
 
                 processor.stop()
                 processor.flash(binary_file_host)

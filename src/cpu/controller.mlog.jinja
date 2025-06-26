@@ -99,9 +99,10 @@ init_incr:
     # initialize label/cost tables
 
 #% for instruction in instructions
+    #% set cost = base_instruction_cost + instruction.cost
     # {{ instruction.label }}
     write {{labels[instruction.label]}} {{LABELS}} {{loop.index0}}
-    write {{instruction.cost}} {{COSTS}} {{loop.index0}}
+    write {{cost}} {{COSTS}} {{loop.index0}}
 #% endfor
 
     # initialize peripherals
@@ -362,7 +363,7 @@ set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{DISPLAY}} null
 set {{labels[instruction.label]}} null
-set {{instruction.cost}} null
+set {{cost}} null
 set {{loop.index0}} null
 # unused variables
 set _ UART_FIFO_MODULO

@@ -5,8 +5,10 @@
 #%# constants
 
 #%# the slowest instruction seems to be AMOMIN.W in icache-covered memory
-#%# safety factor * (check_interrupts + main + 2 * (decode + decode_BRANCH + end_decode) + AMOMIN.W + store_ram_word_unchecked)
-#% set MAX_INSTRUCTION_ACCUMULATOR_USAGE = (1.05 * (8 + 46 + 2 * (23 + 16 + 33) + 59 + 21))|round(method="ceil")|int
+#% set slowest_op = (instructions|selectattr("label", "equalto", "AMOMIN.W")|first).cost
+
+#%# ... + check_interrupts + 2*(decode + decode_BRANCH + end_decode) + store_ram_word_unchecked
+#% set MAX_INSTRUCTION_ACCUMULATOR_USAGE = (base_instruction_cost + slowest_op + 8 + 2*(23 + 16 + 33) + 23)|round(method="ceil")|int
 
 #%# linked buildings
 #%# IMPORTANT: the buildings must be linked in the order shown here
@@ -184,25 +186,25 @@ main__read_icache:
 
     read delta {{COSTS}} index
     op sub accumulator accumulator delta
-    op sub accumulator accumulator 46 # worst case across both paths
 
     read @counter {{LABELS}} index
 
 # this is a normal length for a label
+# cost: 3
 end_instruction_with_rd_and_interrupts:
-    op sub accumulator accumulator 2
     set interrupts_pending true
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
 # writes value rd to register rd_id if rd_id is not x0
+# cost: 2
 end_instruction_with_rd:
-    op sub accumulator accumulator 3
     jump end_instruction equal rd_id 0
     write rd {{REGISTERS}} rd_id
     # continue into end_instruction
 
 # all instructions jump here after completing successfully
+# cost: 9 (included in base cost)
 end_instruction:
     # increment instret
     op add csr_minstret csr_minstret 1
@@ -222,7 +224,6 @@ end_instruction_trap:
     jump state->pause equal pc breakpoint_address
     jump state->pause equal single_step_enabled true
 
-    op sub accumulator accumulator 10
     jump ipt_overrun notEqual current_tick @tick
     jump next_tick lessThanEq accumulator {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}}
     jump main notEqual interrupts_pending true
@@ -1080,16 +1081,16 @@ BGEU:
 
 # cost: dynamic
 conditional_branch:
-    op sub accumulator accumulator 11
+    op sub accumulator accumulator 12 # -1 because we know we won't be writing to rd
     set rd_id 0 # prevent end_instruction_with_rd from writing to a register
     # continue into unconditional_pc_relative_jump
 
-# cost: 9
+# cost: 9 + 2
 unconditional_pc_relative_jump:
     op add next_pc pc imm
     # continue into unconditional_jump
 
-# cost: 8
+# cost: 8 + 2
 unconditional_jump:
     op and next_pc next_pc 0xffffffff
 
@@ -1241,7 +1242,7 @@ store_value:
 
 # cost: dynamic
 store_ram_word_unchecked:
-    op sub accumulator accumulator 21
+    op sub accumulator accumulator 23
 
     # otherwise, store the new value
     op add ret @counter 1
@@ -1263,7 +1264,7 @@ store_ram_word_unchecked:
     # atomics are not supported for MMIO, so we don't need to write to rd here
     # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
 store_mmio_word_unchecked:
-    op sub accumulator accumulator 10
+    op sub accumulator accumulator 13
 
     op sub _offset decode_address {{MMIO_START}}
 
@@ -1295,7 +1296,7 @@ store_mmio_word_unchecked:
     # Transmitter Holding Register
     # append value to queue
     # NOTE: we don't check for overflow here, see readme
-    op sub accumulator accumulator 6 # -2
+    op sub accumulator accumulator 3 # -5
 
     op add _index _tx_write {{UART_TX_START}}
     op and value value 0xff
@@ -1309,7 +1310,7 @@ store_mmio_word_unchecked:
     jump end_instruction always
 
 store_mmio_word_unchecked__uart_fcr:
-    op sub accumulator accumulator 6 # -2
+    op sub accumulator accumulator 3 # -5
 
     # FIFO Control Register
 
@@ -1754,7 +1755,7 @@ EBREAK:
 MRET:
     jump ILLEGAL_OP lessThan privilege_mode 0b11
 
-    op sub accumulator accumulator 11
+    op sub accumulator accumulator 14
     # ^ static cost ends here
 
     # set mstatus.MIE to mstatus.MPIE, set mstatus.MPIE to 1, set privilege_mode to mstatus.MPP, and set mstatus.MPP to U

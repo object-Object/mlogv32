@@ -93,7 +93,12 @@ def build(
     config = BuildConfig.load(yaml_path)
 
     worker_output = get_template_output_path(config.templates.worker)
-    worker_code = render_template(config.templates.worker, worker_output)
+    worker_code = render_template(
+        config.templates.worker,
+        worker_output,
+        instructions=config.instructions,
+        **config.inputs,
+    )
 
     labels = dict(iter_labels(parse_mlog(worker_code)))
 
@@ -103,6 +108,7 @@ def build(
         controller_output,
         instructions=config.instructions,
         labels=labels,
+        **config.inputs,
     )
 
     lookups_schem = cast(

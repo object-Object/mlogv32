@@ -6,15 +6,19 @@ schematics:
   lookups: ../../schematics/lookup_procs.msch
   ram: ../../schematics/ram_proc.msch
 
+inputs:
+  # 46 (main) + 9 (end)
+  base_instruction_cost: 55
+
 instructions:
   - label: BEQ
     cost: 2
   - label: BNE
     cost: 2
   - label: JAL
-    cost: 1 + 9
+    cost: 1 + 9 + 2
   - label: JALR
-    cost: 3 + 8
+    cost: 3 + 8 + 2
   - label: BLT
     cost: 2 + 5 + 2
   - label: BGE
@@ -24,17 +28,17 @@ instructions:
   - label: BGEU
     cost: 1
   - label: LB
-    cost: 3 + 29
+    cost: 3 + 29 + 2
   - label: LH
-    cost: 3 + 29
+    cost: 3 + 29 + 2
   - label: LW
-    cost: 3 + 29
+    cost: 3 + 29 + 2
   - label: LUI
-    cost: 2
+    cost: 2 + 2
   - label: LBU
-    cost: 3 + 29
+    cost: 3 + 29 + 2
   - label: LHU
-    cost: 2 + 29
+    cost: 2 + 29 + 2
   - label: SB
     cost: 2 + 28
   - label: SH
@@ -46,7 +50,7 @@ instructions:
   - label: AMOSWAP.W
     cost: 1 + 52
   - label: LR.W
-    cost: 8 + 8 + 32
+    cost: 8 + 8 + 32 + 2
   - label: SC.W
     cost: 7 + 8
   - label: AMOXOR.W
@@ -64,77 +68,77 @@ instructions:
   - label: AMOMAXU.W
     cost: 2 + 52
   - label: ADDI
-    cost: 3
+    cost: 3 + 2
   - label: SUB
-    cost: 2 + 1 + 3
+    cost: 2 + 1 + 3 + 2
   - label: SLTI
-    cost: 1 + 2 + 5 + 1 + 2
+    cost: 1 + 2 + 5 + 1 + 2 + 2
   - label: SLTIU
-    cost: 2
+    cost: 2 + 2
   - label: XORI
-    cost: 2
+    cost: 2 + 2
   - label: SRA
-    cost: 1 + 5 + 6
+    cost: 1 + 5 + 6 + 2
   - label: ORI
-    cost: 2
+    cost: 2 + 2
   - label: ANDI
-    cost: 2
+    cost: 2 + 2
   - label: ADD
-    cost: 1 + 3
+    cost: 1 + 3 + 2
   - label: SLL
-    cost: 1 + 5
+    cost: 1 + 5 + 2
   - label: SLT
-    cost: 2 + 5 + 1 + 2
+    cost: 2 + 5 + 1 + 2 + 2
   - label: SLTU
-    cost: 1 + 2
+    cost: 1 + 2 + 2
   - label: XOR
-    cost: 1 + 2
+    cost: 1 + 2 + 2
   - label: SRL
-    cost: 1 + 2
+    cost: 1 + 2 + 2
   - label: OR
-    cost: 1 + 2
+    cost: 1 + 2 + 2
   - label: AND
-    cost: 1 + 2
+    cost: 1 + 2 + 2
   - label: MUL
-    cost: 7 + 9
+    cost: 7 + 9 + 2
   - label: MULH
-    cost: 2 + 13
+    cost: 2 + 13 + 2
   - label: MULHSU
-    cost: 3 + 13
+    cost: 3 + 13 + 2
   - label: MULHU
-    cost: 3 + 13
+    cost: 3 + 13 + 2
   - label: DIV
-    cost: 2 + 5 + 5
+    cost: 2 + 5 + 5 + 2
   - label: DIVU
-    cost: 5
+    cost: 5 + 2
   - label: REM
-    cost: 2 + 5 + 5
+    cost: 2 + 5 + 5 + 2
   - label: REMU
-    cost: 5
+    cost: 5 + 2
   - label: PRIV
     cost: 5
   - label: CSRRW
-    cost: 2 + 60 # probably an overestimate, but the CSR code is very complicated
+    cost: 2 + 60 + 3 # probably an overestimate, but the CSR code is very complicated
   - label: CSRRS
-    cost: 2 + 60
+    cost: 2 + 60 + 3
   - label: CSRRC
-    cost: 1 + 60
+    cost: 1 + 60 + 3
   - label: AUIPC
     cost: 3
   - label: CSRRWI
-    cost: 1 + 2 + 60
+    cost: 1 + 2 + 60 + 3
   - label: CSRRSI
-    cost: 1 + 2 + 60
+    cost: 1 + 2 + 60 + 3
   - label: CSRRCI
-    cost: 1 + 1 + 60
+    cost: 1 + 1 + 60 + 3
   - label: FENCE
     cost: 1
   - label: SLLI
-    cost: 5
+    cost: 5 + 2
   - label: SRLI
-    cost: 2
+    cost: 2 + 2
   - label: SRAI
-    cost: 5 + 6
+    cost: 5 + 6 + 2
   - label: ILLEGAL_OP
     cost: 0
   - label: MLOGSYS

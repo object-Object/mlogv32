@@ -28,6 +28,7 @@ type RelativePath = Annotated[Path, AfterValidator(_RelativePath_after)]
 class BuildConfig(BaseModel):
     templates: Templates
     schematics: Schematics
+    inputs: dict[str, Any]
     instructions: list[Instruction]
 
     class Templates(BaseModel):

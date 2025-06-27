@@ -280,6 +280,7 @@ end_pause:
     set last_cycle_update @tick
 
     # check if interrupts should be pending
+    # FIXME: we probably need to check this in the workers
     
     # timer interrupt
     op greaterThan high_gt csr_mtimeh csr_mtimecmph

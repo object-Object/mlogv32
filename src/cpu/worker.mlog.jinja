@@ -14,8 +14,14 @@
 #%# decode + decode_BRANCH + end_decode
 #% set branch_decode = 23 + 16 + 33
 
-#%# ... + check_interrupts + load_ram_word_unchecked + store_ram_word_unchecked + instret overflow + a bit extra to be safe
-#% set MAX_INSTRUCTION_COST = (base_instruction_cost + amo_decode + amo_cost + branch_decode + 8 + 32 + 23 + 3 + 10)|round(method="ceil")|int
+#%# ... + store_ram_word_unchecked + instret overflow + a bit extra to be safe
+#% set base_max_cost = base_instruction_cost + amo_cost + branch_decode + 23 + 3 + 10
+
+#%# ... + check_interrupts + access_icache
+#% set MAX_FAST_INSTRUCTION_COST = base_max_cost + 8 + 25
+
+#%# ... + load_ram_word_unchecked
+#% set MAX_SLOW_INSTRUCTION_COST = base_max_cost + amo_decode + 32
 
 #%# linked buildings
 #%# IMPORTANT: the buildings must be linked in the order shown here
@@ -128,9 +134,10 @@ check_interrupts__machine:
     jump trap_without_mtval notEqual mie.mtie 0
 
 # cost:
-#  base: 17
-#  fast path: 42 (base + 9 + 16)
-#  slow path: 35 (base + 13 + 5) + dynamic
+#   base:          14
+#   read_icache:   18 (base + 4)
+#   access_icache: 43 (base + 13 + 16)
+#   slow_fetch:    36 (base + 17 + 5) + dynamic
 main:
     # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
     op add next_pc pc 4
@@ -145,9 +152,11 @@ main:
     jump main__access_icache lessThan pc ICACHE_SIZE
 
 main__slow_instruction_fetch:
+    jump next_tick lessThanEq accumulator {{MAX_SLOW_INSTRUCTION_COST}}
+
     # update accumulator in case we take a trap while loading
-    # 13 (instructions between main and the below comment) + 5 (load_word static cost)
-    op sub accumulator accumulator 18
+    # 14 (instructions between main and the below comment) + 5 (load_word static cost)
+    op sub accumulator accumulator 19
 
     jump default_mtvec_handler equal pc {{SYSCON}}
 
@@ -162,20 +171,23 @@ main__slow_instruction_fetch:
 
     # a trap cannot occur between now and the lookup table fetch
     # so modify accumulator to take base_instruction_cost into account
-    # base_instruction_cost assumes we take the fast path
-    # at this point, we've double-counted 5 instructions on the base path
-    # also, the static cost of the slow path is 7 instructions fewer than the fast path
-    # so we can safely add 12 instructions back into the accumulator
-    op add accumulator accumulator 12
+    # base_instruction_cost assumes we take read_icache
+    # the static cost of slow_fetch is 18 instructions slower than read_icache
+    # however, we subtracted 19 above
+    # so we can safely add 1 instruction back into the accumulator
+    op add accumulator accumulator 1
 
     set instruction result
     set decode_address null
     
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
-    op add decode_ret @counter 10
+    op add decode_ret @counter 11
     jump decode always
 
 main__access_icache:
+    # base_instruction_cost assumes read_icache
+    # access_icache is 25 instructions slower than read_icache
+    op sub accumulator accumulator 25
     # the icache is stored in RAM cells immediately after the end of RAM with the same density as regular memory
     # icache address = RAM_END + pc = RAM_START + RAM_SIZE + pc
     # _address @ access_ram_raw = address - RAM_START
@@ -254,7 +266,7 @@ end_instruction_trap:
     jump state->pause equal pc breakpoint_address
     jump state->pause equal single_step_enabled true
 
-    jump next_tick lessThanEq accumulator {{MAX_INSTRUCTION_COST}}
+    jump next_tick lessThanEq accumulator {{MAX_FAST_INSTRUCTION_COST}}
     jump main notEqual interrupts_pending true
     jump check_interrupts always
 
@@ -375,6 +387,7 @@ unsigned_to_signed__done_2:
 access_ram:
     op sub _address address {{RAM_START}}
 
+# cost: 16
 access_ram_raw:
     # we store 4 bytes in each value
     op idiv _address _address 4
@@ -2296,7 +2309,8 @@ set {{UART_RX_WRITE}} null
 set {{UART_TX_START}} null
 set {{UART_TX_READ}} null
 set {{UART_TX_WRITE}} null
-set {{MAX_INSTRUCTION_COST}} null
+set {{MAX_FAST_INSTRUCTION_COST}} null
+set {{MAX_SLOW_INSTRUCTION_COST}} null
 # local preprocessor constants
 set {{UART_START_LINK}} null
 set {{LABELS}} null

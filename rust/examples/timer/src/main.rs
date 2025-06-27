@@ -5,7 +5,7 @@ use core::{cell::RefCell, hint};
 
 use critical_section::Mutex;
 use itoa::Buffer;
-use mlogv32::io::{print_flush, print_str};
+use mlogv32::io::print_str;
 use riscv::{
     interrupt::{self, Interrupt},
     register::mie,
@@ -42,7 +42,6 @@ fn machine_timer() {
 
         let mut buf = Buffer::new();
         print_str(buf.format(mtime));
-        print_flush();
     });
 }
 

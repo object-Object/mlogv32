@@ -2101,26 +2101,11 @@ modify_csr__minstreth:
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id
-    jump ILLEGAL_OP greaterThan imm 3
-    
-    # TODO: we could save an instruction if we used B-type instead of I-type
-    op mul jump imm 2
-    op add @counter @counter jump
+    jump ILLEGAL_OP greaterThan imm 0
 
     # init icache
     set is_first_decoding_worker true
-    jump MLOGSYS__init_icache always
-    # printchar
-    printchar rs1
-    jump end_instruction always
-    # printflush
-    printflush {{ERROR_OUTPUT}}
-    jump end_instruction always
-    # drawflush
-    drawflush {{DISPLAY}}
-    jump end_instruction always
 
-MLOGSYS__init_icache:
     set state "decoding"
     op min __etext rs1 ROM_SIZE
     op min __etext __etext ICACHE_SIZE
@@ -2205,68 +2190,78 @@ MLOGDRAW:
 
     # draw_clear
     draw clear rs1 a1 a2
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_color
     draw color rs1 a1 a2 a3
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_col
     op mul rs1 rs1 %00000001
     jump MLOGDRAW_draw_col always
     # draw_stroke
     draw stroke rs1
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_line
     draw line rs1 a1 a2 a3
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_rect
     draw rect rs1 a1 a2 a3
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_lineRect
     draw lineRect rs1 a1 a2 a3
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_poly
     draw poly rs1 a1 a2 a3 a4
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_linePoly
     draw linePoly rs1 a1 a2 a3 a4
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_triangle
     draw triangle rs1 a1 a2 a3 a4 a5
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_image
     jump end_instruction greaterThanEq a2 4
     jump MLOGDRAW_draw_image always
     # draw_print
     draw print rs1 a1 topLeft
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_translate
     draw translate rs1 a1
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_scale
     draw scale rs1 a1
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_rotate
     draw rotate rs1
-    jump end_instruction always
+    jump MLOGDRAW__end always
     # draw_reset
     draw reset
-    jump end_instruction always
+    jump MLOGDRAW__end always
 
 MLOGDRAW_draw_col:
     draw col rs1
-    jump end_instruction always
+    jump MLOGDRAW__end always
 
 MLOGDRAW_draw_image:
     op mul a2 a2 2 # instructions per index
     op add @counter @counter a2
 
-    lookup block image a3; jump MLOGDRAW_draw_image__end always
-    lookup unit image a3; jump MLOGDRAW_draw_image__end always
-    lookup item image a3; jump MLOGDRAW_draw_image__end always
-    lookup liquid image a3; jump MLOGDRAW_draw_image__end always
+    # block
+    lookup block image a3
+    jump MLOGDRAW_draw_image__end always
+    # unit
+    lookup unit image a3
+    jump MLOGDRAW_draw_image__end always
+    # item
+    lookup item image a3
+    jump MLOGDRAW_draw_image__end always
+    # liquid
+    lookup liquid image a3
 
 MLOGDRAW_draw_image__end:
     draw image rs1 a1 image a4 a5
+
+MLOGDRAW__end:
+    drawflush {{DISPLAY}}
     jump end_instruction always
 
 #% endblock contents

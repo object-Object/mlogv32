@@ -142,6 +142,6 @@ instructions:
   - label: ILLEGAL_OP
     cost: 0
   - label: MLOGSYS
-    cost: 5
+    cost: 1
   - label: MLOGDRAW
-    cost: 16
+    cost: 17

@@ -3,16 +3,20 @@ _start:
     la s0, msg
     li s1, 0
     la s2, msg_len
+
+    # UART0
+    li a0, 0xf0000010
+
+    li t0, 0b111
+    sb t0, 8(a0) # FCR
     
 loop:
     lbu t0, 0(s0)
-    .insn i CUSTOM_0, 0, zero, t0, 1 # printchar
+    sb t0, 0(a0) # THR
 
     addi s0, s0, 1
     addi s1, s1, 1
     blt s1, s2, loop
-
-    .insn i CUSTOM_0, 0, zero, zero, 2 # printflush
 
     # halt
     li t0, 0xfffffff0

@@ -1,7 +1,3 @@
-#define MLOGSYS_printchar(c) asm volatile (".insn i CUSTOM_0, 0, zero, %0, 1" : : "r" (c) )
-#define MLOGSYS_printflush() asm volatile (".insn i CUSTOM_0, 0, zero, zero, 2" : : )
-#define MLOGSYS_drawflush() asm volatile (".insn i CUSTOM_0, 0, zero, zero, 3" : : )
-
 #define _declare_MLOGDRAW_0(NAME) \
 void MLOGDRAW_ ## NAME ()
 

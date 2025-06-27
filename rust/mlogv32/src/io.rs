@@ -1,4 +1,4 @@
-use core::{arch::asm, hint, slice};
+use core::{hint, slice};
 
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
 use uart::{Data, FifoControl, LineStatus, Uart, address::MmioAddress};
@@ -11,23 +11,9 @@ pub fn print_str(msg: &str) {
     }
 }
 
-pub fn print_char(c: char) {
-    unsafe {
-        asm!(
-            ".insn i CUSTOM_0, 0, zero, {}, 1",
-            in(reg) c as u32,
-            options(nomem, preserves_flags, nostack),
-        );
-    };
-}
-
-pub fn print_flush() {
-    unsafe {
-        asm!(
-            ".insn i CUSTOM_0, 0, zero, zero, 2",
-            options(nomem, preserves_flags, nostack),
-        );
-    }
+pub fn print_char(_c: char) {
+    // FIXME: printchar instruction no longer exists, set up println impl similar to esp-println
+    // https://github.com/esp-rs/esp-hal/tree/84bb51215d261913f00239ecd0ed38fcd8296d0e/esp-println
 }
 
 // TODO: create Peripherals struct?

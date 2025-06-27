@@ -43,7 +43,6 @@ fn main() -> ! {
         {
             printer.print_char(uart1.uart_mut().read_byte() as char);
             printer.flush();
-            draw_flush();
         }
 
         spin_loop();
@@ -81,7 +80,6 @@ impl DisplayPrinter {
         draw_reset();
         draw_clear(0, 0, 0);
         draw_col(0xffffffff);
-        draw_flush();
     }
 
     pub fn print_str(&mut self, s: &str) {

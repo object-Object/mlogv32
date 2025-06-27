@@ -206,12 +206,3 @@ pub fn draw_reset() {
         );
     };
 }
-
-pub fn draw_flush() {
-    unsafe {
-        asm!(
-            ".insn i CUSTOM_0, 0, zero, zero, 3",
-            options(nomem, preserves_flags, nostack),
-        );
-    };
-}

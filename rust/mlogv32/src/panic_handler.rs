@@ -1,5 +1,5 @@
 use crate::halt;
-use crate::io::{print_flush, print_str};
+use crate::io::print_str;
 use core::panic::PanicInfo;
 
 #[panic_handler]
@@ -20,8 +20,6 @@ fn panic(info: &PanicInfo) -> ! {
             print_str(location.file());
         }
     }
-
-    print_flush();
 
     halt();
 }

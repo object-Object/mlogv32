@@ -38,8 +38,6 @@ fn main() -> ! {
     draw_rect(28, 12, 2, 12);
     draw_rect(32, 12, 8, 2);
 
-    draw_flush();
-
     let cycle1 = cycle::read();
     let instret1 = instret::read();
     let time1 = time::read();
@@ -50,8 +48,6 @@ fn main() -> ! {
     print_str(buf.format(instret1));
     print_str("\ntime 1: ");
     print_str(buf.format(time1));
-
-    print_flush();
 
     halt()
 }

@@ -439,13 +439,14 @@ swap_endianness:
 # address -> result
 # cost: dynamic
 load_rom_word_unchecked:
-    op sub accumulator accumulator 46
+    op sub accumulator accumulator 26
 
     # align to 4 bytes
     op and _address address 0xfffffffc
 
     # get rom proc data
     op idiv _rom_index _address {{ROM_PROC_BYTES}}
+    op mod _str_index _address {{ROM_PROC_BYTES}}
 
     op mod _rom_x _rom_index MEMORY_WIDTH
     op add _rom_x _rom_x MEMORY_X
@@ -456,23 +457,30 @@ load_rom_word_unchecked:
     getblock building _rom _rom_x _rom_y
     read _rom _rom "v"
 
-    # read word and convert to big endian
-    set result 0
-
-    op mod _str_index _address {{ROM_PROC_BYTES}}
-    set _shift 0 # leftmost byte in memory becomes rightmost byte in word
-load_rom_word__loop:
-    read _byte _rom _str_index
-    op sub _byte _byte {{ROM_BYTE_OFFSET}}
-    op max _byte _byte 0 # if we're reading out of bounds, default to 0
-    op shl _byte _byte _shift
-    op add result result _byte
+    # read bytes of word
+    read _byte0 _rom _str_index
 
     op add _str_index _str_index 1
-    op add _shift _shift 8
-    jump load_rom_word__loop lessThan _shift 32 # stop when we've read 4 bytes
+    read _byte1 _rom _str_index
 
-    set _rom null # avoid issues with the vars menu and block data size
+    op add _str_index _str_index 1
+    read _byte2 _rom _str_index
+
+    op add _str_index _str_index 1
+    read _rom _rom _str_index # clear _rom to avoid issues with the vars menu and block data size
+
+    # merge into big endian
+    op shl _byte1 _byte1 8
+    op shl _byte2 _byte2 16
+    op shl _rom _rom 24
+
+    op add result _byte0 _byte1
+    op add result result _byte2
+    op add result result _rom
+
+    op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
+    op max result result 0 # if we're reading out of bounds, default to 0
+    
     set @counter ret
 
 # address, mcause, mtval -> result
@@ -2245,8 +2253,8 @@ MLOGDRAW_draw_image__end:
 # and so that if we go over the 1000 instruction limit, we can ignore the errors below this line
 # {% raw %}
 # common preprocessor constants
+set {{ null
 set {{LOOKUP_PROC_SIZE}} null
-set {{ROM_BYTE_OFFSET}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null

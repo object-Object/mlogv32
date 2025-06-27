@@ -17,6 +17,9 @@
 
 #% set DISPLAY = 'display1'
 
+    # we ONLY reset this variable if the controller is rebuilt or manually restarted
+    set skip_slow_init false
+
 # disable the power switch, then reset
 halt:
     control enabled {{POWER_SWITCH}} false
@@ -59,6 +62,8 @@ reset:
     # change state from halt to reset, and set prev_proc again in case a worker changed it
     set prev_proc @this
     set state "reset"
+
+    jump end_slow_init equal skip_slow_init true
 
     # disable RAM procs
 
@@ -104,6 +109,10 @@ init_incr:
     write {{labels[instruction.label]}} {{LABELS}} {{loop.index0}}
     write {{cost}} {{COSTS}} {{loop.index0}}
 #% endfor
+
+    # ^ all of this only needs to run once, so skip it on subsequent runs to make startup faster
+    set skip_slow_init true
+end_slow_init:
 
     # initialize peripherals
 

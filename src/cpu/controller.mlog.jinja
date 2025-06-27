@@ -229,9 +229,9 @@ next_tick:
     # for debug output
     read instruction prev_proc "instruction"
     read op_id prev_proc "op_id"
-    read rs1 prev_proc "rs1"
-    read rs2 prev_proc "rs2"
-    read rd prev_proc "rd"
+    read rs1_id prev_proc "rs1_id"
+    read rs2_id prev_proc "rs2_id"
+    read rd_id prev_proc "rd_id"
     read imm prev_proc "imm"
 
     # tell the next proc to fetch the hart state from us
@@ -399,8 +399,8 @@ set _ csr_mie
 set _ interrupts_pending
 set _ instruction
 set _ op_id
-set _ rs1
-set _ rs2
-set _ rd
+set _ rs1_id
+set _ rs2_id
+set _ rd_id
 set _ imm
 # {% endraw %}

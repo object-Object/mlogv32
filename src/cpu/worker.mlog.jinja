@@ -57,7 +57,14 @@ reset:
 
     op add RAM_END {{RAM_START}} RAM_SIZE
 
+    # don't trigger ipt_overrun after resetting
+    set current_tick @tick
+
 next_tick:
+    # check this here to speed up the hot path a bit, at the cost of making debugging somewhat more difficult
+    jump ipt_overrun notEqual current_tick @tick
+
+next_tick_no_check_overrun:
     wait 1e-5
 
     # poll hardware
@@ -227,7 +234,7 @@ end_instruction_with_rd:
     # continue into end_instruction
 
 # all instructions jump here after completing successfully
-# cost: 9 (included in base cost)
+# cost: 8 (included in base cost)
 end_instruction:
     # increment instret
     op add csr_minstret csr_minstret 1
@@ -239,9 +246,6 @@ end_instruction:
     op sub accumulator accumulator 3
 
 end_instruction_trap:
-    # check this first to aid in debugging
-    jump ipt_overrun notEqual current_tick @tick
-
     # next_pc is set to pc + 4 at the start of main
     # if we're in the icache, icache_var was already incremented
     # if next_pc was modified, icache_var should have also been set to null
@@ -270,7 +274,8 @@ ipt_overrun:
 
     printflush {{ERROR_OUTPUT}}
     write @this {{CONTROLLER}} "prev_proc"
-    jump state->halt always
+    set state "halt"
+    jump next_tick_no_check_overrun always
 
 default_mtvec_handler:
     print "Control transferred to {{SYSCON}} (default mtvec), halting."
@@ -2165,7 +2170,7 @@ parallel_decode__loop:
 
     # bail out if the decode operation was cancelled
     read state {{CONTROLLER}} "state"
-    jump next_tick notEqual state "decoding"
+    jump next_tick_no_check_overrun notEqual state "decoding"
 
     op add decode_address decode_address 4
     jump parallel_decode__loop lessThan decode_address end_decode_address
@@ -2183,7 +2188,7 @@ parallel_decode__wait:
     jump parallel_decode__wait equal state "decoding"
 
     # if we're not the worker that initially encountered the decode instruction, go to the next tick
-    jump next_tick notEqual is_first_decoding_worker true
+    jump next_tick_no_check_overrun notEqual is_first_decoding_worker true
 
     # otherwise, finish this instruction and then go to the next tick
     set is_first_decoding_worker null

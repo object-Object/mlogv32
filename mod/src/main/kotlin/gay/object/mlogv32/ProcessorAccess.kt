@@ -116,11 +116,20 @@ class ProcessorAccess(
                             while (true) {
                                 Log.info("Waiting for clients...")
                                 val client = serverSocket.accept()
-                                launch {
-                                    handleClient(client)
+
+                                if (runOnMainThread { build.isValid }) {
+                                    launch {
+                                        handleClient(client)
+                                    }
+                                } else {
+                                    Log.err("ProcessorAccess build invalid, stopping server.")
+                                    client.close()
+                                    stopServer()
+                                    break
                                 }
                             }
                         }
+                    } catch (_: CancellationException) {
                     } catch (e: Exception) {
                         Log.err("ProcessorAccess server failed", e)
                     }
@@ -301,21 +310,21 @@ private fun linkedBuild(build: LogicBuild, name: String) =
 
 private fun LVar.numu() = num().toUInt()
 
-@Serializable
-sealed class Request {
-    abstract suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response
-
-    protected suspend fun <T> runOnMainThread(block: () -> T): T {
-        return suspendCancellableCoroutine { continuation ->
-            Core.app.post {
-                try {
-                    continuation.resume(block())
-                } catch (e: Exception) {
-                    continuation.resumeWithException(e)
-                }
+private suspend fun <T> runOnMainThread(block: () -> T): T {
+    return suspendCancellableCoroutine { continuation ->
+        Core.app.post {
+            try {
+                continuation.resume(block())
+            } catch (e: Exception) {
+                continuation.resumeWithException(e)
             }
         }
     }
+}
+
+@Serializable
+sealed class Request {
+    abstract suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response
 }
 
 @Serializable

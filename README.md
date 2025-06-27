@@ -16,7 +16,7 @@ Instructions are cached in the following format, utilizing the full 54 bits of `
 | ----------------- | ----- | ----- | ----- | ---- |
 | op_id (-64 to 63) | rs2   | rs1   | rd    | imm  |
 
-The main CPU code is generated from `src/main.mlog.jinja` using a custom Jinja-based preprocessor (`python/src/mlogv32/preprocessor`).
+The CPU is implemented using a variable-size build-order-independent subframe architecture. There is one controller processor (`src/cpu/controller.mlog.jinja`) and an arbitrary number of worker processors (`src/cpu/worker.mlog.jinja`). Schematics are generated using a custom preprocessor (`python/src/mlogv32/preprocessor`) based on Jinja and pymsch.
 
 ## Memory
 

@@ -154,10 +154,10 @@ end_slow_init:
     set csr_mtimeh 0
     set csr_mtimecmp 0
     set csr_mtimecmph 0
-    set csr_mcycle 0
-    set csr_mcycleh 0
     set csr_minstret 0
     set csr_minstreth 0
+    write 0 {{CSRS}} "{{ 'mcycle'|csr }}"
+    write 0 {{CSRS}} "{{ 'mcycleh'|csr }}"
 
     # clear pending/enabled interrupts
     set csr_mip 0
@@ -217,8 +217,6 @@ next_tick:
     read csr_mtimeh prev_proc "csr_mtimeh"
     read csr_mtimecmp prev_proc "csr_mtimecmp"
     read csr_mtimecmph prev_proc "csr_mtimecmph"
-    read csr_mcycle prev_proc "csr_mcycle"
-    read csr_mcycleh prev_proc "csr_mcycleh"
     read csr_minstret prev_proc "csr_minstret"
     read csr_minstreth prev_proc "csr_minstreth"
     read csr_mstatus prev_proc "csr_mstatus"
@@ -265,6 +263,9 @@ end_pause:
     # we define the rate of increase of cycle as "@ipt * ticks"
     # this should be a decent estimation of the number of mlog instructions executed
 
+    read csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    read csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
+
     op sub delta_cycles @tick last_cycle_update
     op mul delta_cycles delta_cycles @ipt
 
@@ -275,6 +276,11 @@ end_pause:
     op add csr_mcycleh csr_mcycleh overflow
 
     op mod csr_mcycle csr_mcycle 0x100000000
+
+    write csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    write csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
+    write csr_mcycle {{CSRS}} "{{ 'cycle'|csr }}"
+    write csr_mcycleh {{CSRS}} "{{ 'cycleh'|csr }}"
 
     set last_time_update @time
     set last_cycle_update @tick

@@ -94,8 +94,6 @@ next_tick_no_check_overrun:
     read csr_mtimeh prev_proc "csr_mtimeh"
     read csr_mtimecmp prev_proc "csr_mtimecmp"
     read csr_mtimecmph prev_proc "csr_mtimecmph"
-    read csr_mcycle prev_proc "csr_mcycle"
-    read csr_mcycleh prev_proc "csr_mcycleh"
     read csr_minstret prev_proc "csr_minstret"
     read csr_minstreth prev_proc "csr_minstreth"
     read csr_mstatus prev_proc "csr_mstatus"
@@ -113,7 +111,7 @@ next_tick_no_check_overrun:
     jump reset notEqual state "running"
 
     set current_tick @tick
-    op sub accumulator @ipt 32
+    op sub accumulator @ipt 30
     jump main notEqual interrupts_pending true
 
 check_interrupts:
@@ -1981,11 +1979,11 @@ modify_csr__read__not_machine:
     # mcounteren is hardwired zero, so now that we know it's a timer, trap if we're not in M-mode
     jump ILLEGAL_OP lessThan privilege_mode 0b11
     
-    jump modify_csr__mcycle equal csr_7_0 0x00
+    jump modify_csr__read__not_timer equal csr_7_0 0x00 # mcycle
     jump modify_csr__time equal imm 0xc01 # mtime doesn't exist
     jump modify_csr__minstret equal csr_7_0 0x02
     
-    jump modify_csr__mcycleh equal csr_7_0 0x80
+    jump modify_csr__read__not_timer equal csr_7_0 0x80 # mcycleh
     jump modify_csr__timeh equal imm 0xc81
     jump modify_csr__minstreth equal csr_7_0 0x82
 
@@ -2078,24 +2076,6 @@ modify_csr__mie:
     # MSIE                                                 -
     op and csr_mie new_value 0b11111111111111110000100010000000
 
-    jump end_instruction_with_rd_and_interrupts always
-
-modify_csr__mcycle:
-    set rd csr_mcycle
-
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
-
-    set csr_mcycle new_value
-    jump end_instruction_with_rd_and_interrupts always
-
-modify_csr__mcycleh:
-    set rd csr_mcycleh
-
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
-
-    set csr_mcycleh new_value
     jump end_instruction_with_rd_and_interrupts always
 
 modify_csr__minstret:

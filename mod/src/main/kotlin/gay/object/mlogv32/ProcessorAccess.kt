@@ -124,7 +124,6 @@ class ProcessorAccess(
                                 } else {
                                     Log.err("ProcessorAccess build invalid, stopping server.")
                                     client.close()
-                                    stopServer()
                                     break
                                 }
                             }

@@ -4,11 +4,18 @@
 
 #%# constants
 
-#%# the slowest instruction seems to be AMOMIN.W in icache-covered memory
-#% set slowest_op = (instructions|selectattr("label", "equalto", "AMOMIN.W")|first).cost
+#%# the slowest instruction seems to be an uncached AMOMIN.W in RAM, reading a branch instruction from icache-covered memory
 
-#%# ... + check_interrupts + 2*(decode + decode_BRANCH + end_decode) + store_ram_word_unchecked
-#% set MAX_INSTRUCTION_ACCUMULATOR_USAGE = (base_instruction_cost + slowest_op + 8 + 2*(23 + 16 + 33) + 23)|round(method="ceil")|int
+#% set amo_cost = (instructions|selectattr("label", "equalto", "AMOMIN.W")|first).cost
+
+#%# decode + decode_AMO + end_decode (decode_address == null)
+#% set amo_decode = 23 + 9 + 4
+
+#%# decode + decode_BRANCH + end_decode
+#% set branch_decode = 23 + 16 + 33
+
+#%# ... + check_interrupts + load_ram_word_unchecked + store_ram_word_unchecked + instret overflow + a bit extra to be safe
+#% set MAX_INSTRUCTION_COST = (base_instruction_cost + amo_decode + amo_cost + branch_decode + 8 + 32 + 23 + 3 + 10)|round(method="ceil")|int
 
 #%# linked buildings
 #%# IMPORTANT: the buildings must be linked in the order shown here
@@ -113,11 +120,13 @@ check_interrupts__machine:
     set mcause 0x80000007 # machine timer interrupt
     jump trap_without_mtval notEqual mie.mtie 0
 
+# cost:
+#  base: 17
+#  fast path: 42 (base + 9 + 16)
+#  slow path: 35 (base + 13 + 5) + dynamic
 main:
     # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
     op add next_pc pc 4
-
-    set mtval pc
 
     # get the current instruction cache processor and variable
     jump main__read_icache notEqual icache_var null
@@ -129,14 +138,28 @@ main:
     jump main__access_icache lessThan pc ICACHE_SIZE
 
 main__slow_instruction_fetch:
+    # update accumulator in case we take a trap while loading
+    # 13 (instructions between main and the below comment) + 5 (load_word static cost)
+    op sub accumulator accumulator 18
+
     jump default_mtvec_handler equal pc {{SYSCON}}
 
+    set mtval pc
     set mcause 1 # instruction access fault
     jump trap greaterThanEq pc RAM_END # prevent executing from MMIO
 
     set address pc
     op add ret @counter 1
     jump load_word always
+    # ^ above accumulator count ends here
+
+    # a trap cannot occur between now and the lookup table fetch
+    # so modify accumulator to take base_instruction_cost into account
+    # base_instruction_cost assumes we take the fast path
+    # at this point, we've double-counted 5 instructions on the base path
+    # also, the static cost of the slow path is 7 instructions fewer than the fast path
+    # so we can safely add 12 instructions back into the accumulator
+    op add accumulator accumulator 12
 
     set instruction result
     set decode_address null
@@ -225,7 +248,7 @@ end_instruction_trap:
     jump state->pause equal single_step_enabled true
 
     jump ipt_overrun notEqual current_tick @tick
-    jump next_tick lessThanEq accumulator {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}}
+    jump next_tick lessThanEq accumulator {{MAX_INSTRUCTION_COST}}
     jump main notEqual interrupts_pending true
     jump check_interrupts always
 
@@ -1757,7 +1780,7 @@ ECALL:
 
 EBREAK:
     set mcause 3 # breakpoint
-    # mtval is set to pc by main
+    set mtval pc
     jump trap always
 
 MRET:
@@ -2266,7 +2289,7 @@ set {{UART_RX_WRITE}} null
 set {{UART_TX_START}} null
 set {{UART_TX_READ}} null
 set {{UART_TX_WRITE}} null
-set {{MAX_INSTRUCTION_ACCUMULATOR_USAGE}} null
+set {{MAX_INSTRUCTION_COST}} null
 # local preprocessor constants
 set {{UART_START_LINK}} null
 set {{LABELS}} null

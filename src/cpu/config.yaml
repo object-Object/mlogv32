@@ -7,8 +7,8 @@ schematics:
   ram: ../../schematics/ram_proc.msch
 
 inputs:
-  # 46 (main) + 9 (end)
-  base_instruction_cost: 55
+  # 42 (main) + 9 (end)
+  base_instruction_cost: 51
 
 instructions:
   - label: BEQ

@@ -239,6 +239,9 @@ end_instruction:
     op sub accumulator accumulator 3
 
 end_instruction_trap:
+    # check this first to aid in debugging
+    jump ipt_overrun notEqual current_tick @tick
+
     # next_pc is set to pc + 4 at the start of main
     # if we're in the icache, icache_var was already incremented
     # if next_pc was modified, icache_var should have also been set to null
@@ -247,7 +250,6 @@ end_instruction_trap:
     jump state->pause equal pc breakpoint_address
     jump state->pause equal single_step_enabled true
 
-    jump ipt_overrun notEqual current_tick @tick
     jump next_tick lessThanEq accumulator {{MAX_INSTRUCTION_COST}}
     jump main notEqual interrupts_pending true
     jump check_interrupts always

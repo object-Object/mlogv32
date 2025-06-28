@@ -20,3 +20,11 @@ configs:
     ROM_ROWS: 2
     RAM_ROWS: 12
     ICACHE_ROWS: 2
+  
+  micropython:
+    MEMORY_X_OFFSET: -9
+    MEMORY_Y_OFFSET: -19
+    MEMORY_WIDTH: 32
+    ROM_ROWS: 1
+    RAM_ROWS: 1
+    ICACHE_ROWS: 1

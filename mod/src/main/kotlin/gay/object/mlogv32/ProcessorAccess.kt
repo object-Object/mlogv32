@@ -224,7 +224,7 @@ class ProcessorAccess(
             val rx = client.openReadChannel()
             val tx = client.openWriteChannel(true)
             while (true) {
-                val response: Response = try {
+                val response: Response? = try {
                     val line = rx.readUTF8Line() ?: break
                     Log.info("Got request: $line")
                     val request = Json.decodeFromString<Request>(line)
@@ -237,6 +237,10 @@ class ProcessorAccess(
                 } catch (e: Exception) {
                     Log.err("Request failed", e)
                     ErrorResponse(e)
+                }
+                if (response == null) {
+                    Log.info("Disconnecting from client.")
+                    break
                 }
                 tx.writeStringUtf8(Json.encodeToString(response) + "\n")
             }
@@ -323,7 +327,7 @@ private suspend fun <T> runOnMainThread(block: () -> T): T {
 
 @Serializable
 sealed class Request {
-    abstract suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response
+    abstract suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response?
 }
 
 @Serializable
@@ -402,13 +406,25 @@ enum class UartDevice {
 }
 
 @Serializable
+enum class UartDirection {
+    both,
+    tx,
+    rx;
+
+    val transmit get() = this != rx
+    val receive get() = this != tx
+}
+
+@Serializable
 @SerialName("serial")
 data class SerialRequest(
     val device: UartDevice,
-    val stopOnHalt: Boolean,
     val overrun: Boolean,
+    val direction: UartDirection = UartDirection.both,
+    val stopOnHalt: Boolean = false,
+    val disconnectOnHalt: Boolean = false,
 ) : Request() {
-    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response {
+    override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel): Response? {
         val uart = when (device) {
             UartDevice.uart0 -> processor.uart0
             UartDevice.uart1 -> processor.uart1
@@ -423,27 +439,36 @@ data class SerialRequest(
             var overflowCount = 0
 
             val fromUart = runOnMainThread {
-                if (stopOnHalt && !processor.powerSwitch.enabled) {
-                    throw RuntimeException("Processor stopped!")
+                if (!processor.powerSwitch.enabled) {
+                    when {
+                        disconnectOnHalt -> return@runOnMainThread null
+                        stopOnHalt -> throw RuntimeException("Processor stopped!")
+                    }
                 }
 
-                rx.readAvailable(1) { buffer ->
-                    val bytes = if (overrun) {
-                        buffer.size.toInt()
-                    } else {
-                        min(buffer.size.toInt(), uart.availableForWrite)
-                    }
+                if (direction.transmit) {
+                    rx.readAvailable(1) { buffer ->
+                        val bytes = if (overrun) {
+                            buffer.size.toInt()
+                        } else {
+                            min(buffer.size.toInt(), uart.availableForWrite)
+                        }
 
-                    for (i in 0..<bytes) {
-                        val byte = buffer.readUByte()
-                        if (!uart.write(byte, signalOverflow = overrun)) overflowCount++
-                    }
+                        for (i in 0..<bytes) {
+                            val byte = buffer.readUByte()
+                            if (!uart.write(byte, signalOverflow = overrun)) overflowCount++
+                        }
 
-                    bytes
+                        bytes
+                    }
                 }
 
-                uart.readAll()
-            }
+                if (direction.receive) {
+                    uart.readAll()
+                } else {
+                    listOf()
+                }
+            } ?: return null
 
             if (overflowCount > 0) Log.warn("$device RX buffer is full, $overflowCount bytes dropped!")
 

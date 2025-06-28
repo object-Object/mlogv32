@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any, TypedDict, Unpack, cast
+from typing import Annotated, Any, TypedDict, Unpack, cast, overload
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -78,11 +78,14 @@ def configs(yaml_path: Path):
 @app.command()
 def build(
     yaml_path: Path,
+    cpu_config_name: Annotated[str | None, Option("-c", "--config")] = None,
     width: Annotated[int, Option("-w", "--width")] = 16,
     height: Annotated[int, Option("-h", "--height")] = 16,
     size: Annotated[int | None, Option("-s", "--size")] = None,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
-    cpu_only: bool = False,
+    include_all: Annotated[bool, Option("--all")] = False,
+    include_cpu: Annotated[bool, Option("--cpu")] = False,
+    include_peripherals: Annotated[bool, Option("--peripherals")] = False,
 ):
     """Generate a CPU schematic."""
 
@@ -90,7 +93,28 @@ def build(
         width = size
         height = size
 
+    if include_all or not (include_cpu or include_peripherals):
+        include_cpu = True
+        include_peripherals = True
+
     config = BuildConfig.load(yaml_path)
+
+    if cpu_config_name:
+        with config.configs.open("rb") as f:
+            cpu_configs: ConfigsYaml = yaml.load(f, yaml.Loader)
+
+        if cpu_config_name not in cpu_configs["configs"]:
+            raise KeyError(f"Unknown config name: {cpu_config_name}")
+
+        configs(config.configs)
+
+        config_code = (
+            (config.configs.parent / cpu_config_name)
+            .with_suffix(".mlog")
+            .read_text("utf-8")
+        )
+    else:
+        config_code = ""
 
     worker_output = get_template_output_path(config.templates.worker)
     worker_code = render_template(
@@ -125,19 +149,65 @@ def build(
 
     schem = Schematic()
 
+    @overload
+    def add_peripheral(block: Block) -> None: ...
+
+    @overload
+    def add_peripheral(block: Schematic, x: int, y: int) -> None: ...
+
+    def add_peripheral(block: Block | Schematic, x: int = 0, y: int = 0):
+        if not include_peripherals:
+            return
+        match block:
+            case Block():
+                schem.add_block(block)
+            case Schematic():
+                schem.add_schem(block, x, y)
+
+    def add_cpu(block: Block):
+        if include_cpu:
+            schem.add_block(block)
+
+    def add_label(x: int, y: int, **labels: Unpack[Labels]):
+        label = "\n".join(
+            template.format(label)
+            for key, template in [
+                ("up", "{} ⇧"),
+                ("left", "⇦ {}"),
+                ("right", "{} ⇨"),
+                ("down", "{} ⇩"),
+            ]
+            if (label := labels.get(key))
+        )
+        add_peripheral(
+            Block(
+                block=Content.MESSAGE,
+                x=x,
+                y=y,
+                config=label,
+                rotation=0,
+            )
+        )
+
+    def add_with_label(block: Block, **labels: Unpack[Labels]):
+        add_label(block.x - 1, block.y, **labels)
+        add_peripheral(block)
+
+    # peripherals
+
     for x in lenrange(0, 16):
         for y in lenrange(0, 16):
-            schem.add_block(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
+            add_peripheral(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
 
     display_link = ProcessorLink(0, 0, "")
 
-    schem.add_schem(lookups_schem, 0, 16)
+    add_peripheral(lookups_schem, 0, 16)
     lookup_links = [ProcessorLink(x=i % 4, y=16 + i // 4, name="") for i in range(16)]
 
-    add_label(schem, 4, 19, right="UART0, UART2", down="LABELS")
-    schem.add_block(simple_block(Content.WORLD_CELL, 4, 18))
-    schem.add_block(simple_block(Content.WORLD_CELL, 4, 17))
-    add_label(schem, 4, 16, up="COSTS", right="UART1, UART3")
+    add_label(4, 19, right="UART0, UART2", down="LABELS")
+    add_peripheral(simple_block(Content.WORLD_CELL, 4, 18))
+    add_peripheral(simple_block(Content.WORLD_CELL, 4, 17))
+    add_label(4, 16, up="COSTS", right="UART1, UART3")
 
     labels_link = ProcessorLink(4, 18, "")
     costs_link = ProcessorLink(4, 17, "")
@@ -145,13 +215,15 @@ def build(
     uart_links = list[ProcessorLink]()
     for x in lenrange(5, 4, 2):
         for y in lenrange(18, -4, -2):
-            schem.add_block(simple_block(Content.MEMORY_BANK, x, y))
+            add_peripheral(simple_block(Content.MEMORY_BANK, x, y))
             uart_links.append(ProcessorLink(x, y, ""))
 
-    schem.add_block(simple_block(Content.MEMORY_CELL, 9, 19))
-    schem.add_schem(ram_schem, 9, 18)
-    schem.add_schem(ram_schem, 9, 17)
-    schem.add_block(Block(Content.MICRO_PROCESSOR, 9, 16, ProcessorConfig("", []), 0))
+    add_peripheral(simple_block(Content.MEMORY_CELL, 9, 19))
+    add_peripheral(ram_schem, 9, 18)
+    add_peripheral(ram_schem, 9, 17)
+    add_peripheral(
+        Block(Content.MICRO_PROCESSOR, 9, 16, ProcessorConfig(config_code, []), 0)
+    )
 
     registers_link = ProcessorLink(9, 19, "")
     csrs_link = ProcessorLink(9, 18, "")
@@ -159,25 +231,21 @@ def build(
     config_link = ProcessorLink(9, 16, "")
 
     add_with_label(
-        schem,
         simple_block(Content.MESSAGE, 11, 19),
         left="REGISTERS",
         right="ERROR_OUTPUT",
     )
     add_with_label(
-        schem,
         Block(Content.SWITCH, 11, 18, False, 0),
         left="CSRS",
         right="POWER_SWITCH",
     )
     add_with_label(
-        schem,
         Block(Content.SWITCH, 11, 17, False, 0),
         left="INCR",
         right="PAUSE_SWITCH",
     )
     add_with_label(
-        schem,
         Block(Content.SWITCH, 11, 16, False, 0),
         left="CONFIG",
         right="SINGLE_STEP_SWITCH",
@@ -188,11 +256,9 @@ def build(
     pause_switch_link = ProcessorLink(11, 17, "")
     single_step_switch_link = ProcessorLink(11, 16, "")
 
-    # hack
-    if cpu_only:
-        schem = Schematic()
+    # CPU
 
-    schem.add_block(
+    add_cpu(
         Block(
             block=Content.WORLD_PROCESSOR,
             x=16,
@@ -229,7 +295,7 @@ def build(
             if x == 16 and y == 0:
                 continue
 
-            schem.add_block(
+            add_cpu(
                 Block(
                     block=Content.WORLD_PROCESSOR,
                     x=x,
@@ -280,33 +346,6 @@ class Labels(TypedDict, total=False):
     left: str
     right: str
     down: str
-
-
-def add_label(schem: Schematic, x: int, y: int, **labels: Unpack[Labels]):
-    label = "\n".join(
-        template.format(label)
-        for key, template in [
-            ("up", "{} ⇧"),
-            ("left", "⇦ {}"),
-            ("right", "{} ⇨"),
-            ("down", "{} ⇩"),
-        ]
-        if (label := labels.get(key))
-    )
-    schem.add_block(
-        Block(
-            block=Content.MESSAGE,
-            x=x,
-            y=y,
-            config=label,
-            rotation=0,
-        )
-    )
-
-
-def add_with_label(schem: Schematic, block: Block, **labels: Unpack[Labels]):
-    add_label(schem, block.x - 1, block.y, **labels)
-    schem.add_block(block)
 
 
 def create_jinja_env(template_dir: Path):

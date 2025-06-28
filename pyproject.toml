@@ -42,7 +42,7 @@ packages = [
 
 [tool.poe.tasks]
 build     = "python -m mlogv32.preprocessor build src/cpu/config.yaml"
-build-cpu = "python -m mlogv32.preprocessor build src/cpu/config.yaml --cpu-only"
+build-cpu = "python -m mlogv32.preprocessor build src/cpu/config.yaml --cpu"
 
 [tool.ruff]
 extend-exclude = [

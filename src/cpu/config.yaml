@@ -6,6 +6,8 @@ schematics:
   lookups: ../../schematics/lookup_procs.msch
   ram: ../../schematics/ram_proc.msch
 
+configs: ../config/configs.yaml
+
 inputs:
   # 18 (main__read_icache) + 8 (end)
   base_instruction_cost: 26

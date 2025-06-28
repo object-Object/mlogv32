@@ -1,7 +1,6 @@
     # per-world config options for mlogv32
 
     # reloaded after unpausing
-    set TARGET_IPT {{#TARGET_IPT}}
     set BREAKPOINT_ADDRESS {{#BREAKPOINT_ADDRESS}}
 
     # loaded at reset only
@@ -29,14 +28,13 @@
 #%- if false
 # {% raw %}
 set {{ null
-set TARGET_IPT TARGET_IPT
-set BREAKPOINT_ADDRESS BREAKPOINT_ADDRESS
-set MEMORY_WIDTH MEMORY_WIDTH
-set ROM_SIZE ROM_SIZE
-set RAM_SIZE RAM_SIZE
-set ICACHE_SIZE ICACHE_SIZE
-set UART_FIFO_MODULO UART_FIFO_MODULO
-set MEMORY_X MEMORY_X
-set MEMORY_Y MEMORY_Y
+set _ BREAKPOINT_ADDRESS
+set _ MEMORY_WIDTH
+set _ ROM_SIZE
+set _ RAM_SIZE
+set _ ICACHE_SIZE
+set _ UART_FIFO_MODULO
+set _ MEMORY_X
+set _ MEMORY_Y
 # {% endraw %}
 #% endif

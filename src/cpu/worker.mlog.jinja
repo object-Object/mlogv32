@@ -17,8 +17,8 @@
 #%# ... + store_ram_word_unchecked + instret overflow + a bit extra to be safe
 #% set base_max_cost = base_instruction_cost + amo_cost + branch_decode + 23 + 3 + 10
 
-#%# ... + check_interrupts + access_icache
-#% set MAX_FAST_INSTRUCTION_COST = base_max_cost + 8 + 25
+#%# ... + fire_interrupts + access_icache
+#% set MAX_FAST_INSTRUCTION_COST = base_max_cost + 9 + 25
 
 #%# ... + load_ram_word_unchecked
 #% set MAX_SLOW_INSTRUCTION_COST = base_max_cost + amo_decode + 32
@@ -99,7 +99,8 @@ next_tick_no_check_overrun:
     read csr_mstatus prev_proc "csr_mstatus"
     read csr_mip prev_proc "csr_mip"
     read csr_mie prev_proc "csr_mie"
-    read interrupts_pending prev_proc "interrupts_pending"
+    read poll_interrupts prev_proc "poll_interrupts"
+    read fire_interrupts prev_proc "fire_interrupts"
 
     jump reset equal state "halt"
 
@@ -111,21 +112,45 @@ next_tick_no_check_overrun:
     jump reset notEqual state "running"
 
     set current_tick @tick
-    op sub accumulator @ipt 30
-    jump main notEqual interrupts_pending true
+    op sub accumulator @ipt 33
 
-check_interrupts:
-    op sub accumulator accumulator 8
+    # using two variables is slower here, but faster in end_instruction
+    jump poll_interrupts equal poll_interrupts true
+    jump fire_interrupts equal fire_interrupts true
+    jump main always
+
+# check if software-manipulable interrupts should become pending
+# this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
+poll_interrupts:
+    op sub accumulator accumulator 8 # -2 because we took the first jump above
+    set poll_interrupts false
+
+    # machine timer interrupt
+    op greaterThan high_gt csr_mtimeh csr_mtimecmph
+    op equal high_eq csr_mtimeh csr_mtimecmph
+    op greaterThanEq low_ge csr_mtime csr_mtimecmp
+
+    op and mip.mtip high_eq low_ge
+    op or mip.mtip mip.mtip high_gt
+    op shl mip.mtip mip.mtip 7
+
+    op and csr_mip csr_mip 0b11111111111111111111111101111111
+    op or csr_mip csr_mip mip.mtip
+
+# check if interrupts should fire
+# this runs at the start of the first worker each tick, and if certain CSRs are modified
+fire_interrupts:
+    op sub accumulator accumulator 9
+    set fire_interrupts false
 
     # if privilege_mode < M, machine interrupts are globally enabled
-    jump check_interrupts__machine lessThan privilege_mode 0b11
+    jump fire_interrupts__machine lessThan privilege_mode 0b11
     # if privilege_mode = M, machine interrupts are enabled if mstatus.MIE is 1
     op and mstatus.mie csr_mstatus 0b1000
     jump main equal mstatus.mie 0
 
-check_interrupts__machine:
-
-    # timer interrupt
+fire_interrupts__machine:
+    # machine timer interrupt
     op and mip.mtip csr_mip 0b10000000
     op and mie.mtie csr_mie mip.mtip
     set mcause 0x80000007 # machine timer interrupt
@@ -230,9 +255,15 @@ main__read_icache:
     read @counter {{LABELS}} index
 
 # this is a normal length for a label
+# cost: 4
+end_instruction_with_rd_and_poll_interrupts:
+    set poll_interrupts true
+    # continue into end_instruction_with_rd_and_fire_interrupts
+
+# this is too
 # cost: 3
-end_instruction_with_rd_and_interrupts:
-    set interrupts_pending true
+end_instruction_with_rd_and_fire_interrupts:
+    set fire_interrupts true
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
@@ -265,8 +296,8 @@ end_instruction_trap:
     jump state->pause equal single_step_enabled true
 
     jump next_tick lessThanEq accumulator {{MAX_FAST_INSTRUCTION_COST}}
-    jump main notEqual interrupts_pending true
-    jump check_interrupts always
+    jump main notEqual fire_interrupts true
+    jump fire_interrupts always
 
 # exceptions
 
@@ -526,15 +557,17 @@ load_rom_word_unchecked:
 
 # address, mcause, mtval -> result
 load_mmio_word:
-    op sub accumulator accumulator 14
+    op sub accumulator accumulator 15
 
     op sub _offset address {{MMIO_START}}
     op and _offset _offset 0xfffffffc
     jump trap greaterThanEq _offset 0x90
 
     # if we're in UART range, look it up
-    op add access_uart_ret @counter 1
+    op add access_uart_ret @counter 2 # skip privilege check if accessing uart
     jump access_uart greaterThanEq _offset 0x10
+    # otherwise, we're in machine timer range, so trap if not in M-mode
+    jump trap lessThan privilege_mode 0b11
 
     # MCR, MSR, and SPR are all hardwired to zero
     set result 0
@@ -1325,22 +1358,22 @@ store_mmio_word_unchecked:
     jump store_mmio_word_unchecked__uart_fcr equal _offset 0x18
     jump end_instruction greaterThan _offset 0x10
 
-    # NOTE: if we get to this point, the MMIO address must be valid, so we don't need a bounds check
+    # NOTE: if we get to this point, the MMIO address must be valid, so we don't need bounds or privilege checks
     op idiv _jump _offset 2
     op add @counter @counter _jump
 
     # mtime
     set csr_mtime value
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_poll_interrupts always
     # mtimeh
     set csr_mtimeh value
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_poll_interrupts always
     # mtimecmp
     set csr_mtimecmp value
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_poll_interrupts always
     # mtimecmph
     set csr_mtimecmph value
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_poll_interrupts always
     # UART
     # Transmitter Holding Register
     # append value to queue
@@ -1823,7 +1856,7 @@ MRET:
     set icache_var null
 
     set rd_id 0
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_fire_interrupts always
 
 CSRRWI:
     # CSRI-type: rs1_id=uimm, imm=csr, rd_id
@@ -2037,7 +2070,7 @@ modify_csr__mstatus:
     op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
 modify_csr__mstatus__mpp_m:
 
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__mip:
     set rd csr_mip
@@ -2061,7 +2094,7 @@ modify_csr__mip:
     # enforce read-only non-zero fields
     op or csr_mip csr_mip tmp
 
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__mie:
     set rd csr_mie
@@ -2076,7 +2109,7 @@ modify_csr__mie:
     # MSIE                                                 -
     op and csr_mie new_value 0b11111111111111110000100010000000
 
-    jump end_instruction_with_rd_and_interrupts always
+    jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__minstret:
     set rd csr_minstret

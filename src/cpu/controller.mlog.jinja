@@ -162,7 +162,8 @@ end_slow_init:
     # clear pending/enabled interrupts
     set csr_mip 0
     set csr_mie 0
-    set interrupts_pending false
+    set poll_interrupts false
+    set fire_interrupts false
 
     # reset mtvec to implementation-defined value to help catch bugs
     write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
@@ -222,7 +223,8 @@ next_tick:
     read csr_mstatus prev_proc "csr_mstatus"
     read csr_mip prev_proc "csr_mip"
     read csr_mie prev_proc "csr_mie"
-    read interrupts_pending prev_proc "interrupts_pending"
+    read poll_interrupts prev_proc "poll_interrupts"
+    read fire_interrupts prev_proc "fire_interrupts"
 
     # for debug output
     read instruction prev_proc "instruction"
@@ -285,26 +287,9 @@ end_pause:
     set last_time_update @time
     set last_cycle_update @tick
 
-    # check if interrupts should be pending
-    # FIXME: we probably need to check this in the workers
-    
-    # timer interrupt
-    op greaterThan high_gt csr_mtimeh csr_mtimecmph
-    op equal high_eq csr_mtimeh csr_mtimecmph
-    op greaterThanEq low_ge csr_mtime csr_mtimecmp
-
-    op and mip.mtip high_eq low_ge
-    op or mip.mtip mip.mtip high_gt
-    op shl mip.mtip mip.mtip 7
-
-    op and csr_mip csr_mip 0b11111111111111111111111101111111
-    op or csr_mip csr_mip mip.mtip
-
-    # general "please check interrupts" signal
-    # this is set by instructions that require interrupts to be checked immediately,
-    # and cleared by the first worker to handle it
-    op notEqual m_interrupts_pending csr_mip 0
-    op or interrupts_pending interrupts_pending m_interrupts_pending
+    # tell the first worker to poll and fire interrupts
+    set poll_interrupts true
+    set fire_interrupts true
 
     # go to next tick
 
@@ -403,7 +388,8 @@ set _ csr_minstreth
 set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
-set _ interrupts_pending
+set _ poll_interrupts
+set _ fire_interrupts
 set _ instruction
 set _ op_id
 set _ rs1_id

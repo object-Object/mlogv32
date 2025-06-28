@@ -29,7 +29,6 @@ logicids.json
 .gradle
 **/build/
 !src/**/build/
-!gradle-wrapper.jar
 
 ## Eclipse
 bin/
@@ -42,6 +41,7 @@ bin/
 ## Java
 *.class
 *.jar
+!gradle-wrapper.jar
 *.war
 *.rar
 *.nar

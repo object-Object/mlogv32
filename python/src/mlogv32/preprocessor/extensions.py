@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, Protocol, cast
+from typing import Iterable, Protocol, cast, override
 
 from jinja2 import Environment
 from jinja2.ext import Extension
@@ -17,6 +17,7 @@ class CommentStatement(Extension):
     ```
     """
 
+    @override
     def preprocess(
         self,
         source: str,
@@ -25,6 +26,89 @@ class CommentStatement(Extension):
     ) -> str:
         # hacky
         return source.replace("{{#", "{{")
+
+
+class LineExpressionEnv(Protocol):
+    line_expression_prefix: str
+    line_expression_re: re.Pattern[str]
+
+    @staticmethod
+    def of(environment: Environment) -> LineExpressionEnv:
+        return cast(LineExpressionEnv, environment)
+
+    @staticmethod
+    def extend(
+        environment: Environment,
+        *,
+        line_expression_prefix: str,
+    ):
+        environment.extend(
+            line_expression_prefix=line_expression_prefix,
+            line_expression_re=re.compile(
+                r"^([ \t\v]*)" + re.escape(line_expression_prefix) + r" ([^\r\n]+)$",
+                flags=re.M,
+            ),
+        )
+
+
+class LineExpression(Extension):
+    """Adds line expressions, similar to the built-in line statements/comments.
+
+    Configuration:
+    ```
+    LineExpressionEnv.extend(env, line_expression_prefix="#{")
+    ```
+    Example:
+    ```
+    #{ 1 + 1
+    ```
+    Output:
+    ```
+    2
+    ```
+    """
+
+    def __init__(self, environment: Environment) -> None:
+        super().__init__(environment)
+
+    @property
+    def _env(self):
+        return LineExpressionEnv.of(self.environment)
+
+    @override
+    def filter_stream(self, stream: TokenStream) -> TokenStream | Iterable[Token]:
+        for token in stream:
+            if token.type != "data":
+                yield token
+                continue
+
+            pos = 0
+            lineno = token.lineno
+
+            while True:
+                match = self._env.line_expression_re.search(token.value, pos)
+                if match is None:
+                    break
+
+                new_pos = match.start()
+                if new_pos > pos:
+                    preval = token.value[pos:new_pos]
+                    yield Token(lineno, "data", preval)
+                    lineno += count_newlines(preval)
+
+                yield Token(lineno, "data", match.group(1))
+
+                for subtoken in self.environment.lexer.tokenize(
+                    "{{ " + match.group(2) + " }}",
+                    name=stream.name,
+                    filename=stream.filename,
+                ):
+                    yield Token(lineno, subtoken.type, subtoken.value)
+
+                pos = match.end()
+
+            if pos < len(token.value):
+                yield Token(lineno, "data", token.value[pos:])
 
 
 # https://jinja.palletsprojects.com/en/stable/extensions/#inline-gettext
@@ -134,6 +218,7 @@ class LocalVariables(Extension):
 
         return cache[name]
 
+    @override
     def filter_stream(self, stream: TokenStream) -> TokenStream | Iterable[Token]:
         for token in stream:
             if token.type != "data":

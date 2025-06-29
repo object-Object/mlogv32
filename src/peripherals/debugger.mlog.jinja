@@ -72,7 +72,7 @@ reset__find_lookup_start:
     print "x14 (a4)    =\n"
     print "x15 (a5)    =\n"
 
-    #{{'\n'}} {{ print(0, 0) }}
+    #{ print(0, 0)
 
     print "x16 (a6)  =\n"
     print "x17 (a7)  =\n"
@@ -91,7 +91,7 @@ reset__find_lookup_start:
     print "x30 (t5)  =\n"
     print "x31 (t6)  =\n"
 
-    #{{'\n'}} {{ print(35, 0) }}
+    #{ print(35, 0)
 
 loop:
     sensor enabled switch1 @enabled
@@ -235,9 +235,9 @@ loop__no_mark_icache:
     # clear
 
     draw color 0 0 0 255
-    #{{'\n'}} {{ rect(14, 0, 10, 16) }}
-    #{{'\n'}} {{ rect(47, 0, 10, 16) }}
-    #{{'\n'}} {{ rect(0, 17, 73, 22) }}
+    #{ rect(14, 0, 10, 16)
+    #{ rect(47, 0, 10, 16)
+    #{ rect(0, 17, 73, 22)
     draw color 255 255 255 255
 
     # column 1
@@ -322,7 +322,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    #{{'\n'}} {{ print(14, 0) }}
+    #{ print(14, 0)
 
     print "pc          = {0}\n"
     set n pc
@@ -365,7 +365,7 @@ loop__no_mark_icache:
     print "minstret = {0}\n\n"
     format minstret
 
-    #{{'\n'}} {{ print(0, 17) }}
+    #{ print(0, 17)
 
     print "mscratch = {0}\n"
     set n mscratch
@@ -407,7 +407,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_bin always
 
-    #{{'\n'}} {{ print(0, 30) }}
+    #{ print(0, 30)
 
     # column 2
 
@@ -491,7 +491,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    #{{'\n'}} {{ print(47, 0) }}
+    #{ print(47, 0)
 
     print "state           = {0}\n"
     format state
@@ -535,7 +535,7 @@ done_privilege_mode:
     op add ret @counter 1
     jump format_uart always
 
-    #{{'\n'}} {{ print(35, 17) }}
+    #{ print(35, 17)
 
     wait 0.02
     jump loop always

@@ -12,7 +12,13 @@ from typer import Option, Typer
 
 from mlogv32.utils.msch import BEContent
 
-from .extensions import CommentStatement, LocalVariables, LocalVariablesEnv
+from .extensions import (
+    CommentStatement,
+    LineExpression,
+    LineExpressionEnv,
+    LocalVariables,
+    LocalVariablesEnv,
+)
 from .filters import FILTERS
 from .models import BuildConfig
 from .parser import check_unsaved_variables, iter_labels, parse_mlog
@@ -362,8 +368,13 @@ def create_jinja_env(
         extensions=[
             "jinja2.ext.do",
             CommentStatement,
+            LineExpression,
             *extensions,
         ],
+    )
+    LineExpressionEnv.extend(
+        env,
+        line_expression_prefix="#{",
     )
     env.filters |= FILTERS
     return env

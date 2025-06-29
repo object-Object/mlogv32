@@ -58,6 +58,8 @@ mlogv32_clear_bss: \
   j mlogv32_clear_bss; \
 mlogv32_bss_done: \
   \
+  RVMODEL_IO_WRITE_STR(t0, "\n--- ", MLOGV32_TEST_NAME, " ---\n") \
+  \
   tail rvtest_init;
 
 //RV_COMPLIANCE_DATA_BEGIN

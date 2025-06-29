@@ -65,6 +65,7 @@ class mlogv32(pluginTemplate):
         self.compile_cmd = (
             "riscv{xlen}-unknown-elf-gcc -march={isa} \
          -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
+         -D 'MLOGV32_TEST_NAME=\"{test_name}\"'\
          -T "
             + self.pluginpath
             + "/env/{linker_script}\
@@ -123,7 +124,12 @@ class mlogv32(pluginTemplate):
             # we will iterate over each entry in the testlist. Each entry node will be refered to by the
             # variable testname.
             for testname in testlist:
-                logger.info(f"Building test: {testname}")
+                # hack
+                _, _, test_display_name = testname.partition(
+                    "riscv-arch-test/riscv-test-suite/"
+                )
+
+                logger.info(f"Building test:  {test_display_name}")
 
                 # for each testname we get all its fields (as described by the testlist format)
                 testentry = testlist[testname]
@@ -177,6 +183,7 @@ class mlogv32(pluginTemplate):
                     elf=elf,
                     macros=compile_macros,
                     linker_script=linker_script,
+                    test_name=test_display_name,
                 )
 
                 objcopy_cmd = self.objcopy_cmd.format(
@@ -221,7 +228,7 @@ class mlogv32(pluginTemplate):
                     f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}"
                 )
 
-                logger.info(f"Running test: {testname}")
+                logger.info(f"Running test: {test_display_name}")
 
                 processor.stop()
                 processor.flash(binary_file_host)

@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import re
-from typing import Iterable
+from typing import Iterable, Protocol, cast
 
 from jinja2 import Environment
 from jinja2.ext import Extension
@@ -27,7 +29,34 @@ class CommentStatement(Extension):
 
 # https://jinja.palletsprojects.com/en/stable/extensions/#inline-gettext
 
+
 _local_re = re.compile(r"(?:(?<=[\n #\t;])|^)\$([^\n #\t;]+)")
+
+
+class LocalVariablesEnv(Protocol):
+    local_variable_index: int
+    largest_local_variable: int
+    local_variable_cache: dict[str, str]
+
+    @staticmethod
+    def of(environment: Environment) -> LocalVariablesEnv:
+        return cast(LocalVariablesEnv, environment)
+
+    @staticmethod
+    def extend(
+        environment: Environment,
+        *,
+        local_variable_index: int = 1,
+        largest_local_variable: int = 0,
+        local_variable_cache: dict[str, str] | None = None,
+    ):
+        if local_variable_cache is None:
+            local_variable_cache = {}
+        environment.extend(
+            local_variable_index=local_variable_index,
+            largest_local_variable=largest_local_variable,
+            local_variable_cache=local_variable_cache,
+        )
 
 
 class LocalVariables(Extension):
@@ -57,22 +86,22 @@ class LocalVariables(Extension):
 
     def __init__(self, environment: Environment) -> None:
         super().__init__(environment)
-        environment.extend(
-            local_variable_index=1,
-            largest_local_variable=0,
-            local_variable_cache={},
-        )
+        LocalVariablesEnv.extend(environment)
         environment.globals |= {  # type: ignore
             "reset_locals": self.reset_locals,
             "declare_locals": self.declare_locals,
             "local_variable": self.local_variable,
         }
 
+    @property
+    def _env(self):
+        return LocalVariablesEnv.of(self.environment)
+
     def reset_locals(self, i: int = 1):
         if i < 1:
             raise ValueError(f"Invalid local variable index: {i}")
-        setattr(self.environment, "local_variable_index", i)
-        getattr(self.environment, "local_variable_cache").clear()
+        self._env.local_variable_index = i
+        self._env.local_variable_cache.clear()
 
     def declare_locals(self, *names: str | list[str]):
         for name in names:
@@ -82,7 +111,7 @@ class LocalVariables(Extension):
                 self.local_variable(name.removeprefix("$"))
 
     def local_variable(self, name: str | int | None = None):
-        cache: dict[str, str] = getattr(self.environment, "local_variable_cache")
+        cache = self._env.local_variable_cache
 
         if name not in cache:
             if isinstance(name, int):
@@ -90,22 +119,18 @@ class LocalVariables(Extension):
                 if i < 1:
                     raise ValueError(f"Invalid local variable index: {i}")
             else:
-                i: int = getattr(self.environment, "local_variable_index")
+                i = self._env.local_variable_index
 
             value = f"local{i}"
 
-            setattr(self.environment, "local_variable_index", i + 1)
+            self._env.local_variable_index = i + 1
 
             if not isinstance(name, str):
                 return value
 
             cache[name] = value
 
-            setattr(
-                self.environment,
-                "largest_local_variable",
-                max(i, getattr(self.environment, "largest_local_variable")),
-            )
+            self._env.largest_local_variable = max(i, self._env.largest_local_variable)
 
         return cache[name]
 

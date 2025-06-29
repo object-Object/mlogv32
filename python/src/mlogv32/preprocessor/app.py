@@ -12,7 +12,7 @@ from typer import Option, Typer
 
 from mlogv32.utils.msch import BEContent
 
-from .extensions import CommentStatement, LocalVariables
+from .extensions import CommentStatement, LocalVariables, LocalVariablesEnv
 from .filters import FILTERS
 from .models import BuildConfig
 from .parser import check_unsaved_variables, iter_labels, parse_mlog
@@ -125,7 +125,7 @@ def build(
         worker_env,
         instructions=config.instructions,
     )
-    i = getattr(worker_env, "largest_local_variable")
+    i = LocalVariablesEnv.of(worker_env).largest_local_variable
     print(f"Local variable count: {i}")
 
     worker_ast = parse_mlog(worker_code)

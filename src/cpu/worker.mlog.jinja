@@ -1637,10 +1637,11 @@ SRAI:
 
     jump extend_sign_rd always
 
+#% set mul_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low", "$$rs1_negative", "$$rs2_negative"]
+
 mul_decomp:
-#% set mul_decomp_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low"]
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals)
+#% do declare_locals(mul_locals)
 
     # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
 
@@ -1659,7 +1660,7 @@ mul_decomp:
 MUL:
     # R-type: rs1, rs2, rd_id
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals)
+#% do declare_locals(mul_locals)
     op add ret @counter 1
     jump mul_decomp always
 
@@ -1673,16 +1674,15 @@ MUL:
 
 MULH:
     # R-type: rs1, rs2, rd_id
-#% set mulh_s_u_locals = ["$$rs1_negative", "$$rs2_negative"]
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+#% do declare_locals(mul_locals)
     op greaterThanEq $$rs1_negative rs1 0x80000000 # check if the sign bit is set
     op greaterThanEq $$rs2_negative rs2 0x80000000
     # continue into mulh_s_u
 
 mulh_s_u:
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+#% do declare_locals(mul_locals)
     op add ret @counter 1
     jump mul_decomp always
 
@@ -1709,7 +1709,7 @@ mulh_s_u__rs2_positive:
 MULHSU:
     # R-type: rs1, rs2, rd_id
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+#% do declare_locals(mul_locals)
     op greaterThanEq $$rs1_negative rs1 0x80000000
     set $$rs2_negative false
     jump mulh_s_u always
@@ -1717,7 +1717,7 @@ MULHSU:
 MULHU:
     # R-type: rs1, rs2, rd_id
 #% do reset_locals()
-#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+#% do declare_locals(mul_locals)
     set $$rs1_negative false
     set $$rs2_negative false
     jump mulh_s_u always

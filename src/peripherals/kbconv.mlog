@@ -7,16 +7,14 @@ set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, Based
 set SOURCELINK "https://github.com/BasedUser/mPC"
 
 read UART_FIFO_MODULO processor1 "UART_FIFO_MODULO"
-read uart_wptr bank1 255
-op and uart_wptr uart_wptr 0xff # clear overflow flag if set by another producer
 
 read modifiers cell2 0
 op and shift modifiers 1
 op and ctrl modifiers 2
 op and caps modifiers 32
-read rptr cell1 62
 
 loop:
+read rptr cell1 62
 read wptr cell1 63
 jump loop equal wptr rptr
 
@@ -59,11 +57,15 @@ jump handleSpecial greaterThan tgtmodifier 0  # but ONLY if there's anything to 
 noApplySpecial: # TODO: once bank3 as scancode is in
 appliedSpecial:
 
-op add next_uart_wptr uart_wptr 1
-op mod next_uart_wptr next_uart_wptr UART_FIFO_MODULO
 
 # wait for uart to have space
 wait_for_uart:
+read uart_wptr bank1 255
+op and uart_wptr uart_wptr 0xff # clear overflow flag if set by another producer
+
+op add next_uart_wptr uart_wptr 1
+op mod next_uart_wptr next_uart_wptr UART_FIFO_MODULO
+
 read uart_rptr bank1 254
 jump wait_for_uart equal uart_rptr next_uart_wptr
 

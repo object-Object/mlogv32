@@ -397,7 +397,7 @@ def build(
     )
     schem2.write_file(str(out / "ram_proc.msch"))
 
-    w, h, *_ = schem1.get_dimensions()
+    w, h = schem1.get_dimensions()
     print(
         f"Generated {len(lookup_procs)} lookup tables ({w}x{h}) for {ram_size} variables using {min(len(BLOCK_IDS), ram_size)} block ids."
     )

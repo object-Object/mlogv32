@@ -147,16 +147,10 @@ def build(
         labels=worker_labels,
     )
 
-    lookups_schem = cast(
-        Schematic,
-        Schematic.read_file(str(config.schematics.lookups)),  # type: ignore
-    )
+    lookups_schem = Schematic.read_file(str(config.schematics.lookups))
     assert lookups_schem.get_dimensions() == (4, 4)
 
-    ram_schem = cast(
-        Schematic,
-        Schematic.read_file(str(config.schematics.ram)),  # type: ignore
-    )
+    ram_schem = Schematic.read_file(str(config.schematics.ram))
     assert ram_schem.get_dimensions() == (1, 1)
 
     schem = Schematic()
@@ -339,7 +333,8 @@ def lenrange(start: int, length: int, step: int = 1):
 
 
 def simple_block(block: Content | BEContent, x: int, y: int):
-    return Block(block, x, y, None, 0)
+    # lie
+    return Block(cast(Content, block), x, y, None, 0)
 
 
 def relative_links(*links: ProcessorLink, x: int, y: int):

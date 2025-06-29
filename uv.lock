@@ -237,7 +237,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "lark", extras = ["interegular"], specifier = ">=1.2.2" },
     { name = "pydantic", specifier = ">=2.11.5" },
-    { name = "pymsch", specifier = ">=0.0.11" },
+    { name = "pymsch", git = "https://github.com/object-Object/pymsch?rev=3c413fae16" },
     { name = "pyperclip", specifier = ">=1.9.0" },
     { name = "pyyaml", specifier = ">=5.2" },
     { name = "riscof", git = "https://github.com/riscv/riscof?rev=9fe3597d75" },
@@ -380,10 +380,9 @@ wheels = [
 [[package]]
 name = "pymsch"
 version = "0.0.11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bc/d3/796bbd80b865ad1340e090af383232461d570434228a2c29aefdad84da6c/pymsch-0.0.11.tar.gz", hash = "sha256:4346eb4cc239414f0b718ab11b7591fc57b09d529b061ba4d6e58df0221f2d6a", size = 11002 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/8f/8918acb75cec9051a722180bca3026462f779e5fa360d3fd611e78e33940/pymsch-0.0.11-py3-none-any.whl", hash = "sha256:3fd74208819ea3ed961e229f8836ecb923f7bd9739f425f496ca64a95c0e2b00", size = 11612 },
+source = { git = "https://github.com/object-Object/pymsch?rev=3c413fae16#3c413fae167d1d9fe3881f0076ef540c797361ba" }
+dependencies = [
+    { name = "pyperclip" },
 ]
 
 [[package]]

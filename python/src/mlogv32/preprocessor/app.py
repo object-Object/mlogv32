@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any, TypedDict, Unpack, cast, overload
+from typing import Annotated, Any, Iterable, TypedDict, Unpack, cast, overload
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.ext import Extension
 from pymsch import Block, Content, ProcessorConfig, ProcessorLink, Schematic
 from typer import Option, Typer
 
 from mlogv32.utils.msch import BEContent
 
-from .extensions import CommentStatement
+from .extensions import CommentStatement, LocalVariables
 from .filters import FILTERS
 from .models import BuildConfig
-from .parser import iter_labels, parse_mlog
+from .parser import check_unsaved_variables, iter_labels, parse_mlog
 
 app = Typer(
     pretty_exceptions_show_locals=False,
@@ -93,7 +94,7 @@ def build(
         width = size
         height = size
 
-    if include_all or not (include_cpu or include_peripherals):
+    if include_all:
         include_cpu = True
         include_peripherals = True
 
@@ -117,22 +118,27 @@ def build(
         config_code = ""
 
     worker_output = get_template_output_path(config.templates.worker)
+    worker_env = create_jinja_env(config.templates.worker.parent, [LocalVariables])
     worker_code = render_template(
         config.templates.worker,
         worker_output,
+        worker_env,
         instructions=config.instructions,
-        **config.inputs,
     )
+    i = getattr(worker_env, "largest_local_variable")
+    print(f"Local variable count: {i}")
 
-    labels = dict(iter_labels(parse_mlog(worker_code)))
+    worker_ast = parse_mlog(worker_code)
+    check_unsaved_variables(worker_ast)
+    worker_labels = dict(iter_labels(worker_ast))
 
     controller_output = get_template_output_path(config.templates.controller)
     controller_code = render_template(
         config.templates.controller,
         controller_output,
+        create_jinja_env(config.templates.controller.parent, [LocalVariables]),
         instructions=config.instructions,
-        labels=labels,
-        **config.inputs,
+        labels=worker_labels,
     )
 
     lookups_schem = cast(
@@ -199,18 +205,14 @@ def build(
         for y in lenrange(0, 16):
             add_peripheral(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
 
-    display_link = ProcessorLink(0, 0, "")
-
     add_peripheral(lookups_schem, 0, 16)
     lookup_links = [ProcessorLink(x=i % 4, y=16 + i // 4, name="") for i in range(16)]
 
     add_label(4, 19, right="UART0, UART2", down="LABELS")
     add_peripheral(simple_block(Content.WORLD_CELL, 4, 18))
-    add_peripheral(simple_block(Content.WORLD_CELL, 4, 17))
-    add_label(4, 16, up="COSTS", right="UART1, UART3")
+    add_label(4, 16, right="UART1, UART3")
 
     labels_link = ProcessorLink(4, 18, "")
-    costs_link = ProcessorLink(4, 17, "")
 
     uart_links = list[ProcessorLink]()
     for x in lenrange(5, 4, 2):
@@ -270,7 +272,6 @@ def build(
                     *uart_links,
                     registers_link,
                     labels_link,
-                    costs_link,
                     csrs_link,
                     incr_link,
                     config_link,
@@ -278,7 +279,6 @@ def build(
                     power_switch_link,
                     pause_switch_link,
                     single_step_switch_link,
-                    display_link,
                     x=16,
                     y=0,
                 ),
@@ -307,14 +307,12 @@ def build(
                             *uart_links,
                             registers_link,
                             labels_link,
-                            costs_link,
                             csrs_link,
                             incr_link,
                             config_link,
                             controller_link,
                             error_output_link,
                             single_step_switch_link,
-                            display_link,
                             x=x,
                             y=y,
                         ),
@@ -323,10 +321,11 @@ def build(
                 )
             )
 
-    if output:
-        schem.write_file(str(output))
-    else:
-        schem.write_clipboard()
+    if include_cpu or include_peripherals:
+        if output:
+            schem.write_file(str(output))
+        else:
+            schem.write_clipboard()
 
 
 def lenrange(start: int, length: int, step: int = 1):
@@ -348,7 +347,10 @@ class Labels(TypedDict, total=False):
     down: str
 
 
-def create_jinja_env(template_dir: Path):
+def create_jinja_env(
+    template_dir: Path,
+    extensions: Iterable[type[Extension] | str] = (),
+):
     env = Environment(
         loader=FileSystemLoader(template_dir),
         line_statement_prefix="#%",
@@ -358,15 +360,23 @@ def create_jinja_env(template_dir: Path):
         trim_blocks=True,
         undefined=StrictUndefined,
         extensions=[
+            "jinja2.ext.do",
             CommentStatement,
+            *extensions,
         ],
     )
     env.filters |= FILTERS
     return env
 
 
-def render_template(path: Path, output: Path | None, **kwargs: Any):
-    env = create_jinja_env(path.parent)
+def render_template(
+    path: Path,
+    output: Path | None,
+    env: Environment | None = None,
+    **kwargs: Any,
+):
+    if env is None:
+        env = create_jinja_env(path.parent)
     template = env.get_template(path.name)
     result = template.render(**kwargs)
 

@@ -114,10 +114,9 @@ Supported privilege levels: M, U
 
 This non-standard extension adds instructions to control the mlogv32 processor's hardware and access certain Mlog features.
 
-| funct12 (31:20) | rs1 (19:15) | funct3 (14:12) | rd (11:7) | opcode (6:0) | name     |
-| --------------- | ----------- | -------------- | --------- | ------------ | -------- |
-| funct12         | rs1         | `000`          | `00000`   | `0001011`    | MLOGSYS  |
-| funct12         | rs1         | `001`          | `00000`   | `0001011`    | MLOGDRAW |
+| funct12 (31:20) | rs1 (19:15) | funct3 (14:12) | rd (11:7) | opcode (6:0) | name    |
+| --------------- | ----------- | -------------- | --------- | ------------ | ------- |
+| funct12         | rs1         | `000`          | `00000`   | `0001011`    | MLOGSYS |
 
 The MLOG instructions are encoded with an I-type instruction format using the _custom-0_ opcode. The zero-extended immediate is used as a minor opcode (funct12) for implementation reasons.
 
@@ -129,57 +128,13 @@ The `mlogsys.icache` instruction uses register _rs1_ as the number of bytes to d
 | ------- | ------ | --------------------- |
 | 0       | length | Initialize ROM icache |
 
-The MLOGDRAW instruction is used for drawing graphics using the Mlog `draw` instruction. Arguments are passed to this instruction using registers _rs1_, a1, a2, a3, a4, and a5 as necessary. Due to subframe constraints, `drawflush` is executed after every `draw` call.
-
-| funct12 | rs1     | a1    | a2    | a3     | a4       | a5       | name             |
-| ------- | ------- | ----- | ----- | ------ | -------- | -------- | ---------------- |
-| 0       | red     | green | blue  |        |          |          | `draw clear`     |
-| 1       | red     | green | blue  | alpha  |          |          | `draw color`     |
-| 2       | color   |       |       |        |          |          | `draw col`       |
-| 3       | width   |       |       |        |          |          | `draw stroke`    |
-| 4       | x1      | y1    | x2    | y2     |          |          | `draw line`      |
-| 5       | x       | y     | width | height |          |          | `draw rect`      |
-| 6       | x       | y     | width | height |          |          | `draw lineRect`  |
-| 7       | x       | y     | sides | radius | rotation |          | `draw poly`      |
-| 8       | x       | y     | sides | radius | rotation |          | `draw linePoly`  |
-| 9       | x1      | y1    | x2    | y2     | x3       | y3       | `draw triangle`  |
-| 10      | x       | y     | type  | id     | size     | rotation | `draw image`     |
-| 11      | x       | y     |       |        |          |          | `draw print`     |
-| 12      | x       | y     |       |        |          |          | `draw translate` |
-| 13      | x       | y     |       |        |          |          | `draw scale`     |
-| 14      | degrees |       |       |        |          |          | `draw rotate`    |
-| 15      | `00000` |       |       |        |          |          | `draw reset`     |
-
-#### `draw col`
-
-`color` should be in integer format, eg. `0xff0000ff`.
-
-#### `draw image`
-
-`type`: `lookup` type
-
-| Type   | Value |
-| ------ | ----- |
-| block  | 0     |
-| unit   | 1     |
-| item   | 2     |
-| liquid | 3     |
-
-`id`: `lookup` id (see https://yrueii.github.io/MlogDocs/)
-
-Returns 1 if the id was successfully looked up, or 0 if the lookup returned null.
-
-#### `draw print`
-
-Only alignment `topLeft` is supported.
-
 ## CSRs
 
 CSR values are stored either in a RAM processor (CSRS) or in a variable in the CPU, depending on the CSR. Following is a table of CSRs, their storage location, and any relevant notes (eg. supported fields).
 
 | CSR               | Location | Notes                                                                                   |
 | ----------------- | -------- | --------------------------------------------------------------------------------------- |
-| `cycle[h]`        | CPU      | Frequency: ticks \* ipt. Traps in U-mode.                                               |
+| `cycle[h]`        | CSRS     | Frequency: ticks \* ipt. Traps in U-mode.                                               |
 | `time[h]`         | CPU      | Frequency: ms. Traps in U-mode.                                                         |
 | `instret[h]`      | CPU      | Traps in U-mode.                                                                        |
 | `hpmcounter*[h]`  | CSRS     | Not implemented.                                                                        |
@@ -198,7 +153,7 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `mcause`          | CSRS     | Stored in CSRS because the CPU often speculatively sets the corresponding CPU variable. |
 | `mtval`           | CSRS     | Same reasoning as `mcause`.                                                             |
 | `mip`             | CPU      |                                                                                         |
-| `mcycle[h]`       | CPU      | See `cycle[h]`.                                                                         |
+| `mcycle[h]`       | CSRS     | See `cycle[h]`.                                                                         |
 | `minstret[h]`     | CPU      | See `instret[h]`.                                                                       |
 | `mhpmcounter*[h]` | CSRS     | See `hpmcounter*[h]`.                                                                   |
 | `mcountinhibit`   | CSRS     | Not implemented.                                                                        |

@@ -1,9 +1,10 @@
+#% from 'worker.mlog.jinja' import fetch_variables
+
 #% extends 'constants.jinja'
 #% block contents
 
 #% set REGISTERS = 'cell1'
 #% set LABELS = 'cell2'
-#% set COSTS = 'cell3'
 
 #% set CSRS = 'processor17'
 #% set INCR = 'processor18'
@@ -14,8 +15,6 @@
 #% set POWER_SWITCH = 'switch1'
 #% set PAUSE_SWITCH = 'switch2'
 #% set SINGLE_STEP_SWITCH = 'switch3'
-
-#% set DISPLAY = 'display1'
 
     # we ONLY reset this variable if the controller is rebuilt or manually restarted
     set skip_slow_init false
@@ -101,13 +100,11 @@ init_incr:
     op add address address 1
     jump init_incr lessThanEq address {{RAM_PROC_VARS}}
 
-    # initialize label/cost tables
+    # initialize label lookup table
 
 #% for instruction in instructions
-    #% set cost = base_instruction_cost + instruction.cost
     # {{ instruction.label }}
     write {{labels[instruction.label]}} {{LABELS}} {{loop.index0}}
-    write {{cost}} {{COSTS}} {{loop.index0}}
 #% endfor
 
     # ^ all of this only needs to run once, so skip it on subsequent runs to make startup faster
@@ -118,11 +115,6 @@ end_slow_init:
 
     # text output
     printflush {{ERROR_OUTPUT}}
-
-    # display
-    draw reset
-    draw clear 0 0 0
-    drawflush {{DISPLAY}}
 
     # icache
     set __etext 0
@@ -162,8 +154,7 @@ end_slow_init:
     # clear pending/enabled interrupts
     set csr_mip 0
     set csr_mie 0
-    set poll_interrupts false
-    set fire_interrupts false
+    set interrupt_flags 0b00
 
     # reset mtvec to implementation-defined value to help catch bugs
     write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
@@ -187,17 +178,15 @@ end_slow_init:
     write 0 {{CSRS}} "{{ 'mscratch'|csr }}"
     write 0 {{CSRS}} "{{ 'mtval'|csr }}"
 
-    # get the worker count
-    # this is necessary for distributing parallel tasks, eg. the MLOGSYS.icache instruction
-    set prev_proc @this
-    set worker_id -1  # the first worker will have an id of -1 + 1 = 0
+    # clear critical section if set
+    set controller_critical_section null
+
+    # align to tick
     wait 1e-5
-    read worker_count prev_proc "worker_id"
-    op add worker_count worker_count 1
 
     # set mtime/mcycle reference points
-    set last_time_update @time
-    set last_cycle_update @tick
+    set last_mtime_update @time
+    set last_mcycle_update @tick
 
     # start the workers
     set prev_proc @this
@@ -207,51 +196,29 @@ next_tick:
     wait 1e-5
 
     # fetch current hart state
-    read state prev_proc "state"
-    read pc prev_proc "pc"
-    read icache_ram prev_proc "icache_ram"
-    read icache_var prev_proc "icache_var"
-    read __etext prev_proc "__etext"
-    read privilege_mode prev_proc "privilege_mode"
-    read reservation_set prev_proc "reservation_set"
-    read csr_mtime prev_proc "csr_mtime"
-    read csr_mtimeh prev_proc "csr_mtimeh"
-    read csr_mtimecmp prev_proc "csr_mtimecmp"
-    read csr_mtimecmph prev_proc "csr_mtimecmph"
-    read csr_minstret prev_proc "csr_minstret"
-    read csr_minstreth prev_proc "csr_minstreth"
-    read csr_mstatus prev_proc "csr_mstatus"
-    read csr_mip prev_proc "csr_mip"
-    read csr_mie prev_proc "csr_mie"
-    read poll_interrupts prev_proc "poll_interrupts"
-    read fire_interrupts prev_proc "fire_interrupts"
+    # note: we DO NOT update prev_proc here if not halting
 
-    # for debug output
-    read instruction prev_proc "instruction"
-    read op_id prev_proc "op_id"
-    read rs1_id prev_proc "rs1_id"
-    read rs2_id prev_proc "rs2_id"
-    read rd_id prev_proc "rd_id"
-    read imm prev_proc "imm"
-
-    # tell the next proc to fetch the hart state from us
-    set prev_proc @this
+    #{{ '\n' }}{{ fetch_variables() }}
 
     # perform any state transitions requested by the workers
+    # if halting/resetting, we don't modify the requesting worker's @counter
     jump halt equal state "halt"
     jump reset equal state "reset"
     jump pause equal state "pause"
-    jump decode equal state "decoding"
 end_pause:
 
     # poll hardware
     sensor enabled {{POWER_SWITCH}} @enabled
-    jump halt equal enabled false
+    jump state->halt equal enabled false
+
+    # check which CSR we're currently updating, if any
 
     # update time
     # TODO: handle mtimeh/mcycleh overflow
 
-    op sub delta_ms @time last_time_update
+    jump skip_mtime_update equal controller_critical_section "mtime"
+
+    op sub delta_ms @time last_mtime_update
 
     op add csr_mtime csr_mtime delta_ms
     op floor csr_mtime csr_mtime
@@ -261,14 +228,22 @@ end_pause:
 
     op mod csr_mtime csr_mtime 0x100000000
 
+    write csr_mtime prev_proc "csr_mtime"
+    write csr_mtimeh prev_proc "csr_mtimeh"
+
+skip_mtime_update:
+    set last_mtime_update @time
+
     # update cycle
     # we define the rate of increase of cycle as "@ipt * ticks"
     # this should be a decent estimation of the number of mlog instructions executed
 
+    jump skip_mcycle_update equal controller_critical_section "mcycle"
+
     read csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
     read csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
 
-    op sub delta_cycles @tick last_cycle_update
+    op sub delta_cycles @tick last_mcycle_update
     op mul delta_cycles delta_cycles @ipt
 
     op add csr_mcycle csr_mcycle delta_cycles
@@ -284,16 +259,19 @@ end_pause:
     write csr_mcycle {{CSRS}} "{{ 'cycle'|csr }}"
     write csr_mcycleh {{CSRS}} "{{ 'cycleh'|csr }}"
 
-    set last_time_update @time
-    set last_cycle_update @tick
+skip_mcycle_update:
+    set last_mcycle_update @tick
 
-    # tell the first worker to poll and fire interrupts
-    set poll_interrupts true
-    set fire_interrupts true
+    # tell the next worker to poll and fire interrupts
+    write 0b11 prev_proc "interrupt_flags"
 
     # go to next tick
 
     jump next_tick always
+
+state->halt:
+    write 0 prev_proc "@counter"
+    jump halt always
 
 pause:
     control enabled {{SINGLE_STEP_SWITCH}} true
@@ -303,30 +281,19 @@ pause__loop:
     wait 1e-5
 
     sensor enabled {{POWER_SWITCH}} @enabled
-    jump halt equal enabled false
+    jump state->halt equal enabled false
 
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump pause__loop equal enabled true
 
-    set prev_proc @this
+    read counter prev_proc "@counter"
+    op add counter counter 1
+    write counter prev_proc "@counter"
+
     set state "running"
+    write state prev_proc "state"
+
     jump end_pause always
-
-decode:
-    set workers_done 0
-
-decode__loop:
-    wait 1e-5
-
-    sensor enabled {{POWER_SWITCH}} @enabled
-    jump halt equal enabled false
-
-    jump decode__loop lessThan workers_done worker_count
-
-    # signal that all workers are finished, then wait for the first decoding worker to increment pc
-    set prev_proc @this
-    set state "running"
-    jump next_tick always
 
 # given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # address -> variable
@@ -354,7 +321,6 @@ set {{RAM_START}} null
 set {{SYSCON}} null
 # local preprocessor constants
 set {{LABELS}} null
-set {{COSTS}} null
 set {{CSRS}} null
 set {{INCR}} null
 set {{CONFIG}} null
@@ -362,17 +328,12 @@ set {{ERROR_OUTPUT}} null
 set {{SINGLE_STEP_SWITCH}} null
 set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
-set {{DISPLAY}} null
 set {{labels[instruction.label]}} null
-set {{cost}} null
 set {{loop.index0}} null
 # unused variables
 set _ UART_FIFO_MODULO
 set _ RAM_END
-set _ worker_id
-set _ state
 set _ pc
-set _ icache_ram
 set _ icache_var
 set _ __etext
 set _ privilege_mode
@@ -388,12 +349,5 @@ set _ csr_minstreth
 set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
-set _ poll_interrupts
-set _ fire_interrupts
-set _ instruction
-set _ op_id
-set _ rs1_id
-set _ rs2_id
-set _ rd_id
-set _ imm
+set _ interrupt_flags
 # {% endraw %}

@@ -1,15 +1,20 @@
-start: (line? COMMENT? _NEWLINE)*
+start: (line? _NEWLINE)*
 
 ?line: LABEL -> label
      | statement
+     | directive
 
 statement: TOKEN (TOKEN | LABEL | STRING)*
+
+directive: _DIRECTIVE TOKEN+
 
 STRING.2: /"[^\n]*"/
 
 LABEL.1: /[^\n #\t;]+:/
 
 TOKEN: /[^\n #\t;]+/
+
+_DIRECTIVE.1: "#directive"
 
 COMMENT: /#[^\n]*/
 

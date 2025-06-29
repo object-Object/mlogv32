@@ -1,10 +1,67 @@
+#% macro fetch_variables()
+    read __etext prev_proc "__etext"
+    read _address prev_proc "_address"
+    read _rom prev_proc "_rom"
+    read address prev_proc "address"
+    read csr_mie prev_proc "csr_mie"
+    read csr_minstret prev_proc "csr_minstret"
+    read csr_minstreth prev_proc "csr_minstreth"
+    read csr_mip prev_proc "csr_mip"
+    read csr_mstatus prev_proc "csr_mstatus"
+    read csr_mtime prev_proc "csr_mtime"
+    read csr_mtimecmp prev_proc "csr_mtimecmp"
+    read csr_mtimecmph prev_proc "csr_mtimecmph"
+    read csr_mtimeh prev_proc "csr_mtimeh"
+    read decode_ram prev_proc "decode_ram"
+    read decode_var prev_proc "decode_var"
+    read icache_payload prev_proc "icache_payload"
+    read icache_ram prev_proc "icache_ram"
+    read icache_var prev_proc "icache_var"
+    read imm prev_proc "imm"
+    read interrupt_flags prev_proc "interrupt_flags"
+    read length prev_proc "length"
+    read mcause prev_proc "mcause"
+    read mtval prev_proc "mtval"
+    read next_pc prev_proc "next_pc"
+    read op_id prev_proc "op_id"
+    read pc prev_proc "pc"
+    read privilege_mode prev_proc "privilege_mode"
+    read ram prev_proc "ram"
+    read rd prev_proc "rd"
+    read rd_id prev_proc "rd_id"
+    read result prev_proc "result"
+    read ret prev_proc "ret"
+    read ret2 prev_proc "ret2"
+    read ret3 prev_proc "ret3"
+    read rs1 prev_proc "rs1"
+    read rs1_id prev_proc "rs1_id"
+    read rs2 prev_proc "rs2"
+    read rs2_id prev_proc "rs2_id"
+    read state prev_proc "state"
+    read value prev_proc "value"
+    read variable prev_proc "variable"
+
+    read nonlocal1 prev_proc "nonlocal1"
+    read nonlocal2 prev_proc "nonlocal2"
+
+#% do reset_locals()
+    read {{local_variable()}} prev_proc "{{ local_variable(1) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(2) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(3) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(4) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(5) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(6) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(7) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(10) }}"
+#% endmacro
+
 #%# hack: use extends so we don't need to individually import all of the constants
 #% extends 'constants.jinja'
 #% block contents
 
 #%# linked buildings
-#%# IMPORTANT: the buildings must be linked in the order shown here
-#%# ie. lookups (not shown), then UART0 to 3, then REGISTERS, etc
 
 #% set UART_START_LINK = 16
 
@@ -19,8 +76,6 @@
 #% set ERROR_OUTPUT = 'message1'
 
 #% set SINGLE_STEP_SWITCH = 'switch1'
-
-#% set DISPLAY = 'display1'
 
 reset:
     setrate 1000
@@ -41,86 +96,80 @@ reset:
 
     op add RAM_END {{RAM_START}} RAM_SIZE
 
-next_tick:
     wait 1e-5
+
+    # @counter is moved here when the next worker starts executing
+#% set NEXT_TICK_LINE = 12
+#directive assert_line {{ NEXT_TICK_LINE }}
 
     # poll hardware
     read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
     sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
 
-    # fetch current hart state
+    # fetch saved variables from the previous worker
     read prev_proc {{CONTROLLER}} "prev_proc"
 
-    read worker_id prev_proc "worker_id"
-    op add worker_id worker_id 1
+#directive begin_fetch
 
-    read state prev_proc "state"
-    read pc prev_proc "pc"
-    read icache_ram prev_proc "icache_ram"
-    read icache_var prev_proc "icache_var"
-    read __etext prev_proc "__etext"
-    read privilege_mode prev_proc "privilege_mode"
-    read reservation_set prev_proc "reservation_set"
-    read csr_mtime prev_proc "csr_mtime"
-    read csr_mtimeh prev_proc "csr_mtimeh"
-    read csr_mtimecmp prev_proc "csr_mtimecmp"
-    read csr_mtimecmph prev_proc "csr_mtimecmph"
-    read csr_minstret prev_proc "csr_minstret"
-    read csr_minstreth prev_proc "csr_minstreth"
-    read csr_mstatus prev_proc "csr_mstatus"
-    read csr_mip prev_proc "csr_mip"
-    read csr_mie prev_proc "csr_mie"
-    read poll_interrupts prev_proc "poll_interrupts"
-    read fire_interrupts prev_proc "fire_interrupts"
+    #{{ '\n' }}{{ fetch_variables() }}
 
-    jump reset equal state "halt"
+#directive end_fetch
 
-    # tell the next proc to fetch the hart state from us
-    # we do this even if not running so that the worker id is accurate
+    jump reset__running equal state "decoding"
+    jump reset notEqual state "running"
+reset__running:
+
+    # tell the next worker to fetch the hart state from us
     write @this {{CONTROLLER}} "prev_proc"
 
-    jump parallel_decode equal state "decoding"
-    jump reset notEqual state "running"
+    # if we just started executing, don't restore @counter
+    jump poll_interrupts equal prev_proc {{CONTROLLER}}
 
-    # using two variables is slower here, but faster in end_instruction
-    jump poll_interrupts equal poll_interrupts true
-    jump fire_interrupts equal fire_interrupts true
-    jump main always
+    # otherwise, jump to whatever instruction the previous worker would have executed next
+    # _counter doesn't need to be saved because this should only ever run at the start of a tick
+#directive push_saved _counter
+    read _counter prev_proc "@counter"
+    write {{NEXT_TICK_LINE}} prev_proc "@counter"
+    set @counter _counter
+#directive pop_saved _counter
 
 # check if software-manipulable interrupts should become pending
 # this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
 poll_interrupts:
-    set poll_interrupts false
+#% do reset_locals()
+    op and interrupt_flags interrupt_flags 0b01 # clear interrupt_flags.poll
 
     # machine timer interrupt
-    op greaterThan high_gt csr_mtimeh csr_mtimecmph
-    op equal high_eq csr_mtimeh csr_mtimecmph
-    op greaterThanEq low_ge csr_mtime csr_mtimecmp
+    op greaterThan $high_gt csr_mtimeh csr_mtimecmph
+    op equal $high_eq csr_mtimeh csr_mtimecmph
+    op greaterThanEq $low_ge csr_mtime csr_mtimecmp
 
-    op and mip.mtip high_eq low_ge
-    op or mip.mtip mip.mtip high_gt
-    op shl mip.mtip mip.mtip 7
+    op and $mip.mtip $high_eq $low_ge
+    op or $mip.mtip $mip.mtip $high_gt
+    op shl $mip.mtip $mip.mtip 7
 
     op and csr_mip csr_mip 0b11111111111111111111111101111111
-    op or csr_mip csr_mip mip.mtip
+    op or csr_mip csr_mip $mip.mtip
 
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, and if certain CSRs are modified
 fire_interrupts:
-    set fire_interrupts false
+#% do reset_locals()
+    op and interrupt_flags interrupt_flags 0b10 # clear interrupt_flags.fire
 
     # if privilege_mode < M, machine interrupts are globally enabled
     jump fire_interrupts__machine lessThan privilege_mode 0b11
     # if privilege_mode = M, machine interrupts are enabled if mstatus.MIE is 1
-    op and mstatus.mie csr_mstatus 0b1000
-    jump main equal mstatus.mie 0
+    op and $mstatus.mie csr_mstatus 0b1000
+    jump main equal $mstatus.mie 0
 
 fire_interrupts__machine:
+#% do reset_locals()
     # machine timer interrupt
-    op and mip.mtip csr_mip 0b10000000
-    op and mie.mtie csr_mie mip.mtip
+    op and $mip.mtip csr_mip 0b10000000
+    op and $mie.mtie csr_mie $mip.mtip
     set mcause 0x80000007 # machine timer interrupt
-    jump trap_without_mtval notEqual mie.mtie 0
+    jump trap_without_mtval notEqual $mie.mtie 0
 
 main:
     # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
@@ -146,11 +195,11 @@ main__slow_instruction_fetch:
     op add ret @counter 1
     jump load_word always
 
-    set instruction result
-    set decode_address null
+    set value result
+    set address null
     
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
-    op add decode_ret @counter 10
+    op add ret3 @counter 10
     jump decode always
 
 main__access_icache:
@@ -161,7 +210,7 @@ main__access_icache:
     #                           = RAM_SIZE + pc
     # so just calculate that and skip the extra subtraction
     op add _address RAM_SIZE pc
-    op add lookup_variable_ret @counter 1
+    op add ret2 @counter 1
     jump access_ram_raw always
     set icache_ram ram
     set icache_var variable
@@ -172,7 +221,7 @@ main__read_icache:
     read icache_var {{INCR}} icache_var
     op and imm icache_payload 0xffffffff
     op shr op_id icache_payload 47
-    # decode_ret jumps here for the slow path
+    # ret3 jumps here for the slow path
     # we can't jump any later because decode doesn't fully isolate the register fields
 
     op shr rd_id icache_payload 32
@@ -189,18 +238,23 @@ main__read_icache:
     read rs1 {{REGISTERS}} rs1_id
     read rs2 {{REGISTERS}} rs2_id
 
+    jump state->pause strictEqual pc breakpoint_address
+    jump state->pause equal single_step_enabled true
+end_pause:
+
+#% do reset_locals()
     # jump to instruction handler
-    op add index op_id 64 # op_id is in the range [-64, 63]
-    read @counter {{LABELS}} index
+    op add $index op_id 64 # op_id is in the range [-64, 63]
+    read @counter {{LABELS}} $index
 
 # this is a normal length for a label
 end_instruction_with_rd_and_poll_interrupts:
-    set poll_interrupts true
+    op or interrupt_flags interrupt_flags 0b10 # set interrupt_flags.poll
     # continue into end_instruction_with_rd_and_fire_interrupts
 
 # this is too
 end_instruction_with_rd_and_fire_interrupts:
-    set fire_interrupts true
+    op or interrupt_flags interrupt_flags 0b01 # set interrupt_flags.fire
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
@@ -221,37 +275,43 @@ end_instruction:
     op add csr_minstreth csr_minstreth 1
 
 end_instruction_trap:
+    # TODO: we could save an instruction in the main loop by putting this into interrupt_flags, but it would be harder to read
+    write null {{CONTROLLER}} "controller_critical_section"
+
     # next_pc is set to pc + 4 at the start of main
     # if we're in the icache, icache_var was already incremented
     # if next_pc was modified, icache_var should have also been set to null
     set pc next_pc
 
-    jump state->pause equal pc breakpoint_address
-    jump state->pause equal single_step_enabled true
-
-    jump main notEqual fire_interrupts true
+    jump main equal interrupt_flags 0b00
+    jump poll_interrupts greaterThanEq interrupt_flags 0b10
     jump fire_interrupts always
 
 # exceptions
 
 default_mtvec_handler:
+    # if we set state before printing, atomicity should be guaranteed
+    set state "halt"
     print "Control transferred to {{SYSCON}} (default mtvec), halting."
     printflush {{ERROR_OUTPUT}}
-    # continue into state->halt
+    jump reset always
 
 state->halt:
     set state "halt"
-    jump next_tick always
+    jump reset always
 
 state->reset:
     set state "reset"
-    jump next_tick always
+    jump reset always
 
+# the controller will advance @counter and set state to "running" when it's time to unpause
 state->pause:
     set state "pause"
-    jump next_tick always
+    stop
+    jump end_pause always
 
 ILLEGAL_OP:
+#% do reset_locals()
     set mcause 2
     # TODO: return faulting instruction bits?
     # continue into trap_without_mtval
@@ -262,14 +322,14 @@ trap_without_mtval:
 
 trap:
     # set mstatus.MPIE to mstatus.MIE, set mstatus.MIE to 0, and set mstatus.MPP to privilege_mode
-    op and mstatus.mpie csr_mstatus 0b1000
-    op shl mstatus.mpie mstatus.mpie 4
+    op and $mstatus.mpie csr_mstatus 0b1000
+    op shl $mstatus.mpie $mstatus.mpie 4
 
-    op shl mstatus.mpp privilege_mode 11
+    op shl $mstatus.mpp privilege_mode 11
 
     op and csr_mstatus csr_mstatus 0b11111111111111111110011101110111
-    op or csr_mstatus csr_mstatus mstatus.mpie
-    op or csr_mstatus csr_mstatus mstatus.mpp
+    op or csr_mstatus csr_mstatus $mstatus.mpie
+    op or csr_mstatus csr_mstatus $mstatus.mpp
 
     # set mcause
     write mcause {{CSRS}} "{{ 'mcause'|csr }}"
@@ -294,17 +354,19 @@ trap:
 
 # in-place variable length sign extension function for rd
 # if length is known statically, a sequence of xor-sub-and can be used instead
-# rd, length -> rd
+# ends by jumping to end_instruction_with_rd
+# rd, length ->
 extend_sign_rd:
+#% do reset_locals()
     # https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
-    op sub _mask length 1
-    op shl _mask 1 _mask
+    op sub $mask length 1
+    op shl $mask 1 $mask
 
-    op xor rd rd _mask
-    op sub rd rd _mask
+    op xor rd rd $mask
+    op sub rd rd $mask
     op and rd rd 0xffffffff # convert signed to unsigned
 
-    set @counter ret
+    jump end_instruction_with_rd always
 
 # converts a pair of two's complement unsigned values to signed in-place
 # this converts two values at once because most usages of it need to convert two values
@@ -324,25 +386,28 @@ unsigned_to_signed__done_2:
 
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
-# ret: lookup_variable_ret
+# ret: ret2
 access_ram:
+#% do reset_locals()
+    # _address is named because it's also an input for lookup_variable
     op sub _address address {{RAM_START}}
 
+# _address -> ram, variable
 access_ram_raw:
     # we store 4 bytes in each value
     op idiv _address _address 4
 
     # get the ram proc containing this address
-    op idiv _ram_index _address {{RAM_PROC_VARS}}
-    op add _ram_index _ram_index RAM_START_PROC
+    op idiv $ram_index _address {{RAM_PROC_VARS}}
+    op add $ram_index $ram_index RAM_START_PROC
 
-    op mod _ram_x _ram_index MEMORY_WIDTH
-    op add _ram_x _ram_x MEMORY_X
+    op mod $ram_x $ram_index MEMORY_WIDTH
+    op add $ram_x $ram_x MEMORY_X
 
-    op idiv _ram_y _ram_index MEMORY_WIDTH
-    op add _ram_y _ram_y MEMORY_Y
+    op idiv $ram_y $ram_index MEMORY_WIDTH
+    op add $ram_y $ram_y MEMORY_Y
 
-    getblock building ram _ram_x _ram_y
+    getblock building ram $ram_x $ram_y
 
     # get the variable within the ram proc containing this address
     op mod _address _address {{RAM_PROC_VARS}}
@@ -350,18 +415,46 @@ access_ram_raw:
 # given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
 # this must stay directly after access_ram
 # _address -> variable
-# ret: lookup_variable_ret
+# ret: ret2
+# NOTE: modify_csr assumes this function uses one local
 lookup_variable:
+#% do reset_locals()
     # the lookup is assumed to start at link 0, so we don't need to add an offset here
-    op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
-    getlink _lookup _lookup
+    op idiv $lookup _address {{LOOKUP_PROC_SIZE}}
+    getlink $lookup $lookup
 
     op mod variable _address {{LOOKUP_PROC_SIZE}}
     lookup block variable variable
     sensor variable variable @name
-    read variable _lookup variable
+    read variable $lookup variable
 
-    set @counter lookup_variable_ret
+    set @counter ret2
+
+# caller must ensure offset is 4-byte aligned and in uart range
+# ret: ret2
+access_uart:
+#% set access_uart_locals = ["$$offset", "$$uart", "$$rx_read", "$$rx_write_raw", "$$rx_write", "$$tx_read", "$$tx_write"]
+#% do reset_locals()
+#% do declare_locals(access_uart_locals)
+    op sub $$offset $$offset 0x10
+
+    op idiv $$uart $$offset 0x20
+    op add $$uart $$uart {{UART_START_LINK}}
+    getlink $$uart $$uart
+
+    op mod $$offset $$offset 0x20
+    op add $$offset $$offset 0x10
+
+    read $$rx_read $$uart {{UART_RX_READ}}
+
+    read $$rx_write_raw $$uart {{UART_RX_WRITE}}
+    op and $$rx_write $$rx_write_raw 0xff
+
+    read $$tx_read $$uart {{UART_TX_READ}}
+
+    read $$tx_write $$uart {{UART_TX_WRITE}}
+
+    set @counter ret2
 
 # loads the word from memory that contains the specified address
 # mcause is required in order to raise the correct exception in case of access fault
@@ -378,7 +471,7 @@ load_ram_or_mmio_word:
 
 load_ram_word_unchecked:
     # locate and read value from ram
-    op add lookup_variable_ret @counter 1
+    op add ret2 @counter 1
     jump access_ram always
     read value ram variable
     # null is coerced to 0 by swap_endianness
@@ -390,65 +483,67 @@ load_ram_word_unchecked:
 # this MUST stay directly after load_word
 # value -> result
 swap_endianness:
+#% do reset_locals()
     # byte 3 -> byte 0
     op shr result value 24
     op and result result 0xff
 
     # byte 1 -> byte 2
-    op shl _tmp value 8
-    op and _tmp _tmp 0xff0000
-    op or result result _tmp
+    op shl $tmp value 8
+    op and $tmp $tmp 0xff0000
+    op or result result $tmp
 
     # byte 2 -> byte 1
-    op shr _tmp value 8
-    op and _tmp _tmp 0xff00
-    op or result result _tmp
+    op shr $tmp value 8
+    op and $tmp $tmp 0xff00
+    op or result result $tmp
 
     # byte 0 -> byte 3
-    op shl _tmp value 24
-    op and _tmp _tmp 0xff000000
-    op or result result _tmp
+    op shl $tmp value 24
+    op and $tmp $tmp 0xff000000
+    op or result result $tmp
 
     set @counter ret
 
 # loads a word from ROM
 # address -> result
 load_rom_word_unchecked:
+#% do reset_locals()
     # align to 4 bytes
-    op and _address address 0xfffffffc
+    op and $address address 0xfffffffc
 
     # get rom proc data
-    op idiv _rom_index _address {{ROM_PROC_BYTES}}
-    op mod _str_index _address {{ROM_PROC_BYTES}}
+    op idiv $rom_index $address {{ROM_PROC_BYTES}}
+    op mod $str_index $address {{ROM_PROC_BYTES}}
 
-    op mod _rom_x _rom_index MEMORY_WIDTH
-    op add _rom_x _rom_x MEMORY_X
+    op mod $rom_x $rom_index MEMORY_WIDTH
+    op add $rom_x $rom_x MEMORY_X
 
-    op idiv _rom_y _rom_index MEMORY_WIDTH
-    op add _rom_y _rom_y MEMORY_Y
+    op idiv $rom_y $rom_index MEMORY_WIDTH
+    op add $rom_y $rom_y MEMORY_Y
 
-    getblock building _rom _rom_x _rom_y
+    getblock building _rom $rom_x $rom_y
     read _rom _rom "v"
 
     # read bytes of word
-    read _byte0 _rom _str_index
+    read $byte0 _rom $str_index
 
-    op add _str_index _str_index 1
-    read _byte1 _rom _str_index
+    op add $str_index $str_index 1
+    read $byte1 _rom $str_index
 
-    op add _str_index _str_index 1
-    read _byte2 _rom _str_index
+    op add $str_index $str_index 1
+    read $byte2 _rom $str_index
 
-    op add _str_index _str_index 1
-    read _rom _rom _str_index # clear _rom to avoid issues with the vars menu and block data size
+    op add $str_index $str_index 1
+    read _rom _rom $str_index # clear _rom to avoid issues with the vars menu and block data size
 
     # merge into big endian
-    op shl _byte1 _byte1 8
-    op shl _byte2 _byte2 16
+    op shl $byte1 $byte1 8
+    op shl $byte2 $byte2 16
     op shl _rom _rom 24
 
-    op add result _byte0 _byte1
-    op add result result _byte2
+    op add result $byte0 $byte1
+    op add result result $byte2
     op add result result _rom
 
     op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
@@ -458,25 +553,27 @@ load_rom_word_unchecked:
 
 # address, mcause, mtval -> result
 load_mmio_word:
-    op sub _offset address {{MMIO_START}}
-    op and _offset _offset 0xfffffffc
-    jump trap greaterThanEq _offset 0x90
+#% do reset_locals()
+#% do declare_locals(access_uart_locals)
+    op sub $$offset address {{MMIO_START}}
+    op and $$offset $$offset 0xfffffffc
+    jump trap greaterThanEq $$offset 0x90
 
     # if we're in UART range, look it up
-    op add access_uart_ret @counter 2 # skip privilege check if accessing uart
-    jump access_uart greaterThanEq _offset 0x10
+    op add ret2 @counter 2 # skip privilege check if accessing uart
+    jump access_uart greaterThanEq $$offset 0x10
     # otherwise, we're in machine timer range, so trap if not in M-mode
     jump trap lessThan privilege_mode 0b11
 
     # MCR, MSR, and SPR are all hardwired to zero
     set result 0
-    jump load_mmio_word__uart_lsr equal _offset 0x24
-    jump load_mmio_word__not_zero lessThan _offset 0x20
+    jump load_mmio_word__uart_lsr equal $$offset 0x24
+    jump load_mmio_word__not_zero lessThan $$offset 0x20
     set @counter ret
 load_mmio_word__not_zero:
 
-    op idiv _jump _offset 2
-    op add @counter @counter _jump
+    op idiv $jump $$offset 2
+    op add @counter @counter $jump
 
     # mtime
     set result csr_mtime
@@ -492,7 +589,7 @@ load_mmio_word__not_zero:
     set @counter ret
     # UART
     # Receiver Holding Register: character received, or 0 if RX FIFO is empty
-    jump load_mmio_word__uart_rhr notEqual _rx_read _rx_write
+    jump load_mmio_word__uart_rhr notEqual $$rx_read $$rx_write
     set @counter ret
     # Interrupt Enable Register: 0 (not supported)
     set result 0b00000000
@@ -507,16 +604,16 @@ load_mmio_word__not_zero:
 
 load_mmio_word__uart_rhr:
     # read one byte from the FIFO
-    read result _uart _rx_read
+    read result $$uart $$rx_read
     op and result result 0xff
 
     # HACK: if mcause is 7, we're loading this word as part of a store instruction, so don't modify UART state
     jump load_mmio_word__uart_rhr__empty equal mcause 7
 
     # else, advance read
-    op add _rx_read _rx_read 1
-    op mod _rx_read _rx_read UART_FIFO_MODULO
-    write _rx_read _uart {{UART_RX_READ}}
+    op add $$rx_read $$rx_read 1
+    op mod $$rx_read $$rx_read UART_FIFO_MODULO
+    write $$rx_read $$uart {{UART_RX_READ}}
 
 load_mmio_word__uart_rhr__empty:
     set @counter ret
@@ -525,107 +622,87 @@ load_mmio_word__uart_lsr:
     # Line Status Register: transmitter/THR empty = TX FIFO empty, overrun error = RX FIFO overflowed, data ready = RX FIFO not empty, other flags 0
 
     # transmitter empty and THR empty
-    jump load_mmio_word__uart_lsr__tx_not_empty notEqual _tx_read _tx_write
+    jump load_mmio_word__uart_lsr__tx_not_empty notEqual $$tx_read $$tx_write
     set result 0b01100000
 load_mmio_word__uart_lsr__tx_not_empty:
 
     # rx overrun error
     # we know an overrun occurred if read == wrap(write + 1) (ie. rx is full)
-    op add _next_rx_write _rx_write 1
-    op mod _next_rx_write _next_rx_write UART_FIFO_MODULO
-    jump load_mmio_word__uart_lsr__no_rx_overrun notEqual _next_rx_write _rx_read
+    op add $tmp $$rx_write 1
+    op mod $tmp $tmp UART_FIFO_MODULO
+    jump load_mmio_word__uart_lsr__no_rx_overrun notEqual $tmp $$rx_read
 
-    # AND if _rx_write_raw != _rx_write (ie. overflow flag is set)
-    jump load_mmio_word__uart_lsr__no_rx_overrun equal _rx_write_raw _rx_write
+    # AND if rx_write_raw != rx_write (ie. overflow flag is set)
+    jump load_mmio_word__uart_lsr__no_rx_overrun equal $$rx_write_raw $$rx_write
 
     op or result result 0b10
 load_mmio_word__uart_lsr__no_rx_overrun:
 
     # rx data ready
-    op notEqual _rx_data_ready _rx_read _rx_write
-    op or result result _rx_data_ready
+    op notEqual $tmp $$rx_read $$rx_write
+    op or result result $tmp
 
     set @counter ret
-
-# caller must ensure offset is 4-byte aligned and in uart range
-# _offset, access_uart_ret -> _offset, _uart, _rx_read, _rx_write_raw, _rx_write, _tx_read, _tx_write
-access_uart:
-    op sub _offset _offset 0x10
-    
-    op idiv _uart _offset 0x20
-    op add _uart _uart {{UART_START_LINK}}
-    getlink _uart _uart
-
-    op mod _offset _offset 0x20
-    op add _offset _offset 0x10
-
-    read _rx_read _uart {{UART_RX_READ}}
-
-    read _rx_write_raw _uart {{UART_RX_WRITE}}
-    op and _rx_write _rx_write_raw 0xff
-
-    read _tx_read _uart {{UART_TX_READ}}
-
-    read _tx_write _uart {{UART_TX_WRITE}}
-
-    set @counter access_uart_ret
 
 # instruction decoder
 
 # decoder entry point: decodes a single instruction and writes it to the icache
 # the caller MUST set decode_var to null before the first consecutive call to this function
-# instruction, decode_address -> op_id, imm, payload
-# ret: decode_ret
+# value (instruction), address -> op_id, imm, payload
+# ret: ret3
 decode:
+#% set decode_locals = ["$$instruction_24_15", "$$instruction_11_7", "$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # the lowest 2 bits are always "11" for non-compressed instructions
     # check this first to increase the odds of an early exit for non-code addresses
-    op and low_bits instruction 0b11
-    jump decode_illegal_instruction notEqual low_bits 0b11
+    op and $tmp value 0b11
+    jump decode_illegal_instruction notEqual $tmp 0b11
 
     # opcode
-    op and opcode instruction 0b1111111
+    op and $opcode value 0b1111111
 
     # also bail out if we're in the big group of illegal instructions between OP-32 and 48b, or at the end after OP-VE
-    jump decode__ok lessThan opcode 0b0111011 # OP-32
-    jump decode_illegal_instruction lessThanEq opcode 0b1011111 # 48b
-    jump decode_illegal_instruction greaterThanEq opcode 0b1110111 # OP-VE
+    jump decode__ok lessThan $opcode 0b0111011 # OP-32
+    jump decode_illegal_instruction lessThanEq $opcode 0b1011111 # 48b
+    jump decode_illegal_instruction greaterThanEq $opcode 0b1110111 # OP-VE
 decode__ok:
 
     # decode and pack registers into the payload
     # we do it in this order because instruction_24_15 is used for I-type and instruction_11_7 is used for S-type
-    op and instruction_24_15 instruction 0b1111111111000000000000000
-    op and instruction_11_7 instruction  0b0000000000000111110000000
+    op and $$instruction_24_15 value 0b1111111111000000000000000
+    op and $$instruction_11_7 value  0b0000000000000111110000000
 
-    op shl icache_payload_rs2_rs1 instruction_24_15 22 # instruction[24:15] -> icache_payload[46:37]
-    op shl icache_payload_rd instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
+    op shl $icache_payload_rs2_rs1 $$instruction_24_15 22 # instruction[24:15] -> icache_payload[46:37]
+    op shl $icache_payload_rd $$instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
 
     # we put the registers into the icache_payload variable here so that we don't have to fully pack the payload if decoding during instruction fetch
-    op add icache_payload icache_payload_rs2_rs1 icache_payload_rd
+    op add icache_payload $icache_payload_rs2_rs1 $icache_payload_rd
 
     # this is used in both S-type and B-type
-    op shr imm_4_0 instruction_11_7 7 # instruction[11:7] -> imm[4:0]
-
-    # this is used in a bunch of places
-    # NOTE: this is unsafe if instruction is longer than 32 bits, but that should never happen. hopefully.
-    op shr funct12 instruction 20
+    op shr $$imm_4_0 $$instruction_11_7 7 # instruction[11:7] -> imm[4:0]
 
     # decode common fields
-    # funct3
-    op shr funct3 instruction 12
-    op and funct3 funct3 0b111
+    # funct12
+    # NOTE: this is unsafe if instruction is longer than 32 bits, but that should never happen. hopefully.
+    op shr $$funct12 value 20
 
     # funct7
-    op shr funct7 funct12 5
+    op shr $$funct7 $$funct12 5
+
+    # funct3
+    op shr $$funct3 value 12
+    op and $$funct3 $$funct3 0b111
 
     # counter array based on (opcode >> 2), since the low 2 bits don't matter
-    op shr jump opcode 2
+    op shr $tmp $opcode 2
 
     # skip the section of illegal instructions that we already handled above
-    jump decode__before_OP-32 lessThan opcode 0b0111011 # OP-32
-    op sub jump jump 10
+    jump decode__before_OP-32 lessThan $opcode 0b0111011 # OP-32
+    op sub $tmp $tmp 10
 decode__before_OP-32:
 
-    op add @counter @counter jump
+    op add @counter @counter $tmp
 
     jump decode_LOAD always
     jump decode_illegal_instruction always # LOAD-FP
@@ -670,25 +747,27 @@ decode_AUIPC:
 # U-type: imm, rd_id
 decode_U-type:
     # imm
-    op and imm instruction 0b11111111111111111111000000000000
+    op and imm value 0b11111111111111111111000000000000
     jump end_decode always
 
 # J-type: imm, rd_id
 decode_JAL:
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # imm
-    op shr imm_20 instruction 11 # instruction[31] -> imm[20]
+    op shr $imm_20 value 11 # instruction[31] -> imm[20]
     # instruction: instruction[19:12] -> imm[19:12]
-    op shr imm_11 instruction 9 # instruction[20] -> imm[11]
+    op shr $imm_11 value 9 # instruction[20] -> imm[11]
     # funct12: instruction[30:21] -> imm[10:1]
 
-    op and imm_20 imm_20         0b100000000000000000000
-    op and imm_19_12 instruction 0b011111111000000000000
-    op and imm_11 imm_11         0b000000000100000000000
-    op and imm_10_1 funct12      0b000000000011111111110
+    op and $imm_20 $imm_20     0b100000000000000000000
+    op and $imm_19_12 value    0b011111111000000000000
+    op and $imm_11 $imm_11     0b000000000100000000000
+    op and $imm_10_1 $$funct12 0b000000000011111111110
 
-    op add imm imm_20 imm_19_12
-    op add imm imm imm_11
-    op add imm imm imm_10_1
+    op add imm $imm_20 $imm_19_12
+    op add imm imm $imm_11
+    op add imm imm $imm_10_1
 
     # extend sign
     op xor imm imm 0b100000000000000000000
@@ -703,23 +782,25 @@ decode_JALR:
 
 # B-type: rs1, rs2, imm
 decode_BRANCH:
-    jump decode_illegal_instruction equal funct3 2
-    jump decode_illegal_instruction equal funct3 3
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction equal $$funct3 2
+    jump decode_illegal_instruction equal $$funct3 3
 
     # imm
-    op shr imm_12 instruction 19 # instruction[31] -> imm[12]
-    op shl imm_11 instruction 4 # instruction[7] -> imm[11]
+    op shr $imm_12 value 19 # instruction[31] -> imm[12]
+    op shl $imm_11 value 4 # instruction[7] -> imm[11]
     # funct12: instruction[30:25] -> imm[10:5]
     # imm_4_0/rd: instruction[11:8] -> imm[4:1]
 
-    op and imm_12 imm_12    0b1000000000000
-    op and imm_11 imm_11    0b0100000000000
-    op and imm_10_5 funct12 0b0011111100000
-    op and imm_4_1 imm_4_0  0b0000000011110
+    op and $imm_12 $imm_12     0b1000000000000
+    op and $imm_11 $imm_11     0b0100000000000
+    op and $imm_10_5 $$funct12 0b0011111100000
+    op and $imm_4_1 $$imm_4_0  0b0000000011110
 
-    op add imm imm_12 imm_11
-    op add imm imm imm_10_5
-    op add imm imm imm_4_1
+    op add imm $imm_12 $imm_11
+    op add imm imm $imm_10_5
+    op add imm imm $imm_4_1
 
     # extend sign
     op xor imm imm 0b1000000000000
@@ -733,12 +814,14 @@ decode_BRANCH:
     # -59: BGE
     # -58: BLTU
     # -57: BGEU
-    op add op_id -64 funct3
+    op add op_id -64 $$funct3
     jump end_decode always
 
 decode_LOAD:
-    jump decode_illegal_instruction equal funct3 3
-    jump decode_illegal_instruction greaterThanEq funct3 6
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction equal $$funct3 3
+    jump decode_illegal_instruction greaterThanEq $$funct3 6
 
     # -56: LB
     # -55: LH
@@ -746,18 +829,20 @@ decode_LOAD:
     # -53: (LUI)
     # -52: LBU
     # -51: LHU
-    op add op_id -56 funct3
+    op add op_id -56 $$funct3
     jump decode_I-type always
 
 # S-type: rs1, rs2, imm
 decode_STORE:
-    jump decode_illegal_instruction greaterThanEq funct3 3
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction greaterThanEq $$funct3 3
 
     # imm
-    op shl imm_11_5 funct7 5 # instruction[31:25] -> imm[11:5]
+    op shl $imm_11_5 $$funct7 5 # instruction[31:25] -> imm[11:5]
     # imm_4_0: instruction[11:7] -> imm[4:0]
 
-    op add imm imm_11_5 imm_4_0
+    op add imm $imm_11_5 $$imm_4_0
 
     # extend sign
     op xor imm imm 0b100000000000
@@ -766,33 +851,35 @@ decode_STORE:
     # -50: SB
     # -49: SH
     # -48: SW
-    op add op_id -50 funct3
+    op add op_id -50 $$funct3
     jump end_decode always
 
+# R-type: rs1, rs2, rd_id
 decode_AMO:
-    # R-type: rs1, rs2, rd_id
-    jump decode_illegal_instruction notEqual funct3 0b010
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction notEqual $$funct3 0b010
 
     # funct5
     # mlogv32 is single-hart, so just ignore aq and rl
-    op shr funct5 funct7 2
+    op shr $funct5 $$funct7 2
 
     # funct5 either has bits in [4:2] or [1:0] set, never both
     # (ab)use that so we don't need 32 lookup table entries
-    jump decode_AMO__high greaterThan funct5 0b11
+    jump decode_AMO__high greaterThan $funct5 0b11
 
     # low bits
     # -47: AMOADD.W
     # -46: AMOSWAP.W
     # -45: LR.W
     # -44: SC.W
-    op add op_id -47 funct5
+    op add op_id -47 $funct5
     jump end_decode always
 
 decode_AMO__high:
     # high bits
-    op and low funct5 0b11
-    jump decode_illegal_instruction notEqual low 0b00
+    op and $low $funct5 0b11
+    jump decode_illegal_instruction notEqual $low 0b00
 
     # -43: AMOXOR.W
     # -42: AMOOR.W
@@ -801,13 +888,15 @@ decode_AMO__high:
     # -39: AMOMAX.W
     # -38: AMOMINU.W
     # -37: AMOMAXU.W
-    op shr funct5 funct5 2
-    op add op_id -44 funct5 # funct5 >> 2 starts at 1, not 0
+    op shr $funct5 $funct5 2
+    op add op_id -44 $funct5 # funct5 >> 2 starts at 1, not 0
     jump end_decode always
 
 decode_OP-IMM:
-    jump decode_SRLI_SRAI equal funct3 5
-    jump decode_SLLI equal funct3 1
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_SRLI_SRAI equal $$funct3 5
+    jump decode_SLLI equal $$funct3 1
 
     # -36: ADDI
     # -35: (SUB)
@@ -817,46 +906,56 @@ decode_OP-IMM:
     # -31: (SRA)
     # -30: ORI
     # -29: ANDI
-    op add op_id -36 funct3
+    op add op_id -36 $$funct3
     # continue into decode_I-type
 
 # common decoder for I-type instructions
 # this should be called AFTER setting op_id
+# I-type: rs1, imm, rd_id
 decode_I-type:
-    # I-type: rs1, imm, rd_id
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # imm is just funct12 but sign-extended
-    op xor funct12 funct12 0b100000000000
-    op sub funct12 funct12 0b100000000000
+    op xor $$funct12 $$funct12 0b100000000000
+    op sub $$funct12 $$funct12 0b100000000000
     # continue into decode_I-type_no_extend_sign
 
 # common decoder for I-type instructions without a sign-extended immediate
+# I-type: rs1, imm, rd_id
 decode_I-type_no_extend_sign:
-    # I-type: rs1, imm, rd_id
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # imm
     # NOTE: SRAI and decode_I-type both mutate funct12
-    set imm funct12
+    set imm $$funct12
     jump end_decode always
 
 decode_SLLI:
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # shamt is encoded in the low 5 bits of imm, so sign extension is redundant
-    jump decode_illegal_instruction notEqual funct7 0b0000000
+    jump decode_illegal_instruction notEqual $$funct7 0b0000000
     set op_id -3 # SLLI
     jump decode_I-type_no_extend_sign always
 
 decode_SRLI_SRAI:
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # SRLI
     set op_id -2 # SRLI
-    jump decode_I-type_no_extend_sign equal funct7 0b0000000
+    jump decode_I-type_no_extend_sign equal $$funct7 0b0000000
 
     # SRAI
-    op and funct12 funct12 0b11111 # HACK: zero out the high bits of funct12 so funct7 isn't included in imm
+    op and $$funct12 $$funct12 0b11111 # HACK: zero out the high bits of funct12 so funct7 isn't included in imm
     set op_id -1 # SRAI
-    jump decode_I-type_no_extend_sign equal funct7 0b0100000
+    jump decode_I-type_no_extend_sign equal $$funct7 0b0100000
 
     jump decode_illegal_instruction always
 
+# R-type: rs1, rs2, rd_id
 decode_OP:
-    # R-type: rs1, rs2, rd_id
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # -28: ADD
     # -27: SLL
     # -26: SLT
@@ -865,8 +964,8 @@ decode_OP:
     # -23: SRL
     # -22: OR
     # -21: AND
-    op add op_id -28 funct3
-    jump end_decode equal funct7 0b0000000
+    op add op_id -28 $$funct3
+    jump end_decode equal $$funct7 0b0000000
 
     # -20: MUL
     # -19: MULH
@@ -876,21 +975,23 @@ decode_OP:
     # -15: DIVU
     # -14: REM
     # -13: REMU
-    op add op_id -20 funct3
-    jump end_decode equal funct7 0b0000001
+    op add op_id -20 $$funct3
+    jump end_decode equal $$funct7 0b0000001
 
-    jump decode_illegal_instruction notEqual funct7 0b0100000
+    jump decode_illegal_instruction notEqual $$funct7 0b0100000
 
     set op_id -35 # SUB
-    jump end_decode equal funct3 0b000
+    jump end_decode equal $$funct3 0b000
 
     set op_id -31 # SRA
-    jump end_decode equal funct3 0b101
+    jump end_decode equal $$funct3 0b101
 
     jump decode_illegal_instruction always
 
 decode_MISC-MEM:
-    jump decode_illegal_instruction greaterThan funct3 1 # FENCE=0, FENCE.I=1
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction greaterThan $$funct3 1 # FENCE=0, FENCE.I=1
 
     # NOTE: we put FENCE at -4 because -3 to -1 are placed manually, not by a funct3 addition
     # so we can move them to different op_ids if we want to add a separate handler for FENCE.I
@@ -898,7 +999,9 @@ decode_MISC-MEM:
     jump decode_I-type_no_extend_sign always
 
 decode_SYSTEM:
-    jump decode_illegal_instruction equal funct3 4
+#% do reset_locals()
+#% do declare_locals(decode_locals)
+    jump decode_illegal_instruction equal $$funct3 4
 
     # -12: PRIV
     # -11: CSRRW
@@ -908,14 +1011,16 @@ decode_SYSTEM:
     # -7: CSRRWI
     # -6: CSRRSI
     # -5: CSRRCI
-    op add op_id -12 funct3
+    op add op_id -12 $$funct3
     jump decode_I-type_no_extend_sign always
 
 # Xmlogsys
 decode_custom-0:
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # 1: MLOGSYS
-    op add op_id 1 funct3
-    jump decode_I-type_no_extend_sign lessThanEq funct3 0
+    op add op_id 1 $$funct3
+    jump decode_I-type_no_extend_sign lessThanEq $$funct3 0
     # continue into decode_illegal_instruction if funct3 >= 1
 
 # must stay directly before end_decode
@@ -928,18 +1033,20 @@ decode_illegal_instruction:
 
 # all decoders jump here after completing successfully
 end_decode:
+#% do reset_locals()
+#% do declare_locals(decode_locals)
     # do this here because several decoders need to do it for sign extension
     # and to make sure the immediate doesn't corrupt the registers
     op and imm imm 0xffffffff
 
     # this branch is taken if decoding during instruction fetch
-    jump end_decode__no_write_icache strictEqual decode_address null
+    jump end_decode__no_write_icache strictEqual address null
 
     # get the current instruction cache processor and variable
     jump end_decode__decode_var_valid notEqual decode_var null
 
-    op add _address RAM_SIZE decode_address
-    op add lookup_variable_ret @counter 1
+    op add _address RAM_SIZE address
+    op add ret2 @counter 1
     jump access_ram_raw always
     set decode_ram ram
     set decode_var variable
@@ -948,8 +1055,8 @@ end_decode__decode_var_valid:
     # pack op_id, registers (already in icache_payload), and imm into a single double
     # this is skipped if decoding for instruction fetch because op_id and imm are already in variables
     # IMPORTANT: use or instead of add because op_id may be negative
-    op shl icache_payload_op_id op_id 47
-    op or icache_payload icache_payload icache_payload_op_id
+    op shl $icache_payload_op_id op_id 47
+    op or icache_payload icache_payload $icache_payload_op_id
     op or icache_payload icache_payload imm
 
     # write to the icache
@@ -957,7 +1064,7 @@ end_decode__decode_var_valid:
     read decode_var {{INCR}} decode_var
 
 end_decode__no_write_icache:
-    set @counter decode_ret
+    set @counter ret3
 
 # instruction handlers
 
@@ -1023,12 +1130,13 @@ unconditional_pc_relative_jump:
     # continue into unconditional_jump
 
 unconditional_jump:
+#% do reset_locals()
     op and next_pc next_pc 0xffffffff
 
-    op mod remainder next_pc 4
+    op mod $remainder next_pc 4
     set mcause 0 # instruction address misaligned
     set mtval next_pc
-    jump trap notEqual remainder 0
+    jump trap notEqual $remainder 0
 
     # write pc+4 to rd
     op add rd pc 4
@@ -1041,13 +1149,13 @@ unconditional_jump:
 LB:
     # I-type: rs1, imm, rd_id
     set length 8
-    set is_signed true
+    set nonlocal1 true
     jump load_value always
 
 LH:
     # I-type: rs1, imm, rd_id
     set length 16
-    set is_signed true
+    set nonlocal1 true
     jump load_value always
 
 LW:
@@ -1066,40 +1174,42 @@ LHU:
     # continue into load_value_unsigned
 
 load_value_unsigned:
-    set is_signed false
+    set nonlocal1 false
     # continue into load_value
 
 # helper for LOAD instructions to load a value with a specified length in bits (8, 16, or 32) from memory
 # raises a misaligned-load exception if the address is misaligned for the specified length
-# rs1 (address), imm (offset), rd_id, length, is_signed ->
+# rs1 (address), imm (offset), rd_id, length, nonlocal1 (is_signed) ->
 load_value:
+#% do reset_locals()
     op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
     # check alignment
-    op idiv _bytes length 8
-    op mod _alignment address _bytes
+    op idiv $bytes length 8
+    op mod $alignment address $bytes
     set mcause 4 # load address misaligned
     set mtval address
-    jump trap notEqual _alignment 0
+    jump trap notEqual $alignment 0
 
     # load the word containing the address
     set mcause 5 # load access fault
     op add ret @counter 1
     jump load_word always
 
+#% do reset_locals()
+
     # right shift by (address % 4) bits
-    op mod _shift address 4
-    op mul _shift _shift 8
-    op shr rd result _shift
+    op mod $shift address 4
+    op mul $shift $shift 8
+    op shr rd result $shift
 
     # truncate to the specified number of bits
-    op pow _divisor 2 length
-    op mod rd rd _divisor
+    op pow $divisor 2 length
+    op mod rd rd $divisor
 
     # extend the sign of the value if it's signed
-    op add ret @counter 1
-    jump extend_sign_rd equal is_signed true
+    jump extend_sign_rd equal nonlocal1 true
 
     # write result to rd
     jump end_instruction_with_rd always
@@ -1124,6 +1234,7 @@ SW:
 # TODO: the 32-bit case could be optimized a lot
 # rs1 (address), rs2 (value), imm (offset), length ->
 store_value:
+#% do reset_locals()
     # we also use parts of this procedure for atomic operations, so it jumps to end_instruction_with_rd at the end
     # so if we jump to store_value, set rd_id to 0 so we don't write garbage to a random register
     set rd_id 0
@@ -1134,37 +1245,38 @@ store_value:
     jump store_value__syscon equal address {{SYSCON}}
 
     # check alignment
-    op idiv _bytes length 8
-    op mod _alignment address _bytes
+    op idiv $bytes length 8
+    op mod $alignment address $bytes
     set mcause 6 # store/AMO address misaligned
     set mtval address
-    jump trap notEqual _alignment 0
+    jump trap notEqual $alignment 0
 
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
-    op mod _shift address 4
-    op mul _shift _shift 8
+    op mod $shift address 4
+    op mul $shift $shift 8
 
-    op pow _length_squared 2 length
-    op sub _bitmask _length_squared 1
-    op shl _bitmask _bitmask _shift
-    op sub _bitmask 0xffffffff _bitmask
+    op pow $length_squared 2 length
+    op sub nonlocal1 $length_squared 1 # nonlocal1 = bitmask
+    op shl nonlocal1 nonlocal1 $shift
+    op sub nonlocal1 0xffffffff nonlocal1
 
     # take the low n bits of the value to store, and shift it to line up with the zeros in the mask
-    op mod _value rs2 _length_squared
-    op shl _value _value _shift
+    op mod nonlocal2 rs2 $length_squared
+    op shl nonlocal2 nonlocal2 $shift
 
     # load the word containing the address
     set mcause 7 # store/AMO access fault
     op add ret @counter 1
     jump load_ram_or_mmio_word always
 
-    # insert the value into the word
-    op and result result _bitmask
-    op add value _value result
+#% do reset_locals()
 
-    # get word-aligned decode address
-    # we do this here because MMIO also needs a word-aligned address
-    op and decode_address address 0xfffffffc
+    # insert the value into the word
+    op and result result nonlocal1 # bitmask
+    op add value result nonlocal2 # inserted value
+
+    # align address to word
+    op and address address 0xfffffffc
 
     # if it's in the MMIO range, handle it separately
     jump store_mmio_word_unchecked greaterThanEq address {{MMIO_START}}
@@ -1178,31 +1290,36 @@ store_ram_word_unchecked:
 
     # decode the new value and update the icache to allow executing from RAM and self-modifying code
     # TODO: add a way for the CPU to temporarily disable this for performance?
-    set instruction value
     set decode_var null
 
     # only decode if we're in icache range
-    op add decode_ret @counter 1
-    jump decode lessThan decode_address ICACHE_SIZE
+    op add ret3 @counter 1
+    jump decode lessThan address ICACHE_SIZE
 
     jump end_instruction_with_rd always
 
     # atomics are not supported for MMIO, so we don't need to write to rd here
     # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
 store_mmio_word_unchecked:
-    op sub _offset decode_address {{MMIO_START}}
+#% do reset_locals()
+#% do declare_locals(access_uart_locals)
+    op sub $$offset address {{MMIO_START}}
 
     # if we're in UART range, look it up
-    op add access_uart_ret @counter 1
-    jump access_uart greaterThanEq _offset 0x10
+    op add ret2 @counter 3 # skip critical section if in UART range
+    jump access_uart greaterThanEq $$offset 0x10
+    # otherwise, we might be modifying something that the controller also modifies
+    jump store_mmio_word_unchecked__mtimecmp greaterThanEq $$offset 0x08
+    write "mtime" {{CONTROLLER}} "controller_critical_section"
+store_mmio_word_unchecked__mtimecmp:
 
     # ignore writes to UART registers other than THR and FCR
-    jump store_mmio_word_unchecked__uart_fcr equal _offset 0x18
-    jump end_instruction greaterThan _offset 0x10
+    jump store_mmio_word_unchecked__uart_fcr equal $$offset 0x18
+    jump end_instruction greaterThan $$offset 0x10
 
     # NOTE: if we get to this point, the MMIO address must be valid, so we don't need bounds or privilege checks
-    op idiv _jump _offset 2
-    op add @counter @counter _jump
+    op idiv $jump $$offset 2
+    op add @counter @counter $jump
 
     # mtime
     set csr_mtime value
@@ -1220,28 +1337,28 @@ store_mmio_word_unchecked:
     # Transmitter Holding Register
     # append value to queue
     # NOTE: we don't check for overflow here, see readme
-    op add _index _tx_write {{UART_TX_START}}
+    op add $tmp $$tx_write {{UART_TX_START}}
     op and value value 0xff
-    write value _uart _index
+    write value $$uart $tmp
 
     # advance write
-    op add _tx_write _tx_write 1
-    op mod _tx_write _tx_write UART_FIFO_MODULO
-    write _tx_write _uart {{UART_TX_WRITE}}
+    op add $$tx_write $$tx_write 1
+    op mod $$tx_write $$tx_write UART_FIFO_MODULO
+    write $$tx_write $$uart {{UART_TX_WRITE}}
 
     jump end_instruction always
 
 store_mmio_word_unchecked__uart_fcr:
     # FIFO Control Register
 
-    op and reset_rx value 0b11
-    jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal reset_rx 0
-    write _rx_write _uart {{UART_RX_READ}}
+    op and $tmp value 0b11
+    jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal $tmp 0
+    write $$rx_write $$uart {{UART_RX_READ}}
 store_mmio_word_unchecked__uart_fcr__no_reset_rx:
 
-    op and reset_tx value 0b101
-    jump store_mmio_word_unchecked__uart_fcr__no_reset_tx equal reset_tx 0
-    write _tx_read _uart {{UART_TX_WRITE}}
+    op and $tmp value 0b101
+    jump store_mmio_word_unchecked__uart_fcr__no_reset_tx equal $tmp 0
+    write $$tx_read $$uart {{UART_TX_WRITE}}
 store_mmio_word_unchecked__uart_fcr__no_reset_tx:
 
     jump end_instruction always
@@ -1266,16 +1383,17 @@ LR.W:
 
     # register reservation set
     # TODO: implement Za64rs?
-    set reservation_set address
+    write address {{CONTROLLER}} "reservation_set"
 
     jump end_instruction_with_rd always
 
 atomic_validate_address:
+#% do reset_locals()
     set address rs1
     set mtval address
 
-    op mod alignment address 4
-    jump trap notEqual alignment 0
+    op mod $alignment address 4
+    jump trap notEqual $alignment 0
 
     op add mcause mcause 1 # load/store/AMO access fault
     jump trap lessThan address {{RAM_START}}
@@ -1285,6 +1403,7 @@ atomic_validate_address:
 
 SC.W:
     # R-type: rs1, rs2, rd_id
+#% do reset_locals()
 
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
@@ -1292,18 +1411,19 @@ SC.W:
     jump atomic_validate_address always
 
     # check if reservation is valid and contains rs1
-    op strictEqual success address reservation_set
+    read $reservation_set {{CONTROLLER}} "reservation_set"
+    op strictEqual $success address $reservation_set
 
     # invalidate reservation
-    set reservation_set null
+    write null {{CONTROLLER}} "reservation_set"
 
     # write 0 to rd if successful, else write 1
-    op notEqual rd success true
+    op notEqual rd $success true
 
     # conditionally write value
-    jump end_instruction_with_rd notEqual success true
+    jump end_instruction_with_rd notEqual $success true
 
-    op add lookup_variable_ret @counter 1
+    op add ret2 @counter 1
     jump access_ram always
 
     set value rs2
@@ -1311,8 +1431,9 @@ SC.W:
 
 AMOSWAP.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 0 # swap
+    set nonlocal1 0 # swap
 
+# nonlocal1 = amo_op
 amo:
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
@@ -1328,7 +1449,7 @@ amo:
 
     # modify
     set rs1 result # hack
-    op add @counter @counter amo_op
+    op add @counter @counter nonlocal1
 
     # swap
     set result rs2
@@ -1366,42 +1487,42 @@ amo__done_modify:
 
 AMOADD.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 2 # add
+    set nonlocal1 2 # add
     jump amo always
 
 AMOAND.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 4 # and
+    set nonlocal1 4 # and
     jump amo always
 
 AMOOR.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 6 # or
+    set nonlocal1 6 # or
     jump amo always
 
 AMOXOR.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 8 # xor
+    set nonlocal1 8 # xor
     jump amo always
 
 AMOMIN.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 10 # min
+    set nonlocal1 10 # min
     jump amo always
 
 AMOMINU.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 12 # minu
+    set nonlocal1 12 # minu
     jump amo always
 
 AMOMAX.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 14 # max
+    set nonlocal1 14 # max
     jump amo always
 
 AMOMAXU.W:
     # R-type: rs1, rs2, rd_id
-    set amo_op 16 # maxu
+    set nonlocal1 16 # maxu
     jump amo always
 
 # most of the register-register instructions are identical to their register-immediate counterparts
@@ -1483,11 +1604,12 @@ SLL:
 
 SLLI:
     # I-type: rs1, imm, rd_id
+#% do reset_locals()
     # truncate before shifting to avoid overflowing 52 integer bits in double
-    op sub length 32 imm
-    op pow divisor 2 length
+    op sub $length 32 imm
+    op pow $divisor 2 $length
 
-    op mod rd rs1 divisor
+    op mod rd rs1 $divisor
     op shl rd rd imm
 
     jump end_instruction_with_rd always
@@ -1512,61 +1634,71 @@ SRAI:
     op shr rd rs1 imm
 
     op sub length 32 imm
-    op add ret @counter 1
+
     jump extend_sign_rd always
 
-    jump end_instruction_with_rd always
+mul_decomp:
+#% set mul_decomp_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low"]
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals)
+
+    # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
+
+    op shr $rs1_high rs1 16 # no truncate necessary, rs1 is already 32 bits
+    op and $rs1_low rs1 0xffff
+    op shr $rs2_high rs2 16
+    op and $rs2_low rs2 0xffff
+
+    op mul $$high_high $rs1_high $rs2_high
+    op mul $$high_low $rs1_high $rs2_low
+    op mul $$low_high $rs1_low $rs2_high
+    op mul $$low_low $rs1_low $rs2_low
+
+    set @counter ret
 
 MUL:
     # R-type: rs1, rs2, rd_id
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals)
     op add ret @counter 1
     jump mul_decomp always
 
-    op add rd high_low low_high
+    op add rd $$high_low $$low_high
     op shl rd rd 16
-    op add rd rd low_low
+    op add rd rd $$low_low
 
     op and rd rd 0xffffffff
 
     jump end_instruction_with_rd always
 
-mul_decomp:
-    # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
-
-    op shr rs1_high rs1 16 # no truncate necessary, rs1 is already 32 bits
-    op and rs1_low rs1 0xffff
-    op shr rs2_high rs2 16
-    op and rs2_low rs2 0xffff
-
-    op mul high_high rs1_high rs2_high
-    op mul high_low rs1_high rs2_low
-    op mul low_high rs1_low rs2_high
-    op mul low_low rs1_low rs2_low
-
-    set @counter ret
-
 MULH:
     # R-type: rs1, rs2, rd_id
-    op greaterThanEq rs1_negative rs1 0x80000000 # check if the sign bit is set
-    op greaterThanEq rs2_negative rs2 0x80000000
+#% set mulh_s_u_locals = ["$$rs1_negative", "$$rs2_negative"]
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+    op greaterThanEq $$rs1_negative rs1 0x80000000 # check if the sign bit is set
+    op greaterThanEq $$rs2_negative rs2 0x80000000
+    # continue into mulh_s_u
 
 mulh_s_u:
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
     op add ret @counter 1
     jump mul_decomp always
 
     # https://github.com/scala-js/scala-js/blob/7e9dbfcd5c9a9eb3fe065db568c4c96ef4e19a81/linker-private-library/src/main/scala/org/scalajs/linker/runtime/RuntimeLong.scala#L422
-    op shr rd low_low 16
-    op add rd rd low_high
-    op add rd rd high_low
+    op shr rd $$low_low 16
+    op add rd rd $$low_high
+    op add rd rd $$high_low
     op shr rd rd 16
-    op add rd rd high_high
+    op add rd rd $$high_high
 
     # https://stackoverflow.com/a/22847373
-    jump mulh_s_u__rs1_positive notEqual rs1_negative true
+    jump mulh_s_u__rs1_positive notEqual $$rs1_negative true
     op sub rd rd rs2
 mulh_s_u__rs1_positive:
 
-    jump mulh_s_u__rs2_positive notEqual rs2_negative true
+    jump mulh_s_u__rs2_positive notEqual $$rs2_negative true
     op sub rd rd rs1
 mulh_s_u__rs2_positive:
 
@@ -1576,14 +1708,18 @@ mulh_s_u__rs2_positive:
 
 MULHSU:
     # R-type: rs1, rs2, rd_id
-    op greaterThanEq rs1_negative rs1 0x80000000
-    set rs2_negative false
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+    op greaterThanEq $$rs1_negative rs1 0x80000000
+    set $$rs2_negative false
     jump mulh_s_u always
 
 MULHU:
     # R-type: rs1, rs2, rd_id
-    set rs1_negative false
-    set rs2_negative false
+#% do reset_locals()
+#% do declare_locals(mul_decomp_locals, mulh_s_u_locals)
+    set $$rs1_negative false
+    set $$rs2_negative false
     jump mulh_s_u always
 
 DIV:
@@ -1665,17 +1801,18 @@ EBREAK:
     jump trap always
 
 MRET:
+#% do reset_locals()
     jump ILLEGAL_OP lessThan privilege_mode 0b11
 
     # set mstatus.MIE to mstatus.MPIE, set mstatus.MPIE to 1, set privilege_mode to mstatus.MPP, and set mstatus.MPP to U
-    op and mstatus.mie csr_mstatus 0b10000000
-    op shr mstatus.mie mstatus.mie 4
+    op and $mstatus.mie csr_mstatus 0b10000000
+    op shr $mstatus.mie $mstatus.mie 4
 
     op and privilege_mode csr_mstatus 0b1100000000000
     op shr privilege_mode privilege_mode 11
 
     op and csr_mstatus csr_mstatus 0b11111111111111111110011111110111
-    op or csr_mstatus csr_mstatus mstatus.mie
+    op or csr_mstatus csr_mstatus $mstatus.mie
     op or csr_mstatus csr_mstatus 0b10000000 # MPIE
 
     # set next_pc to MEPC
@@ -1685,6 +1822,9 @@ MRET:
     set rd_id 0
     jump end_instruction_with_rd_and_fire_interrupts always
 
+#% set modify_csr_start = 2
+#% set modify_csr_locals = ["$$modify_csr_op", "$$readonly", "$$modify_csr_write", "$$new_value", "$$csr_11_8"]
+
 CSRRWI:
     # CSRI-type: rs1_id=uimm, imm=csr, rd_id
     set rs1 rs1_id
@@ -1692,7 +1832,9 @@ CSRRWI:
 
 CSRRW:
     # CSR-type: rs1, imm=csr, rd_id
-    set modify_csr_op 1 # read/write
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+    set $$modify_csr_op 1 # read/write
     jump modify_csr always
 
 CSRRSI:
@@ -1702,7 +1844,9 @@ CSRRSI:
 
 CSRRS:
     # CSR-type: rs1, imm=csr, rd_id
-    set modify_csr_op 3 # read and set bits
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+    set $$modify_csr_op 3 # read and set bits
     jump modify_csr always
 
 CSRRCI:
@@ -1712,7 +1856,9 @@ CSRRCI:
 
 CSRRC:
     # CSR-type: rs1, imm=csr, rd_id
-    set modify_csr_op 5 # read and clear bits
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+    set $$modify_csr_op 5 # read and clear bits
     # continue into modify_csr
 
 modify_csr:
@@ -1745,44 +1891,47 @@ modify_csr:
     #   - write new_value to the CSR in {{CSRS}}
     #   - jump to end_instruction_with_rd
 
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+
     # csr is stored in imm
     # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
-    op and readonly imm 0b110000000000
-    op equal readonly readonly 0b110000000000
+    op and $$readonly imm 0b110000000000
+    op equal $$readonly $$readonly 0b110000000000
 
     # csr[9:8] encodes the lowest privilege level that can access the CSR
-    op shr csr_11_8 imm 8
-    op and required_privilege csr_11_8 0b1100000000
-    jump ILLEGAL_OP lessThan privilege_mode required_privilege
+    op shr $$csr_11_8 imm 8
+    op and $required_privilege $$csr_11_8 0b1100000000
+    jump ILLEGAL_OP lessThan privilege_mode $required_privilege
 
     # disable all supervisor and hypervisor CSRs
-    jump ILLEGAL_OP equal required_privilege 0b01
-    jump ILLEGAL_OP equal required_privilege 0b10
+    jump ILLEGAL_OP equal $required_privilege 0b01
+    jump ILLEGAL_OP equal $required_privilege 0b10
 
     # 0x7b0-0x7bf are only visible to debug mode
-    op shr csr_11_4 imm 4
-    jump ILLEGAL_OP equal csr_11_4 0x7b
+    op shr $csr_11_4 imm 4
+    jump ILLEGAL_OP equal $csr_11_4 0x7b
 
     # read
 
     # IMPORTANT: the values of modify_csr_op and modify_csr_write need to be updated if anything after this line is changed
     # -----------------
-    op add modify_csr_write @counter 11
-    op add modify_csr_op @counter modify_csr_op
+    op add $$modify_csr_write @counter 11
+    op add $$modify_csr_op @counter $$modify_csr_op
     jump modify_csr__read always
 
     # modify
     # the old value is stored in the variable rd by this point
 
     # read/write (always write)
-    set new_value rs1
+    set $$new_value rs1
     jump modify_csr__always_write always
     # read and set bits (conditional write)
-    op or new_value rs1 rd
+    op or $$new_value rs1 rd
     jump modify_csr__conditional_write always
     # read and clear bits (conditional write)
-    op not new_value rs1
-    op and new_value new_value rd
+    op not $$new_value rs1
+    op and $$new_value $$new_value rd
 
     # write
 
@@ -1792,26 +1941,28 @@ modify_csr__conditional_write:
     jump end_instruction_with_rd equal rs1_id 0
 
 modify_csr__always_write:
-    jump ILLEGAL_OP equal readonly true
+    jump ILLEGAL_OP equal $$readonly true
 
-    set @counter modify_csr_write
+    set @counter $$modify_csr_write
     # -----------------
     # end of jump section
 
 modify_csr__write:
     # if modify_csr_write still points here, we should write the modified value back to {{CSRS}}
-    write new_value {{CSRS}} variable
+    write $$new_value {{CSRS}} variable
 
     jump end_instruction_with_rd always
 
 # determine if we should use a CSR-specific handler, or read from {{CSRS}}
 modify_csr__read:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set _address imm
-    op add lookup_variable_ret @counter 1
+    op add ret2 @counter 1
     jump lookup_variable always
     read rd {{CSRS}} variable
 
-    jump modify_csr__read__not_machine notEqual csr_11_8 0x3
+    jump modify_csr__read__not_machine notEqual $$csr_11_8 0x3
 
     jump modify_csr__mstatus equal imm 0x300
     jump modify_csr__readonly equal imm 0x301 # misa
@@ -1825,89 +1976,111 @@ modify_csr__read:
 
 modify_csr__read__not_machine:
 
-    op and csr_7_0 imm 0xff
+    op and $csr_7_0 imm 0xff
 
     # all of the user/machine timer CSRs start with 0xb or 0xc
-    jump modify_csr__read__not_timer lessThan csr_11_8 0xb
-    jump modify_csr__read__not_timer greaterThan csr_11_8 0xc
+    jump modify_csr__read__not_timer lessThan $$csr_11_8 0xb
+    jump modify_csr__read__not_timer greaterThan $$csr_11_8 0xc
 
     # and follow the pattern 0b10011111
-    op and tmp imm 0b1100000
-    jump modify_csr__read__not_timer notEqual tmp 0
+    op and $tmp imm 0b1100000
+    jump modify_csr__read__not_timer notEqual $tmp 0
 
     # mcounteren is hardwired zero, so now that we know it's a timer, trap if we're not in M-mode
     jump ILLEGAL_OP lessThan privilege_mode 0b11
     
-    jump modify_csr__read__not_timer equal csr_7_0 0x00 # mcycle
+    jump modify_csr__mcycle[h] equal $csr_7_0 0x00 # mcycle
     jump modify_csr__time equal imm 0xc01 # mtime doesn't exist
-    jump modify_csr__minstret equal csr_7_0 0x02
+    jump modify_csr__minstret equal $csr_7_0 0x02
     
-    jump modify_csr__read__not_timer equal csr_7_0 0x80 # mcycleh
+    jump modify_csr__mcycle[h] equal $csr_7_0 0x80 # mcycleh
     jump modify_csr__timeh equal imm 0xc81
-    jump modify_csr__minstreth equal csr_7_0 0x82
+    jump modify_csr__minstreth equal $csr_7_0 0x82
 
     # hardwire all of the hpmcounter registers to 0
     jump modify_csr__readonly_zero always
-
 modify_csr__read__not_timer:
 
+modify_csr__read__default:
     # none of the CSRs matched, so fallback to {{CSRS}}
-    set @counter modify_csr_op
+    set @counter $$modify_csr_op
 
 modify_csr__readonly_zero:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd 0
 modify_csr__readonly:
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     jump end_instruction_with_rd always
 
 modify_csr__align_4B:
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
-    op and new_value new_value 0xfffffffc
+    op and $$new_value $$new_value 0xfffffffc
     jump modify_csr__write always
 
+modify_csr__mcycle[h]:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
+    # only set the critical section if we're actually going to modify the CSR
+    jump modify_csr__mcycle[h]__cs equal $$modify_csr_op 1 # read/write
+    jump modify_csr__read__default equal rs1_id 0 # conditional write
+
+modify_csr__mcycle[h]__cs:
+    write "mcycle" {{CONTROLLER}} "controller_critical_section"
+    set @counter $$modify_csr_op
+
 modify_csr__time:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_mtime
-    set @counter modify_csr_op
+    set @counter $$modify_csr_op
 
 modify_csr__timeh:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_mtimeh
-    set @counter modify_csr_op
+    set @counter $$modify_csr_op
 
 modify_csr__mstatus:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_mstatus
 
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     # clear WPRI and read-only zero fields
     # SD/XS/FS/VS                  -              ----  --
     # WPRI                          --------                  - - -
     # S-mode                                - ---         -  -   -
     # UBE                                                   -
-    op and csr_mstatus new_value 0b00000000001000100001100010001000
+    op and csr_mstatus $$new_value 0b00000000001000100001100010001000
 
     # if MPP was set to 10 (reserved) or 01 (S), set it to 0
-    op and mstatus.mpp csr_mstatus 0b1100000000000
-    jump modify_csr__mstatus__mpp_m equal mstatus.mpp 0b1100000000000
-    op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
-modify_csr__mstatus__mpp_m:
+    op and $mstatus.mpp csr_mstatus 0b1100000000000
+    jump end_instruction_with_rd_and_fire_interrupts equal $mstatus.mpp 0b1100000000000
 
+    op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
     jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__mip:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_mip
 
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     # get current read-only non-zero fields
     # MEIP                                   -
     # MTIP                                       -
-    op and tmp csr_mip 0b00000000000000000000100010000000
+    op and $tmp csr_mip 0b00000000000000000000100010000000
 
     # clear read-only fields
     # 0                                        -- - - - - - - -
@@ -1915,47 +2088,53 @@ modify_csr__mip:
     # read-only                                    -   -
     # S-mode                                         -   -   -
     # MSIP                                                 -
-    op and csr_mip new_value 0b11111111111111110000100010000000
+    op and csr_mip $$new_value 0b11111111111111110000100010000000
 
     # enforce read-only non-zero fields
-    op or csr_mip csr_mip tmp
+    op or csr_mip csr_mip $tmp
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__mie:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_mie
 
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     # clear read-only zero fields
     # 0                                        -- - - - - - - -
     # LCOFIE                                     -
     # S-mode                                         -   -   -
     # MSIE                                                 -
-    op and csr_mie new_value 0b11111111111111110000100010000000
+    op and csr_mie $$new_value 0b11111111111111110000100010000000
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
 modify_csr__minstret:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_minstret
 
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     # a value written to instret by one instruction should be the value read by the following instruction
-    op sub csr_minstret new_value 1
+    op sub csr_minstret $$new_value 1
     jump end_instruction_with_rd always
 
 modify_csr__minstreth:
+#% do reset_locals(modify_csr_start)
+#% do declare_locals(modify_csr_locals)
     set rd csr_minstreth
 
-    op add modify_csr_write @counter 1
-    set @counter modify_csr_op
+    op add $$modify_csr_write @counter 1
+    set @counter $$modify_csr_op
 
     # if minstret is going to overflow on this increment, minstreth should be new_value - 1 so that it has the expected value for the next instruction
-    op equal is_minstret_overflowing csr_minstret 0xffffffff
-    op sub csr_minstreth new_value is_minstret_overflowing
+    op equal $is_minstret_overflowing csr_minstret 0xffffffff
+    op sub csr_minstreth $$new_value $is_minstret_overflowing
     jump end_instruction_with_rd always
 
 MLOGSYS:
@@ -1963,73 +2142,26 @@ MLOGSYS:
     jump ILLEGAL_OP greaterThan imm 0
 
     # init icache
-    set is_first_decoding_worker true
-
     set state "decoding"
+
     op min __etext rs1 ROM_SIZE
     op min __etext __etext ICACHE_SIZE
-    # continue into parallel_decode
 
-# we jump here from next_tick if state is "decoding"
-parallel_decode:
-    # wait one tick to allow the controller to calculate worker_count, in case this is the very first instruction executed
-    wait 1e-5
-
-    # https://stackoverflow.com/a/37414115
-
-    read worker_count {{CONTROLLER}} "worker_count"
-
-    op idiv n __etext 4
-
-    op idiv n/k n worker_count
-    op mod n%k n worker_count
-
-    op mul decode_address worker_id n/k
-    op min offset worker_id n%k
-    op add decode_address decode_address offset
-    op mul decode_address decode_address 4
-
-    op lessThan chunk_size worker_id n%k
-    op add chunk_size chunk_size n/k
-    op mul chunk_size chunk_size 4
-    op add end_decode_address decode_address chunk_size
-
+    set address 0
     set decode_var null
 
-parallel_decode__loop:
-    set address decode_address
+MLOGSYS__decode_loop:
     op add ret @counter 1
     jump load_rom_word_unchecked always
-    set instruction result
+    set value result
 
-    op add decode_ret @counter 1
+    op add ret3 @counter 1
     jump decode always
 
-    # bail out if the decode operation was cancelled
-    read state {{CONTROLLER}} "state"
-    jump next_tick notEqual state "decoding"
+    op add address address 4
+    jump MLOGSYS__decode_loop lessThan address __etext
 
-    op add decode_address decode_address 4
-    jump parallel_decode__loop lessThan decode_address end_decode_address
-
-    # atomic increment
-    wait 1e-5
-    read workers_done {{CONTROLLER}} "workers_done"
-    op add workers_done workers_done 1
-    write workers_done {{CONTROLLER}} "workers_done"
-
-    # wait for the controller to signal that all workers are finished decoding
-parallel_decode__wait:
-    wait 1e-5
-    read state {{CONTROLLER}} "state"
-    jump parallel_decode__wait equal state "decoding"
-
-    # if we're not the worker that initially encountered the decode instruction, go to the next tick
-    jump next_tick notEqual is_first_decoding_worker true
-
-    # otherwise, finish this instruction and then go to the next tick
-    set is_first_decoding_worker null
-    write @this {{CONTROLLER}} "prev_proc"
+    set state "running"
     jump end_instruction always
 
 #% endblock contents
@@ -2061,6 +2193,9 @@ set {{CONFIG}} null
 set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
 set {{SINGLE_STEP_SWITCH}} null
+set {{NEXT_TICK_LINE}} null
+# unused variables
+set _ {{local_variable()}}
 # unused labels
 jump BEQ always
 jump BNE always

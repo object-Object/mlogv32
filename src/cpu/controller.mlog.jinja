@@ -23,6 +23,7 @@
 halt:
     control enabled {{POWER_SWITCH}} false
     control enabled {{PAUSE_SWITCH}} false
+    control enabled {{SINGLE_STEP_SWITCH}} false
 
 # wait until the power switch is enabled, then reset/start
 reset:
@@ -283,8 +284,14 @@ breakpoint__loop:
     sensor enabled {{POWER_SWITCH}} @enabled
     jump state->halt equal enabled false
 
+    sensor enabled {{SINGLE_STEP_SWITCH}} @enabled
+    jump breakpoint__end_loop equal enabled false
+
     sensor enabled {{PAUSE_SWITCH}} @enabled
     jump breakpoint__loop equal enabled true
+
+breakpoint__end_loop:
+    control enabled {{PAUSE_SWITCH}} false
 
     read counter prev_proc "@counter"
     op add counter counter 1

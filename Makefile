@@ -30,11 +30,6 @@ webserver: FORCE | build/rust
 	cd rust/examples/webserver && cargo objcopy --bin server --release -- --output-target binary ../../../build/rust/webserver_server.bin
 	cd rust/examples/webserver && cargo objcopy --bin client --release -- --output-target binary ../../../build/rust/webserver_client.bin
 
-# see https://stackoverflow.com/a/61960833
-build/%-0.mlog: build/%.bin scripts/bin_to_mlog.py
-	-rm -f build/$*-[0-9].mlog build/$*-[0-9][0-9].mlog
-	python -m mlogv32.scripts.bin_to_mlog build/$*.bin
-
 build/rust/examples/%.bin: FORCE | build/rust
 	cd rust/examples/$* && cargo robjcopy ../../../build/rust/$*.bin
 	cd rust/examples/$* && cargo objdump --release -- --disassemble > ../../../build/rust/$*.dump

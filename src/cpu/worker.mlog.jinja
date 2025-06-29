@@ -238,9 +238,9 @@ main__read_icache:
     read rs1 {{REGISTERS}} rs1_id
     read rs2 {{REGISTERS}} rs2_id
 
-    jump state->pause strictEqual pc breakpoint_address
-    jump state->pause equal single_step_enabled true
-end_pause:
+    jump state->breakpoint strictEqual pc breakpoint_address
+    jump state->breakpoint equal single_step_enabled true
+end_breakpoint:
 
 #% do reset_locals()
     # jump to instruction handler
@@ -305,10 +305,10 @@ state->reset:
     jump reset always
 
 # the controller will advance @counter and set state to "running" when it's time to unpause
-state->pause:
-    set state "pause"
+state->breakpoint:
+    set state "breakpoint"
     stop
-    jump end_pause always
+    jump end_breakpoint always
 
 ILLEGAL_OP:
 #% do reset_locals()
@@ -1765,17 +1765,17 @@ FENCE:
     # I-type: rs1, imm, rd_id
     # note: this currently also handles FENCE.I, but that will need to change if we want either of them to not be a no-op
 
-    # FIXME: PAUSE needs controller handling
-
     # PAUSE
     # TODO: there's probably a better way to do this
-    # jump FENCE__not_pause notEqual rs1_id 0
-    # jump FENCE__not_pause notEqual imm 0b000000010000
-    # jump FENCE__not_pause notEqual rd_id 0
+    jump FENCE__not_pause notEqual rs1_id 0
+    jump FENCE__not_pause notEqual imm 0b000000010000
+    jump FENCE__not_pause notEqual rd_id 0
 
-    # wait 0.00001
+    set state "PAUSE"
+    wait 0.00001
+    set state "running"
 
-# FENCE__not_pause:
+FENCE__not_pause:
     # no-op
     jump end_instruction always
 

@@ -204,8 +204,8 @@ next_tick:
     # if halting/resetting, we don't modify the requesting worker's @counter
     jump halt equal state "halt"
     jump reset equal state "reset"
-    jump pause equal state "pause"
-end_pause:
+    jump breakpoint equal state "breakpoint"
+end_breakpoint:
 
     # poll hardware
     sensor enabled {{POWER_SWITCH}} @enabled
@@ -273,18 +273,18 @@ state->halt:
     write 0 prev_proc "@counter"
     jump halt always
 
-pause:
+breakpoint:
     control enabled {{SINGLE_STEP_SWITCH}} true
     control enabled {{PAUSE_SWITCH}} true
 
-pause__loop:
+breakpoint__loop:
     wait 1e-5
 
     sensor enabled {{POWER_SWITCH}} @enabled
     jump state->halt equal enabled false
 
     sensor enabled {{PAUSE_SWITCH}} @enabled
-    jump pause__loop equal enabled true
+    jump breakpoint__loop equal enabled true
 
     read counter prev_proc "@counter"
     op add counter counter 1
@@ -293,7 +293,13 @@ pause__loop:
     set state "running"
     write state prev_proc "state"
 
-    jump end_pause always
+    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
+    write breakpoint_address prev_proc "breakpoint_address"
+
+    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
+    write single_step_enabled prev_proc "single_step_enabled"
+
+    jump end_breakpoint always
 
 # given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
 # address -> variable

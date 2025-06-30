@@ -135,7 +135,9 @@ end_slow_init:
 
     # set mcause to 0, since we don't distinguish different reset conditions
     # use null so the debugger can tell if it's a reset or a misaligned instruction
+    # also set scause (unspecified)
     write null {{CSRS}} "{{ 'mcause'|csr }}"
+    write null {{CSRS}} "{{ 'scause'|csr }}"
     
     # clear LR/SC reservation set
     set reservation_set null
@@ -157,14 +159,18 @@ end_slow_init:
     set csr_mie 0
     set interrupt_flags 0b00
 
-    # reset mtvec to implementation-defined value to help catch bugs
+    # reset mtvec and stvec to implementation-defined value to help catch bugs
     write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
+    write {{SYSCON}} {{CSRS}} "{{ 'stvec'|csr }}"
+
+    # clear satp
+    set csr_satp 0
 
     # misa
     # XLEN=32 --
     # 0         ----
     # ISA           ZYXWVUTSRQPONMLKJIHGFEDCBA
-    write   0b01000000100100000001000100000001 {{CSRS}} "{{ 'misa'|csr }}"
+    write   0b01000000100101000001000100000001 {{CSRS}} "{{ 'misa'|csr }}"
 
     # mlogv32 only has one hart, so mhartid is required to be zero
     write 0 {{CSRS}} "{{ 'mhartid'|csr }}"
@@ -179,8 +185,9 @@ end_slow_init:
     write 0 {{CSRS}} "{{ 'mscratch'|csr }}"
     write 0 {{CSRS}} "{{ 'mtval'|csr }}"
 
-    # clear critical section if set
-    set controller_critical_section null
+    write 0 {{CSRS}} "{{ 'sepc'|csr }}"
+    write 0 {{CSRS}} "{{ 'sscratch'|csr }}"
+    write 0 {{CSRS}} "{{ 'stval'|csr }}"
 
     # align to tick
     wait 1e-5
@@ -214,10 +221,8 @@ end_breakpoint:
 
     # check which CSR we're currently updating, if any
 
-    # update time
+    # update mtime
     # TODO: handle mtimeh/mcycleh overflow
-
-    jump skip_mtime_update equal controller_critical_section "mtime"
 
     op sub delta_ms @time last_mtime_update
 
@@ -232,14 +237,11 @@ end_breakpoint:
     write csr_mtime prev_proc "csr_mtime"
     write csr_mtimeh prev_proc "csr_mtimeh"
 
-skip_mtime_update:
     set last_mtime_update @time
 
-    # update cycle
-    # we define the rate of increase of cycle as "@ipt * ticks"
+    # update mcycle
+    # we define the rate of increase of mcycle as "@ipt * ticks"
     # this should be a decent estimation of the number of mlog instructions executed
-
-    jump skip_mcycle_update equal controller_critical_section "mcycle"
 
     read csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
     read csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
@@ -257,10 +259,7 @@ skip_mtime_update:
 
     write csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
     write csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
-    write csr_mcycle {{CSRS}} "{{ 'cycle'|csr }}"
-    write csr_mcycleh {{CSRS}} "{{ 'cycleh'|csr }}"
 
-skip_mcycle_update:
     set last_mcycle_update @tick
 
     # tell the next worker to poll and fire interrupts
@@ -362,5 +361,6 @@ set _ csr_minstreth
 set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
+set _ csr_satp
 set _ interrupt_flags
 # {% endraw %}

@@ -92,13 +92,16 @@ Additionally, the machine trap vector CSR `mtvec` is initialized to `0xfffffff0`
 
 ## ISA
 
-`RV32IMAZicntr_Zicsr_Zifencei_Zihintpause`
+`RV32IMAZicntr_Zicsr_Zifencei_Zihintpause_Svade`
 
-Supported privilege levels: M, U
+Supported privilege levels: M, S, U
+
+Supported address translation schemes: Bare, Sv32
 
 | Extension   | Version |
 | ----------- | ------- |
 | M-mode      | 1.13    |
+| S-mode      | 1.13    |
 | I           | 2.1     |
 | M           | 2.0     |
 | A           | 2.1     |
@@ -106,6 +109,7 @@ Supported privilege levels: M, U
 | Zicsr       | 2.0     |
 | Zifencei\*  | 2.0     |
 | Zihintpause | 2.0     |
+| Svade       | 1.0     |
 | Xmlogsys    | N/A     |
 
 \* Zifencei is currently just a stub - the instruction cache is already updated on every write to memory.
@@ -138,6 +142,17 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `time[h]`         | CPU      | Frequency: ms. Traps in U-mode.                                                         |
 | `instret[h]`      | CPU      | Traps in U-mode.                                                                        |
 | `hpmcounter*[h]`  | CSRS     | Not implemented.                                                                        |
+| `sstatus`         | CPU      | Subset of `mstatus`.                                                                    |
+| `sie`             | CPU      | Subset of `mie`.                                                                        |
+| `stvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
+| `scounteren`      | CSRS     | Read-only zero.                                                                         |
+| `senvcfg`         | CSRS     | Bits 31:1 read-only zero.                                                               |
+| `sscratch`        | CSRS     |                                                                                         |
+| `sepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
+| `scause`          | CSRS     |                                                                                         |
+| `stval`           | CSRS     |                                                                                         |
+| `sip`             | CPU      | Subset of `mip`.                                                                        |
+| `satp`            | CPU      |                                                                                         |
 | `mvendorid`       | CSRS     | Read-only zero.                                                                         |
 | `marchid`         | CSRS     | Read-only zero.                                                                         |
 | `mimpid`          | CSRS     | Read-only zero.                                                                         |
@@ -145,6 +160,9 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `mstatus`         | CPU      |                                                                                         |
 | `mstatush`        | CSRS     | Read-only zero.                                                                         |
 | `misa`            | CSRS     | Read-only.                                                                              |
+| `medeleg`         | CSRS     | Read-only zero.                                                                         |
+| `medelegh`        | CSRS     | Read-only zero.                                                                         |
+| `mideleg`         | CSRS     | Read-only zero.                                                                         |
 | `mie`             | CPU      |                                                                                         |
 | `mtvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
 | `mcounteren`      | CSRS     | Read-only zero.                                                                         |
@@ -153,6 +171,10 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `mcause`          | CSRS     | Stored in CSRS because the CPU often speculatively sets the corresponding CPU variable. |
 | `mtval`           | CSRS     | Same reasoning as `mcause`.                                                             |
 | `mip`             | CPU      |                                                                                         |
+| `menvcfg`         | CSRS     | Bits 31:1 read-only zero.                                                               |
+| `menvcfgh`        | CSRS     | Read-only zero.                                                                         |
+| `pmpcfg*`         | CSRS     | Read-only zero.                                                                         |
+| `pmpaddr*`        | CSRS     | Read-only zero.                                                                         |
 | `mcycle[h]`       | CSRS     | See `cycle[h]`.                                                                         |
 | `minstret[h]`     | CPU      | See `instret[h]`.                                                                       |
 | `mhpmcounter*[h]` | CSRS     | See `hpmcounter*[h]`.                                                                   |

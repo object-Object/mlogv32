@@ -129,7 +129,7 @@ class mlogv32(pluginTemplate):
                     "riscv-arch-test/riscv-test-suite/"
                 )
 
-                logger.info(f"Building test:  {test_display_name}")
+                logger.info(f"Building test: {test_display_name}")
 
                 # for each testname we get all its fields (as described by the testlist format)
                 testentry = testlist[testname]
@@ -228,7 +228,7 @@ class mlogv32(pluginTemplate):
                     f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}"
                 )
 
-                logger.info(f"Running test: {test_display_name}")
+                logger.info(f"Running test:  {test_display_name}")
 
                 processor.stop()
                 processor.flash(binary_file_host)

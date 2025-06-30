@@ -145,8 +145,8 @@ loop:
     read x30 {{REGISTERS}} 30
     read x31 {{REGISTERS}} 31
     
-    read mcycle {{CPU}} "csr_mcycle"
-    read mcycleh {{CPU}} "csr_mcycleh"
+    read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     op shl mcycleh mcycleh 32
     op add mcycle mcycle mcycleh
     
@@ -165,14 +165,22 @@ loop:
     op shl minstreth minstreth 32
     op add minstret minstret minstreth
 
-    read mstatus {{CPU}} "csr_mstatus"
-    read mtvec {{CSRS}} "{{ 'mtvec'|csr }}"
-    read mip {{CPU}} "csr_mip"
-    read mie {{CPU}} "csr_mie"
+    read satp {{CPU}} "csr_satp"
+    read sscratch {{CSRS}} "{{ 'sscratch'|csr }}"
+    read stvec {{CSRS}} "{{ 'stvec'|csr }}"
+    read sepc {{CSRS}} "{{ 'sepc'|csr }}"
+    read scause {{CSRS}} "{{ 'scause'|csr }}"
+    read stval {{CSRS}} "{{ 'stval'|csr }}"
+
     read mscratch {{CSRS}} "{{ 'mscratch'|csr }}"
+    read mtvec {{CSRS}} "{{ 'mtvec'|csr }}"
     read mepc {{CSRS}} "{{ 'mepc'|csr }}"
     read mcause {{CSRS}} "{{ 'mcause'|csr }}"
     read mtval {{CSRS}} "{{ 'mtval'|csr }}"
+
+    read mstatus {{CPU}} "csr_mstatus"
+    read mip {{CPU}} "csr_mip"
+    read mie {{CPU}} "csr_mie"
 
     read state {{CPU}} "state"
     read pc {{CPU}} "pc"
@@ -190,6 +198,10 @@ loop:
     read __etext {{CPU}} "__etext"
     read reservation_set {{CPU}} "reservation_set"
     read privilege_mode {{CPU}} "privilege_mode"
+
+    op add ret @counter 1
+    jump get_effective_privilege_mode always
+    set effective_mode result
 
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
@@ -367,11 +379,6 @@ loop__no_mark_icache:
 
     #{ print(0, 17)
 
-    print "mscratch = {0}\n"
-    set n mscratch
-    op add ret @counter 1
-    jump format_hex always
-
     print "mtvec    = {0}\n"
     set n mtvec
     op add ret @counter 1
@@ -389,6 +396,11 @@ loop__no_mark_icache:
 
     print "mtval    = {0}\n"
     set n mtval
+    op add ret @counter 1
+    jump format_hex always
+
+    print "mscratch = {0}\n"
+    set n mscratch
     op add ret @counter 1
     jump format_hex always
 
@@ -506,7 +518,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    print "privilege_mode  = {0}\n\n"
+    print "privilege_mode  = {0}\n"
     op mul jump privilege_mode 2
     op add @counter @counter jump
     format "user"; jump done_privilege_mode always
@@ -514,6 +526,15 @@ loop__no_mark_icache:
     format "reserved"; jump done_privilege_mode always
     format "machine"
 done_privilege_mode:
+
+    print "effective_mode  = {0}\n\n"
+    op mul jump effective_mode 2
+    op add @counter @counter jump
+    format "user"; jump done_effective_mode always
+    format "supervisor"; jump done_effective_mode always
+    format "reserved"; jump done_effective_mode always
+    format "machine"
+done_effective_mode:
 
     set uart {{UART0}}
     set uart_index 0
@@ -534,6 +555,37 @@ done_privilege_mode:
     set uart_index 3
     op add ret @counter 1
     jump format_uart always
+    print "\n"
+
+    print "satp = {0}\n\n"
+    set n satp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "stvec    = {0}\n"
+    set n stvec
+    op add ret @counter 1
+    jump format_hex always
+
+    print "sepc     = {0}\n"
+    set n sepc
+    op add ret @counter 1
+    jump format_hex always
+
+    print "scause   = {0}\n"
+    set n scause
+    op add ret @counter 1
+    jump format_mcause always
+
+    print "stval    = {0}\n"
+    set n stval
+    op add ret @counter 1
+    jump format_hex always
+
+    print "sscratch = {0}\n"
+    set n sscratch
+    op add ret @counter 1
+    jump format_hex always
 
     #{ print(35, 17)
 
@@ -608,7 +660,7 @@ format_op_id:
     jump format_null strictEqual n null
     op add n n 64
     jump format_op_id__unknown lessThan n 0
-    jump format_op_id__unknown greaterThan n 66
+    jump format_op_id__unknown greaterThan n 65
     op mul n n 2
     op add @counter @counter n
     format "BEQ"; set @counter ret
@@ -677,7 +729,6 @@ format_op_id:
     format "SRAI"; set @counter ret
     format "illegal_instruction"; set @counter ret
     format "MLOGSYS"; set @counter ret
-    format "MLOGDRAW"; set @counter ret
 
 format_op_id__unknown:
     format n; set @counter ret
@@ -721,7 +772,7 @@ format_uart:
     op notEqual rx_overflow_flag rx_wptr rx_wptr_raw
     op land rx_overrun rx_full rx_overflow_flag
 
-    print "uart{0}_rx_size = {1} ({2} -> {3})"
+    print "uart{0}: r={1} ({2}-{3})"
     jump format_uart__rx_fifo_size__no_overrun notEqual rx_overrun true
     print " !!"
 format_uart__rx_fifo_size__no_overrun:
@@ -729,10 +780,8 @@ format_uart__rx_fifo_size__no_overrun:
     format rx_fifo_size
     format rx_rptr
     format rx_wptr
-    print "\n"
 
-    print "uart{0}_tx_size = {1} ({2} -> {3})\n\n"
-    format uart_index
+    print " t={0} ({1}-{2})\n"
     format tx_fifo_size
     format tx_rptr
     format tx_wptr
@@ -955,6 +1004,25 @@ load_rom_word__loop:
 
 inaccessible_load:
     set result null
+    set @counter ret
+
+# get effective privilege mode for load/store instructions from mstatus
+# -> result
+# ret: ret2
+get_effective_privilege_mode:
+    # NOTE: avoid using locals in this function
+    # mstatus.MPRV
+    op and result mstatus 0b100000000000000000
+    jump get_effective_privilege_mode__normal equal result 0
+
+    # MPRV=1, return mstatus.MPP
+    op shr result mstatus 11
+    op and result result 0b11
+    set @counter ret
+
+get_effective_privilege_mode__normal:
+    # MPRV=0, return privilege_mode
+    set result privilege_mode
     set @counter ret
 
 #% if false

@@ -1,10 +1,13 @@
 templates:
   controller: controller.mlog.jinja
   worker: worker.mlog.jinja
+  debugger: ../peripherals/debugger.mlog.jinja
+  display: ../peripherals/scrolling_display.mlog.jinja
 
 schematics:
   lookups: ../../schematics/lookup_procs.msch
   ram: ../../schematics/ram_proc.msch
+  sortkb: ../../schematics/sortKB.msch
 
 configs: ../config/configs.yaml
 

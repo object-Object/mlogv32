@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any, Iterable, TypedDict, Unpack, cast, overload
+from typing import Annotated, Any, Iterable, Literal, TypedDict, Unpack, cast, overload
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -99,8 +99,37 @@ def build(
     include_all: Annotated[bool, Option("--all")] = False,
     include_cpu: Annotated[bool, Option("--cpu")] = False,
     include_peripherals: Annotated[bool, Option("--peripherals")] = False,
+    include_memory: Annotated[bool, Option("--memory")] = False,
+    include_debugger: Annotated[bool, Option("--debugger")] = False,
 ):
-    """Generate a CPU schematic."""
+    """Generate a CPU schematic.
+
+    Memory configuration format (--config):
+
+    - config_name (see src/config/configs.yaml)
+
+    - rom_rows,ram_rows[,icache_rows[,memory_width[,x_offset]]]
+
+    - rom=rom_rows,ram=ram_rows[,icache=icache_rows[,width=memory_width[,x_offset=x_offset]]]
+
+    Defaults:
+
+    - icache: rom + ram
+
+    - width: 32
+
+    - x_offset: -9
+
+    Examples:
+
+    - riscv-arch-test
+
+    - 1,1,1,32
+
+    - 4,4
+
+    - rom=2,ram=12,icache=2,width=16
+    """
 
     if size:
         width = size
@@ -109,6 +138,8 @@ def build(
     if include_all:
         include_cpu = True
         include_peripherals = True
+        include_memory = True
+        include_debugger = True
 
     config = BuildConfig.load(yaml_path)
 
@@ -116,27 +147,81 @@ def build(
         with config.configs.open("rb") as f:
             cpu_configs: ConfigsYaml = yaml.load(f, yaml.Loader)
 
-        if cpu_config_name not in cpu_configs["configs"]:
-            raise KeyError(f"Unknown config name: {cpu_config_name}")
+        if config_args := cpu_configs["configs"].get(cpu_config_name):
+            config_args = cpu_configs["defaults"] | config_args
 
-        configs(config.configs)
+            configs(config.configs)
 
-        config_code = (
-            (config.configs.parent / cpu_config_name)
-            .with_suffix(".mlog")
-            .read_text("utf-8")
-        )
+            config_code = (
+                (config.configs.parent / cpu_config_name)
+                .with_suffix(".mlog")
+                .read_text("utf-8")
+            )
+        else:
+            config_args = parse_config_str(cpu_config_name)
+            if not config_args:
+                raise KeyError(f"Invalid config: {cpu_config_name}")
+
+            config_code = render_template(
+                config.configs.parent / cpu_configs["template"],
+                yaml_path.parent / "generated_config.mlog",
+                **config_args,
+            )
     else:
+        if include_memory:
+            raise ValueError(
+                "--config is required if generating memory, but not supplied"
+            )
+        config_args = {}
         config_code = ""
 
-    worker_output = get_template_output_path(config.templates.worker)
-    worker_env = create_jinja_env(config.templates.worker.parent, [LocalVariables])
-    worker_code = render_template(
+    @overload
+    def _render_template(
+        template: Path,
+        extensions: Iterable[type[Extension] | str] = (),
+        *,
+        force: Literal[True],
+        **kwargs: Any,
+    ) -> tuple[str, Environment, Path]: ...
+
+    @overload
+    def _render_template(
+        template: Path,
+        extensions: Iterable[type[Extension] | str] = (),
+        *,
+        force: Literal[False] = False,
+        **kwargs: Any,
+    ) -> tuple[str, Environment | None, Path | None]: ...
+
+    def _render_template(
+        template: Path,
+        extensions: Iterable[type[Extension] | str] = (),
+        *,
+        force: bool = False,
+        **kwargs: Any,
+    ) -> tuple[str, Environment | None, Path | None]:
+        if template.suffix == ".mlog" and not force:
+            return template.read_text("utf-8"), None, None
+
+        template_output = get_template_output_path(template)
+        template_env = create_jinja_env(template.parent, extensions)
+        rendered = render_template(
+            template,
+            template_output,
+            template_env,
+            **kwargs,
+        )
+        return rendered, template_env, template_output
+
+    # preprocess and check worker
+
+    worker_code, worker_env, worker_output = _render_template(
         config.templates.worker,
-        worker_output,
-        worker_env,
+        [LocalVariables],
+        force=True,
         instructions=config.instructions,
     )
+
     i = LocalVariablesEnv.of(worker_env).largest_local_variable
     print(f"Local variable count: {i}")
 
@@ -156,20 +241,36 @@ Code size:
         e.add_note(f"{worker_output}:{e.token.line}")
         raise
 
-    controller_output = get_template_output_path(config.templates.controller)
-    controller_code = render_template(
+    # preprocess controller
+
+    controller_code, _, _ = _render_template(
         config.templates.controller,
-        controller_output,
-        create_jinja_env(config.templates.controller.parent, [LocalVariables]),
+        [LocalVariables],
+        force=True,
         instructions=config.instructions,
         labels=worker_labels,
     )
+
+    # preprocess other code snippets
+
+    debugger_code, _, _ = _render_template(config.templates.debugger)
+
+    display_code, _, _ = _render_template(config.templates.display)
+
+    rom_code = 'set v ""; stop'
+
+    # load schematics
 
     lookups_schem = Schematic.read_file(str(config.schematics.lookups))
     assert lookups_schem.get_dimensions() == (4, 4)
 
     ram_schem = Schematic.read_file(str(config.schematics.ram))
     assert ram_schem.get_dimensions() == (1, 1)
+
+    sortkb_schem = Schematic.read_file(str(config.schematics.sortkb))
+    assert sortkb_schem.get_dimensions() == (5, 4)
+
+    # begin generating output schematic
 
     schem = Schematic()
 
@@ -187,10 +288,6 @@ Code size:
                 schem.add_block(block)
             case Schematic():
                 schem.add_schem(block, x, y)
-
-    def add_cpu(block: Block):
-        if include_cpu:
-            schem.add_block(block)
 
     def add_label(x: int, y: int, **labels: Unpack[Labels]):
         label = "\n".join(
@@ -223,8 +320,13 @@ Code size:
         for y in lenrange(0, 16):
             add_peripheral(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
 
+    display_link = ProcessorLink(0, 0, "cell2")
+
     add_peripheral(lookups_schem, 0, 16)
-    lookup_links = [ProcessorLink(x=i % 4, y=16 + i // 4, name="") for i in range(16)]
+    lookup_links = [
+        ProcessorLink(x=i % 4, y=16 + i // 4, name=f"processor{i + 1}")
+        for i in range(16)
+    ]
 
     add_label(4, 19, right="UART0, UART2", down="LABELS")
     add_peripheral(simple_block(Content.WORLD_CELL, 4, 18))
@@ -245,7 +347,7 @@ Code size:
         Block(Content.MICRO_PROCESSOR, 9, 16, ProcessorConfig(config_code, []), 0)
     )
 
-    registers_link = ProcessorLink(9, 19, "")
+    registers_link = ProcessorLink(9, 19, "cell1")
     csrs_link = ProcessorLink(9, 18, "")
     incr_link = ProcessorLink(9, 17, "")
     config_link = ProcessorLink(9, 16, "")
@@ -276,74 +378,231 @@ Code size:
     pause_switch_link = ProcessorLink(11, 17, "")
     single_step_switch_link = ProcessorLink(11, 16, "")
 
-    # CPU
+    add_peripheral(ram_schem, 14, 16)
+    add_peripheral(ram_schem, 13, 17)
+    add_peripheral(ram_schem, 14, 17)
+    add_with_label(
+        Block(Content.SWITCH, 14, 18, True, 0),
+        right="UART0 -> DISPLAY",
+    )
 
-    add_cpu(
+    add_peripheral(
         Block(
             block=Content.WORLD_PROCESSOR,
-            x=16,
-            y=0,
+            x=13,
+            y=16,
             config=ProcessorConfig(
-                code=controller_code,
+                code=display_code,
                 links=relative_links(
                     *lookup_links,
-                    *uart_links,
-                    registers_link,
-                    labels_link,
-                    csrs_link,
-                    incr_link,
+                    ProcessorLink(14, 16, "processor17"),  # BUFFER
+                    ProcessorLink(13, 17, "processor18"),  # INCR (display)
+                    ProcessorLink(14, 17, "processor19"),  # DECR
                     config_link,
-                    error_output_link,
+                    ProcessorLink(14, 18, "switch1"),  # DISPLAY_POWER
                     power_switch_link,
-                    pause_switch_link,
-                    single_step_switch_link,
-                    x=16,
-                    y=0,
+                    uart_links[0],
+                    display_link,
+                    x=13,
+                    y=16,
                 ),
             ),
             rotation=0,
         )
     )
 
+    add_peripheral(sortkb_schem, 4, 21)
+
+    # CPU
+
     controller_link = ProcessorLink(16, 0, "")
 
-    for x in lenrange(16, width):
-        for y in lenrange(0, height):
-            # controller
-            if x == 16 and y == 0:
-                continue
-
-            add_cpu(
-                Block(
-                    block=Content.WORLD_PROCESSOR,
-                    x=x,
-                    y=y,
-                    config=ProcessorConfig(
-                        code=worker_code,
-                        links=relative_links(
-                            *lookup_links,
-                            *uart_links,
-                            registers_link,
-                            labels_link,
-                            csrs_link,
-                            incr_link,
-                            config_link,
-                            controller_link,
-                            error_output_link,
-                            single_step_switch_link,
-                            x=x,
-                            y=y,
-                        ),
+    if include_cpu:
+        schem.add_block(
+            Block(
+                block=Content.WORLD_PROCESSOR,
+                x=16,
+                y=0,
+                config=ProcessorConfig(
+                    code=controller_code,
+                    links=relative_links(
+                        *lookup_links,
+                        *uart_links,
+                        registers_link,
+                        labels_link,
+                        csrs_link,
+                        incr_link,
+                        config_link,
+                        error_output_link,
+                        power_switch_link,
+                        pause_switch_link,
+                        single_step_switch_link,
+                        x=16,
+                        y=0,
                     ),
-                    rotation=0,
-                )
+                ),
+                rotation=0,
             )
+        )
 
-    if include_cpu or include_peripherals:
+        for x in lenrange(16, width):
+            for y in lenrange(0, height):
+                # controller
+                if x == 16 and y == 0:
+                    continue
+
+                schem.add_block(
+                    Block(
+                        block=Content.WORLD_PROCESSOR,
+                        x=x,
+                        y=y,
+                        config=ProcessorConfig(
+                            code=worker_code,
+                            links=relative_links(
+                                *lookup_links,
+                                *uart_links,
+                                registers_link,
+                                labels_link,
+                                csrs_link,
+                                incr_link,
+                                config_link,
+                                controller_link,
+                                error_output_link,
+                                single_step_switch_link,
+                                x=x,
+                                y=y,
+                            ),
+                        ),
+                        rotation=0,
+                    )
+                )
+
+    # memory
+    if include_memory:
+        base_y = config_link.y + config_args["MEMORY_Y_OFFSET"]
+        for y in lenrange(
+            0,
+            config_args["ROM_ROWS"]
+            + config_args["RAM_ROWS"]
+            + config_args["ICACHE_ROWS"],
+        ):
+            for x in lenrange(
+                config_link.x + config_args["MEMORY_X_OFFSET"],
+                config_args["MEMORY_WIDTH"],
+            ):
+                if y < config_args["ROM_ROWS"]:
+                    schem.add_block(
+                        Block(
+                            block=Content.MICRO_PROCESSOR,
+                            x=x,
+                            y=base_y + y,
+                            config=ProcessorConfig(rom_code, []),
+                            rotation=0,
+                        )
+                    )
+                else:
+                    schem.add_schem(ram_schem, x, base_y + y)
+
+    # debugger
+
+    if include_debugger:
+        for x in lenrange(-18, 16):
+            for y in lenrange(0, 16):
+                schem.add_block(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
+
+        schem.add_block(Block(Content.SWITCH, -2, 1, True, 0))
+
+        schem.add_block(
+            Block(
+                block=Content.WORLD_PROCESSOR,
+                x=-2,
+                y=0,
+                config=ProcessorConfig(
+                    code=debugger_code,
+                    links=relative_links(
+                        *lookup_links,
+                        *uart_links,
+                        controller_link,
+                        csrs_link,
+                        registers_link,
+                        ProcessorLink(-3, 0, ""),  # debugger display
+                        ProcessorLink(-2, 1, ""),  # debugger power
+                        x=-2,
+                        y=0,
+                    ),
+                ),
+                rotation=0,
+            )
+        )
+
+    if include_cpu or include_peripherals or include_memory or include_debugger:
         if output:
             schem.write_file(str(output))
         else:
             schem.write_clipboard()
+
+
+def parse_config_str(config: str) -> dict[str, Any] | None:
+    """Format:
+
+    - `rom_rows,ram_rows[,icache_rows[,memory_width[,x_offset]]]`
+    - `rom=rom_rows,ram=ram_rows[,icache=icache_rows[,width=memory_width[,x_offset=x_offset]]]`
+
+    Defaults:
+
+    - icache: `rom + ram`
+    - width: `32`
+    - x_offset: `-9`
+
+    Examples:
+
+    - `1,1,1,32`
+    - `4,4`
+    - `rom=2,ram=12,icache=2,width=16`
+    """
+
+    items = config.split(",")
+    if not (2 <= len(items) <= 4):
+        return None
+
+    inputs = dict[str, int]()
+
+    for item, default_key in zip(items, ["rom", "ram", "icache", "width", "x_offset"]):
+        if "=" not in item:
+            key = default_key
+            value = item
+        else:
+            key, value = item.split("=", 1)
+
+        try:
+            inputs[key] = int(value, base=0)
+        except ValueError:
+            return None
+
+    if "rom" not in inputs or "ram" not in inputs:
+        return None
+
+    if "icache" not in inputs:
+        inputs["icache"] = inputs["rom"] + inputs["ram"]
+
+    if "width" not in inputs:
+        inputs["width"] = 32
+
+    if "x_offset" not in inputs:
+        inputs["x_offset"] = -9
+
+    rows = inputs["rom"] + inputs["ram"] + inputs["icache"]
+
+    return dict(
+        BREAKPOINT_ADDRESS="0x",
+        UART_FIFO_CAPACITY=253,
+        MEMORY_X_OFFSET=inputs["x_offset"],
+        MEMORY_Y_OFFSET=-16 - rows,
+        MEMORY_WIDTH=inputs["width"],
+        ROM_ROWS=inputs["rom"],
+        RAM_ROWS=inputs["ram"],
+        ICACHE_ROWS=inputs["icache"],
+    )
 
 
 def lenrange(start: int, length: int, step: int = 1):

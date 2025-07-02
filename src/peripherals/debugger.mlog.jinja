@@ -9,6 +9,7 @@
 #% set CSRS = 'processor18'
 #% set REGISTERS = 'cell1'
 #% set DISPLAY = 'display1'
+#% set SWITCH = 'switch1'
 #% set UART0 = 'bank1'
 #% set UART1 = 'bank2'
 #% set UART2 = 'bank3'
@@ -34,7 +35,7 @@ reset_markers:
     jump reset_markers greaterThan i MARKER_START_ID
 
     wait 1e-5
-    sensor enabled switch1 @enabled
+    sensor enabled {{SWITCH}} @enabled
     jump reset equal enabled false
 
     set i -1
@@ -48,7 +49,7 @@ reset__find_lookup_start:
 
     set LOOKUP_START i
 
-    control enabled switch1 true
+    control enabled {{SWITCH}} true
 
     draw reset
     draw color 255 255 255 255
@@ -94,7 +95,7 @@ reset__find_lookup_start:
     #{ print(35, 0)
 
 loop:
-    sensor enabled switch1 @enabled
+    sensor enabled {{SWITCH}} @enabled
     jump reset equal enabled false
 
     set mark_memory_id MARKER_START_ID
@@ -1019,6 +1020,7 @@ set {{CPU}} null
 set {{CSRS}} null
 set {{REGISTERS}} null
 set {{DISPLAY}} null
+set {{SWITCH}} null
 set {{UART0}} null
 set {{UART1}} null
 set {{UART2}} null

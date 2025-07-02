@@ -34,10 +34,13 @@ class BuildConfig(BaseModel):
     class Templates(BaseModel):
         controller: RelativePath
         worker: RelativePath
+        debugger: RelativePath
+        display: RelativePath
 
     class Schematics(BaseModel):
         lookups: RelativePath
         ram: RelativePath
+        sortkb: RelativePath
 
     class Instruction(BaseModel):
         label: str

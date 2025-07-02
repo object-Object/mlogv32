@@ -1,3 +1,21 @@
+FROM debian:bookworm-slim AS build-sail
+
+ARG SAIL_RELEASE=https://github.com/rems-project/sail/releases/download/0.19.1-linux-binary/sail.tar.gz
+
+# presumably not all of these are required, but the sail readme doesn't say what the dependencies are
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config jq autoconf automake autotools-dev curl python3 python3-pip python3-tomli libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build git cmake libglib2.0-dev libslirp-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /usr/local \
+    && curl --location "${SAIL_RELEASE}" | tar xvz --directory=/usr/local --strip-components=1 \
+    && git clone https://github.com/riscv/sail-riscv.git \
+    && cd sail-riscv \
+    && cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDOWNLOAD_GMP=FALSE -GNinja \
+    && cmake --build build \
+    && mkdir -p /opt/sail-riscv \
+    && mv build/c_emulator/* /opt/sail-riscv
+
 FROM mcr.microsoft.com/devcontainers/rust:bookworm
 
 COPY --from=ghcr.io/astral-sh/uv:0.7.6 /uv /uvx /bin/
@@ -6,7 +24,7 @@ ENV PATH=$PATH:/opt/riscv/bin:/opt/sail-riscv
 
 COPY --from=ghcr.io/object-object/mlogv32-riscv-gnu-toolchain:rv32ima-ilp32 /opt/riscv /opt/riscv
 
-COPY --from=registry.gitlab.com/incoresemi/docker-images/compliance /usr/bin/riscv_sim_RV32 /opt/sail-riscv/
+COPY --from=build-sail /opt/sail-riscv /opt/sail-riscv
 
 # https://code.visualstudio.com/remote/advancedcontainers/persist-bash-history
 ARG USERNAME=vscode

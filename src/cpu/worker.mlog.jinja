@@ -1,7 +1,7 @@
 #% macro fetch_variables()
+    read _rom prev_proc "_rom"
     read __etext prev_proc "__etext"
     read _address prev_proc "_address"
-    read _rom prev_proc "_rom"
     read address prev_proc "address"
     read csr_mie prev_proc "csr_mie"
     read csr_minstret prev_proc "csr_minstret"
@@ -89,9 +89,9 @@
 #% set labels = namespace()
 #% set _labels_vals = (labels|namespace_dict).values()
 
-#% set labels.next_tick = 12
+#% set labels.next_tick = 11
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 144
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 143
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -101,7 +101,7 @@ reset:
     setrate 1000
 
     # define this variable FIRST so that we can read other variables over it
-    set _rom null
+    # set _rom null
 
     # load config
     read MEMORY_X {{CONFIG}} "MEMORY_X"
@@ -1564,6 +1564,11 @@ store_value:
     # handle write-only MMIO
     jump store_value__syscon equal address {{SYSCON}}
 
+    # fast path for 32-bit writes
+    set value rs2
+    op add ret2 @counter 13 # update this if anything below is changed
+    jump access_ram equal length 32
+
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
     op mod $shift address 4
     op mul $shift $shift 8
@@ -1588,6 +1593,7 @@ store_value:
     op add value result nonlocal2 # inserted value
 
     # align address to word
+    # NOTE: we jump to this line from access_ram if length == 32
     op and address address 0xfffffffc
 
     # if it's in the MMIO range, handle it separately
@@ -2644,7 +2650,9 @@ modify_csr__minstreth:
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id
-    jump ILLEGAL_OP greaterThan imm 0
+
+    # for now we can just ignore imm, since MLOGSYS is only used for decoding
+    # jump ILLEGAL_OP greaterThan imm 0
 
     # init icache
     # require M-mode so that we don't need to do address translation

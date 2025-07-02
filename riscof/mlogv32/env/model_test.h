@@ -17,45 +17,49 @@
   .option norelax; \
   .section .text.init.rom; \
   \
+  /* decode ROM */ \
   la t0, __etext_rom; \
   .insn i CUSTOM_0, 0, zero, t0, 0; \
   \
+  /* initialize UART */ \
   li t0, 0xf0000010; \
   li t1, 0b111; \
   sb t1, 0x08(t0); \
   \
+  /* copy .text from ROM to RAM */ \
   la t0, __sitext; \
   la t1, __stext; \
   la t2, __etext; \
-  beqz t2, mlogv32_text_done; \
-mlogv32_load_text: \
   bgeu t1, t2, mlogv32_text_done; \
-  lb t3, 0(t0); \
-  sb t3, 0(t1); \
-  addi t0, t0, 1; \
-  addi t1, t1, 1; \
-  j mlogv32_load_text; \
+mlogv32_load_text: \
+  lw t3, 0(t0); \
+  sw t3, 0(t1); \
+  addi t0, t0, 4; \
+  addi t1, t1, 4; \
+  bltu t1, t2, mlogv32_load_text; \
 mlogv32_text_done: \
   \
+  /* copy .data from ROM to RAM */ \
   la t0, __sidata; \
   la t1, __sdata; \
   la t2, __edata; \
-mlogv32_load_data: \
   bgeu t1, t2, mlogv32_data_done; \
-  lb t3, 0(t0); \
-  sb t3, 0(t1); \
-  addi t0, t0, 1; \
-  addi t1, t1, 1; \
-  j mlogv32_load_data; \
+mlogv32_load_data: \
+  lw t3, 0(t0); \
+  sw t3, 0(t1); \
+  addi t0, t0, 4; \
+  addi t1, t1, 4; \
+  bltu t1, t2, mlogv32_load_data; \
 mlogv32_data_done: \
   \
+  /* zero out .bss */ \
   la t0, __sbss; \
   la t1, __ebss; \
-mlogv32_clear_bss: \
   bgeu t0, t1, mlogv32_bss_done; \
-  sb zero, 0(t0); \
-  addi t0, t0, 1; \
-  j mlogv32_clear_bss; \
+mlogv32_clear_bss: \
+  sw zero, 0(t0); \
+  addi t0, t0, 4; \
+  bltu t0, t1, mlogv32_clear_bss; \
 mlogv32_bss_done: \
   \
   RVMODEL_IO_WRITE_STR(t0, "\n--- ", MLOGV32_TEST_NAME, " ---\n") \

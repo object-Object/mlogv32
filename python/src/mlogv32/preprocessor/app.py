@@ -10,7 +10,10 @@ from jinja2.ext import Extension
 from pymsch import Block, Content, ProcessorConfig, ProcessorLink, Schematic
 from typer import Option, Typer
 
-from mlogv32.utils.msch import BEContent
+from mlogv32.utils.msch import (
+    BEContent,
+    ProcessorConfigUTF8,
+)
 
 from .extensions import (
     CommentStatement,
@@ -96,6 +99,7 @@ def build(
     height: Annotated[int, Option("-h", "--height")] = 16,
     size: Annotated[int | None, Option("-s", "--size")] = None,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
+    bin_path: Annotated[Path | None, Option("--bin")] = None,
     include_all: Annotated[bool, Option("--all")] = False,
     include_cpu: Annotated[bool, Option("--cpu")] = False,
     include_peripherals: Annotated[bool, Option("--peripherals")] = False,
@@ -256,8 +260,6 @@ Code size:
     debugger_code, _, _ = _render_template(config.templates.debugger)
 
     display_code, _, _ = _render_template(config.templates.display)
-
-    rom_code = 'set v ""; stop'
 
     # load schematics
 
@@ -479,6 +481,15 @@ Code size:
 
     # memory
     if include_memory:
+        i = 0
+        if bin_path:
+            data = bin_path.read_bytes()
+            if len(data) % 4 != 0:
+                print("[WARNING] Bin is not aligned to 4 bytes, appending zeros.")
+                data += bytes([0, 0, 0, 0])[: len(data) % 4]
+        else:
+            data = bytes()
+
         base_y = config_link.y + config_args["MEMORY_Y_OFFSET"]
         for y in lenrange(
             0,
@@ -491,17 +502,31 @@ Code size:
                 config_args["MEMORY_WIDTH"],
             ):
                 if y < config_args["ROM_ROWS"]:
+                    if i < len(data):
+                        payload = "".join(chr(174 + c) for c in data[i : i + 16384])
+                        i += 16384
+                    else:
+                        payload = ""
+
                     schem.add_block(
                         Block(
                             block=Content.MICRO_PROCESSOR,
                             x=x,
                             y=base_y + y,
-                            config=ProcessorConfig(rom_code, []),
+                            config=ProcessorConfigUTF8(
+                                code=f'set v "{payload}"; stop',
+                                links=[],
+                            ).compress(),
                             rotation=0,
                         )
                     )
                 else:
                     schem.add_schem(ram_schem, x, base_y + y)
+
+        if i < len(data):
+            print(
+                f"[WARNING] Bin is too large to fit into the generated ROM ({len(data) - i} bytes overflowed)."
+            )
 
     # debugger
 

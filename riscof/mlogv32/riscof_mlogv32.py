@@ -42,6 +42,9 @@ class mlogv32(pluginTemplate):
         self.isa_spec: str = os.path.abspath(config["ispec"])
         self.platform_spec: str = os.path.abspath(config["pspec"])
 
+        self.host_repo_path: str = config["host_repo_path"]
+        self.riscof_repo_path: str = config["riscof_repo_path"]
+
         # We capture if the user would like the run the tests on the target or
         # not. If you are interested in just compiling the tests and not running
         # them on the target, then following variable should be set to False
@@ -152,10 +155,10 @@ class mlogv32(pluginTemplate):
 
                 # hack
                 binary_file_host = binary_file.replace(
-                    "/workspaces/mlogv32", "/Users/object/Git/mlogv32"
+                    self.riscof_repo_path, self.host_repo_path
                 )
                 out_file_host = out_file.replace(
-                    "/workspaces/mlogv32", "/Users/object/Git/mlogv32"
+                    self.riscof_repo_path, self.host_repo_path
                 )
 
                 # name of the signature file as per requirement of RISCOF. RISCOF expects the signature to

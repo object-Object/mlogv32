@@ -15,12 +15,12 @@
 #% set UART3 = 'bank4'
 
 #% macro print(col, row)
-   #{{'\n'}}    draw print {{ 8 + col * 7 }} {{ 508 - row * 13 }} topLeft
+   #{{'\n'}}    draw print {{ 11 + col * 7 }} {{ 512 - 6 - row * 13 }} topLeft
     drawflush {{DISPLAY}}
 #% endmacro
 
 #% macro rect(col, row, width, height)
-   #{{'\n'}}    draw rect {{ 8 + col * 7 }} {{ 508 - row * 13 - 3 }} {{ width * 7 }} {{ height * -13 }}
+   #{{'\n'}}    draw rect {{ 11 + col * 7 }} {{ 512 - 6 - row * 13 - 3 }} {{ width * 7 }} {{ height * -13 }}
 #% endmacro
 
 reset:

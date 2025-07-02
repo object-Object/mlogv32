@@ -786,7 +786,7 @@ format_mcause:
     op mul jump n 2
     op add @counter @counter jump
     format "instr_misalign"; set @counter ret
-    format "instr_access fault"; set @counter ret
+    format "instr_access_fault"; set @counter ret
     format "illegal_instr"; set @counter ret
     format "breakpoint"; set @counter ret
     format "load_misalign"; set @counter ret

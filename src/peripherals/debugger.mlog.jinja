@@ -198,10 +198,7 @@ loop:
     read __etext {{CPU}} "__etext"
     read reservation_set {{CPU}} "reservation_set"
     read privilege_mode {{CPU}} "privilege_mode"
-
-    op add ret @counter 1
-    jump get_effective_privilege_mode always
-    set effective_mode result
+    read effective_privilege_mode {{CPU}} "effective_privilege_mode"
 
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
@@ -519,22 +516,14 @@ loop__no_mark_icache:
     jump format_hex always
 
     print "privilege_mode  = {0}\n"
-    op mul jump privilege_mode 2
-    op add @counter @counter jump
-    format "user"; jump done_privilege_mode always
-    format "supervisor"; jump done_privilege_mode always
-    format "reserved"; jump done_privilege_mode always
-    format "machine"
-done_privilege_mode:
+    set n privilege_mode
+    op add ret @counter 1
+    jump format_privilege_mode always
 
     print "effective_mode  = {0}\n\n"
-    op mul jump effective_mode 2
-    op add @counter @counter jump
-    format "user"; jump done_effective_mode always
-    format "supervisor"; jump done_effective_mode always
-    format "reserved"; jump done_effective_mode always
-    format "machine"
-done_effective_mode:
+    set n effective_privilege_mode
+    op add ret @counter 1
+    jump format_privilege_mode always
 
     set uart {{UART0}}
     set uart_index 0
@@ -658,9 +647,9 @@ format_bin__next:
 
 format_op_id:
     jump format_null strictEqual n null
+    jump format_unknown lessThan n -64
+    jump format_unknown greaterThan n 1
     op add n n 64
-    jump format_op_id__unknown lessThan n 0
-    jump format_op_id__unknown greaterThan n 65
     op mul n n 2
     op add @counter @counter n
     format "BEQ"; set @counter ret
@@ -730,9 +719,6 @@ format_op_id:
     format "illegal_instruction"; set @counter ret
     format "MLOGSYS"; set @counter ret
 
-format_op_id__unknown:
-    format n; set @counter ret
-
 format_op_id__priv:
     set name "ECALL"
     jump format_op_id__priv__ok equal imm 0
@@ -742,9 +728,13 @@ format_op_id__priv:
     jump format_op_id__priv__ok equal imm 0b001100000010
     set name "WFI"
     jump format_op_id__priv__ok equal imm 0b000100000101
-    jump format_op_id__unknown always
+    jump format_unknown always
 format_op_id__priv__ok:
     format name
+    set @counter ret
+
+format_unknown:
+    format n
     set @counter ret
 
 format_null:
@@ -833,6 +823,17 @@ format_mcause__interrupt:
     format "S_external_int"; set @counter ret
     format "M_external_int"; set @counter ret
     format "cntr_overflow_int"; set @counter ret
+
+format_privilege_mode:
+    jump format_null strictEqual n null
+    jump format_unknown lessThan n 0b00
+    jump format_unknown greaterThan n 0b11
+    op mul jump n 2
+    op add @counter @counter jump
+    format "user"; set @counter ret
+    format "supervisor"; set @counter ret
+    format "reserved"; set @counter ret
+    format "machine"; set @counter ret
 
 # creates a marker on the ram proc containing a given address
 # the caller should print a format string with a placeholder for the address
@@ -1004,25 +1005,6 @@ load_rom_word__loop:
 
 inaccessible_load:
     set result null
-    set @counter ret
-
-# get effective privilege mode for load/store instructions from mstatus
-# -> result
-# ret: ret2
-get_effective_privilege_mode:
-    # NOTE: avoid using locals in this function
-    # mstatus.MPRV
-    op and result mstatus 0b100000000000000000
-    jump get_effective_privilege_mode__normal equal result 0
-
-    # MPRV=1, return mstatus.MPP
-    op shr result mstatus 11
-    op and result result 0b11
-    set @counter ret
-
-get_effective_privilege_mode__normal:
-    # MPRV=0, return privilege_mode
-    set result privilege_mode
     set @counter ret
 
 #% if false

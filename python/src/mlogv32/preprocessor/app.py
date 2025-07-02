@@ -21,7 +21,13 @@ from .extensions import (
 )
 from .filters import FILTERS
 from .models import BuildConfig
-from .parser import check_unsaved_variables, iter_labels, parse_mlog
+from .parser import (
+    AssertCounterError,
+    Statement,
+    check_unsaved_variables,
+    iter_labels,
+    parse_mlog,
+)
 
 app = Typer(
     pretty_exceptions_show_locals=False,
@@ -135,8 +141,20 @@ def build(
     print(f"Local variable count: {i}")
 
     worker_ast = parse_mlog(worker_code)
+
     check_unsaved_variables(worker_ast)
-    worker_labels = dict(iter_labels(worker_ast))
+    print(
+        f"""\
+Code size:
+  Instructions: {len(list(n for n in worker_ast if isinstance(n, Statement)))} / 1000
+  Bytes: {len(worker_code.encode())} / {1024 * 100}"""
+    )
+
+    try:
+        worker_labels = dict(iter_labels(worker_ast))
+    except AssertCounterError as e:
+        e.add_note(f"{worker_output}:{e.token.line}")
+        raise
 
     controller_output = get_template_output_path(config.templates.controller)
     controller_code = render_template(

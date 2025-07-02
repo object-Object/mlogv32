@@ -90,22 +90,34 @@ disable_ram:
     jump lookup_variable always
     set prev_variable variable
 
-    set address 1
+    set address 4
 init_incr:
     set variable null
+
+    # if the current variable is the start of a new page, write null to the previous variable
+    # this ensures the processor doesn't cross into another page while executing cached instructions
+    op mod page_offset address 4096
+    jump init_incr__null equal page_offset 0
+
     op add ret @counter 1
-    jump lookup_variable lessThan address {{RAM_PROC_VARS}}
+    jump lookup_variable lessThan address {{RAM_PROC_BYTES}}
+init_incr__null:
 
     write variable {{INCR}} prev_variable
     set prev_variable variable
-    op add address address 1
-    jump init_incr lessThanEq address {{RAM_PROC_VARS}}
+
+    op add address address 4
+    jump init_incr lessThanEq address {{RAM_PROC_BYTES}}
 
     # initialize label lookup table
 
+#% set ns = namespace(i=0)
 #% for instruction in instructions
     # {{ instruction.label }}
-    write {{labels[instruction.label]}} {{LABELS}} {{loop.index0}}
+    #% for _ in range(instruction.count)
+    write {{labels[instruction.label]}} {{LABELS}} {{ns.i}}
+    #% set ns.i = ns.i + 1
+    #% endfor
 #% endfor
 
     # ^ all of this only needs to run once, so skip it on subsequent runs to make startup faster
@@ -124,6 +136,7 @@ end_slow_init:
 
     # set privilege mode to M
     set privilege_mode 0b11
+    set effective_privilege_mode privilege_mode
 
     # clear mstatus
     # technically we're only supposed to clear MPRV and MIE, but the other bits are explicitly unspecified, so this is allowed
@@ -292,9 +305,7 @@ breakpoint__loop:
 breakpoint__end_loop:
     control enabled {{PAUSE_SWITCH}} false
 
-    read counter prev_proc "@counter"
-    op add counter counter 1
-    write counter prev_proc "@counter"
+    write {{labels.END_BREAKPOINT}} prev_proc "@counter"
 
     set state "running"
     write state prev_proc "state"
@@ -307,13 +318,16 @@ breakpoint__end_loop:
 
     jump end_breakpoint always
 
-# given a value 0 <= address < RAM_PROC_SIZE, resolve that variable in the lookup table
+# given a value 0 <= address < RAM_PROC_BYTES, resolve that variable in the lookup table
 # address -> variable
 lookup_variable:
-    op idiv _lookup address {{LOOKUP_PROC_SIZE}}
+    # convert from address (bytes) to index (vars)
+    op idiv _index address 4
+
+    op idiv _lookup _index {{LOOKUP_PROC_SIZE}}
     getlink _lookup _lookup
 
-    op mod variable address {{LOOKUP_PROC_SIZE}}
+    op mod variable _index {{LOOKUP_PROC_SIZE}}
     lookup block variable variable
     sensor variable variable @name
     read variable _lookup variable
@@ -328,7 +342,6 @@ lookup_variable:
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
-set {{RAM_PROC_VARS}} null
 set {{RAM_START}} null
 set {{SYSCON}} null
 # local preprocessor constants
@@ -341,7 +354,8 @@ set {{SINGLE_STEP_SWITCH}} null
 set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{labels[instruction.label]}} null
-set {{loop.index0}} null
+set {{labels.END_BREAKPOINT}} null
+set {{ns.i}} null
 # unused variables
 set _ UART_FIFO_MODULO
 set _ RAM_END
@@ -349,6 +363,7 @@ set _ pc
 set _ icache_var
 set _ __etext
 set _ privilege_mode
+set _ effective_privilege_mode
 set _ reservation_set
 set _ csr_mtime
 set _ csr_mtimeh

@@ -1,4 +1,6 @@
 __all__ = [
+    "AssertCounterError",
+    "Directive",
     "Label",
     "Statement",
     "check_unsaved_variables",
@@ -6,4 +8,12 @@ __all__ = [
     "parse_mlog",
 ]
 
-from .mlog import Label, Statement, check_unsaved_variables, iter_labels, parse_mlog
+from .mlog import (
+    AssertCounterError,
+    Directive,
+    Label,
+    Statement,
+    check_unsaved_variables,
+    iter_labels,
+    parse_mlog,
+)

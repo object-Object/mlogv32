@@ -17,19 +17,19 @@ else:
 
 @dataclass
 class Label:
-    name: str
+    name: Token
 
 
 @dataclass
 class Statement:
-    name: str
-    args: list[str]
+    name: Token
+    args: list[Token]
 
 
 @dataclass
 class Directive:
-    name: str
-    args: list[str]
+    name: Token
+    args: list[Token]
 
 
 type ASTNode = Label | Statement | Directive
@@ -41,17 +41,14 @@ class MlogTransformer(Transformer[Token, list[ASTNode]]):
     def start(self, *children: ASTNode):
         return list(children)
 
-    def label(self, name: str):
-        return Label(name[:-1])
+    def label(self, name: Token):
+        return Label(name.update(value=name[:-1]))
 
-    def statement(self, name: str, *args: str):
+    def statement(self, name: Token, *args: Token):
         return Statement(name, list(args))
 
-    def directive(self, name: str, *args: str):
+    def directive(self, name: Token, *args: Token):
         return Directive(name, list(args))
-
-    def TOKEN(self, token: Token):
-        return str(token)
 
 
 GRAMMAR = (resources.files() / "mlog.lark").read_text("utf-8")
@@ -68,18 +65,25 @@ def parse_mlog(text: str):
     return MlogTransformer().transform(tree)
 
 
+class AssertCounterError(AssertionError):
+    def __init__(self, message: str, token: Token, *args: object) -> None:
+        super().__init__(message, *args)
+        self.token = token
+
+
 def iter_labels(ast: Iterable[ASTNode]) -> Iterator[tuple[str, int]]:
-    line_num = 0
+    counter = 0
     for node in ast:
         match node:
             case Label(name=name):
-                yield (name, line_num)
+                yield (name, counter)
             case Statement():
-                line_num += 1
-            case Directive(name="assert_line", args=[n]):
-                assert line_num == int(n), (
-                    f"Expected next line to be {n}, but got {line_num}"
-                )
+                counter += 1
+            case Directive(name="assert_counter", args=[n]):
+                if counter != int(n):
+                    raise AssertCounterError(
+                        f"Expected @counter to be {n}, but got {counter}", node.name
+                    )
             case Directive():
                 pass
 

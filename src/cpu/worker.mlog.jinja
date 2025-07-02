@@ -13,8 +13,7 @@
     read csr_mtimecmph prev_proc "csr_mtimecmph"
     read csr_mtimeh prev_proc "csr_mtimeh"
     read csr_satp prev_proc "csr_satp"
-    read decode_ram prev_proc "decode_ram"
-    read decode_var prev_proc "decode_var"
+    read effective_privilege_mode prev_proc "effective_privilege_mode"
     read icache_payload prev_proc "icache_payload"
     read icache_ram prev_proc "icache_ram"
     read icache_var prev_proc "icache_var"
@@ -31,9 +30,6 @@
     read rd prev_proc "rd"
     read rd_id prev_proc "rd_id"
     read result prev_proc "result"
-    read ret prev_proc "ret"
-    read ret2 prev_proc "ret2"
-    read ret3 prev_proc "ret3"
     read rs1 prev_proc "rs1"
     read rs1_id prev_proc "rs1_id"
     read rs2 prev_proc "rs2"
@@ -41,6 +37,11 @@
     read state prev_proc "state"
     read value prev_proc "value"
     read variable prev_proc "variable"
+
+    read ret prev_proc "ret"
+    read ret2 prev_proc "ret2"
+    read ret3 prev_proc "ret3"
+    read ret4 prev_proc "ret4"
 
     read nonlocal1 prev_proc "nonlocal1"
     read nonlocal2 prev_proc "nonlocal2"
@@ -78,6 +79,24 @@
 
 #% set SINGLE_STEP_SWITCH = 'switch1'
 
+#%# constants
+
+#%# Sv32
+#% set PAGESIZE = 2**12
+#% set LEVELS = 2
+#% set PTESIZE = 4
+
+#% set labels = namespace()
+#% set _labels_vals = (labels|namespace_dict).values()
+
+#% set labels.next_tick = 12
+
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 144
+#% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
+#% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
+#% set labels.end_instruction                             = _labels_vals|last + 2
+#% set labels.end_instruction_trap                        = _labels_vals|last + 4
+
 reset:
     setrate 1000
 
@@ -100,8 +119,7 @@ reset:
     wait 1e-5
 
     # @counter is moved here when the next worker starts executing
-#% set NEXT_TICK_LINE = 12
-#directive assert_line {{ NEXT_TICK_LINE }}
+#directive assert_counter {{ labels.next_tick }}
 
     # poll hardware
     read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
@@ -130,7 +148,7 @@ reset__running:
     # _counter doesn't need to be saved because this should only ever run at the start of a tick
 #directive push_saved _counter
     read _counter prev_proc "@counter"
-    write {{NEXT_TICK_LINE}} prev_proc "@counter"
+    write {{labels.next_tick}} prev_proc "@counter"
     set @counter _counter
 #directive pop_saved _counter
 
@@ -203,20 +221,25 @@ main:
     # get the current instruction cache processor and variable
     jump main__read_icache notEqual icache_var null
 
+    # convert virtual pc to physical address
+    # we check privilege_mode here because mstatus.MPRV does not affect instruction fetch
+    set address pc
+    set mcause 1 # instruction access fault
+    set mtval pc
+    op add ret3 @counter 1
+    jump translate_virtual_address lessThan privilege_mode 0b11
+
     # fall back to slow instruction fetch/decode if not in valid icache range
     # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= ROM_SIZE
-    jump main__access_icache lessThan pc __etext
-    jump main__slow_instruction_fetch lessThan pc ROM_SIZE
-    jump main__access_icache lessThan pc ICACHE_SIZE
+    jump main__access_icache lessThan address __etext
+    jump main__slow_instruction_fetch lessThan address ROM_SIZE
+    jump main__access_icache lessThan address ICACHE_SIZE
 
 main__slow_instruction_fetch:
-    jump default_mtvec_handler equal pc {{SYSCON}}
+    jump default_mtvec_handler equal address {{SYSCON}}
 
-    set mtval pc
-    set mcause 1 # instruction access fault
-    jump trap greaterThanEq pc RAM_END # prevent executing from MMIO
+    jump trap greaterThanEq address RAM_END # prevent executing from MMIO
 
-    set address pc
     op add ret @counter 1
     jump load_word always
 
@@ -234,7 +257,7 @@ main__access_icache:
     #                           = RAM_START + RAM_SIZE + pc - RAM_START
     #                           = RAM_SIZE + pc
     # so just calculate that and skip the extra subtraction
-    op add _address RAM_SIZE pc
+    op add _address RAM_SIZE address
     op add ret2 @counter 1
     jump access_ram_raw always
     set icache_ram ram
@@ -263,9 +286,10 @@ main__read_icache:
     read rs1 {{REGISTERS}} rs1_id
     read rs2 {{REGISTERS}} rs2_id
 
+    # TODO: should breakpoints use virtual or physical addresses?
     jump state->breakpoint strictEqual pc breakpoint_address
     jump state->breakpoint equal single_step_enabled true
-end_breakpoint:
+END_BREAKPOINT:
 
 #% do reset_locals()
     # jump to instruction handler
@@ -273,23 +297,27 @@ end_breakpoint:
     read @counter {{LABELS}} $index
 
 # this is a normal length for a label
+#directive assert_counter {{ labels.end_instruction_with_rd_and_poll_interrupts }}
 end_instruction_with_rd_and_poll_interrupts:
     op or interrupt_flags interrupt_flags 0b10 # set interrupt_flags.poll
     # continue into end_instruction_with_rd_and_fire_interrupts
 
 # this is too
+#directive assert_counter {{ labels.end_instruction_with_rd_and_fire_interrupts }}
 end_instruction_with_rd_and_fire_interrupts:
     op or interrupt_flags interrupt_flags 0b01 # set interrupt_flags.fire
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
 # writes value rd to register rd_id if rd_id is not x0
+#directive assert_counter {{ labels.end_instruction_with_rd }}
 end_instruction_with_rd:
     jump end_instruction equal rd_id 0
     write rd {{REGISTERS}} rd_id
     # continue into end_instruction
 
 # all instructions jump here after completing successfully
+#directive assert_counter {{ labels.end_instruction }}
 end_instruction:
     # increment instret
     op add csr_minstret csr_minstret 1
@@ -299,6 +327,7 @@ end_instruction:
     set csr_minstret 0
     op add csr_minstreth csr_minstreth 1
 
+#directive assert_counter {{ labels.end_instruction_trap }}
 end_instruction_trap:
     # next_pc is set to pc + 4 at the start of main
     # if we're in the icache, icache_var was already incremented
@@ -316,7 +345,7 @@ default_mtvec_handler:
     set state "halt"
     print "Control transferred to {{SYSCON}} (default mtvec), halting."
     printflush {{ERROR_OUTPUT}}
-    jump reset always
+    # continue into state->halt
 
 state->halt:
     set state "halt"
@@ -326,11 +355,10 @@ state->reset:
     set state "reset"
     jump reset always
 
-# the controller will advance @counter and set state to "running" when it's time to unpause
+# the controller will set @counter to END_BREAKPOINT and set state to "running" when it's time to unpause
 state->breakpoint:
     set state "breakpoint"
     stop
-    jump end_breakpoint always
 
 ILLEGAL_OP:
 #% do reset_locals()
@@ -369,29 +397,298 @@ trap:
     # medeleg and mideleg are not implemented, so always trap into M-mode
     set privilege_mode 0b11
 
-    # don't increment instret
-    jump end_instruction_trap always
+    # update effective_privilege_mode
+    # tail call into end_instruction_trap so we don't update instret
+    set ret {{# labels.end_instruction_trap }}
+    # continue into get_effective_privilege_mode
 
-# helper functions
-
-# get effective privilege mode for load/store instructions from mstatus
-# -> result
-# ret: ret2
+# update effective_privilege_mode
+# we don't need to check the current privilege mode here because MRET/SRET clear MPRV if leaving M-mode
+# this must stay directly after trap
 get_effective_privilege_mode:
     # NOTE: avoid using locals in this function
     # mstatus.MPRV
-    op and result csr_mstatus 0b100000000000000000
-    jump get_effective_privilege_mode__normal equal result 0
+    op and effective_privilege_mode csr_mstatus 0b100000000000000000
+    jump get_effective_privilege_mode__normal equal effective_privilege_mode 0
     
     # MPRV=1, return mstatus.MPP
-    op shr result csr_mstatus 11
-    op and result result 0b11
-    set @counter ret2
+    op shr effective_privilege_mode csr_mstatus 11
+    op and effective_privilege_mode effective_privilege_mode 0b11
+    set @counter ret
 
 get_effective_privilege_mode__normal:
     # MPRV=0, return privilege_mode
-    set result privilege_mode
-    set @counter ret2
+    set effective_privilege_mode privilege_mode
+    set @counter ret
+
+# helper functions
+
+# apply Sv32 virtual address translation
+# jumps to this function must be conditional on privilege_mode or effective_privilege_mode
+# address is assumed to already be truncated to 32 bits
+# mcause must contain the access fault code for the original access type (ie. 1, 5, or 7)
+# mtval must contain the same value as address
+# address, mcause, mtval -> address
+# ret: ret3
+# clobbers: locals, nonlocal2
+translate_virtual_address:
+    # if this function is called, we know that the current effective privilege mode permits address translation
+    # so the only thing we need to check here is satp.MODE
+    jump translate_virtual_address__unchanged lessThan csr_satp 0x80000000
+
+    # begin virtual address translation algorithm
+    # PAGESIZE=2^12, LEVELS=2, PTESIZE=4
+    
+    # step 1
+
+    # a = satp.ppn * PAGESIZE
+#% do reset_locals()
+    op and $a csr_satp 0x3fffff # satp.ppn
+    op mul $a $a {{PAGESIZE}}
+    # i = LEVELS - 1 = 1
+    # nonlocal2 = (i + 1) * 10
+    # i is stored in this form because it simplifies step 2 and doesn't really matter for other steps
+    # we use nonlocal2 because amo uses nonlocal1
+    set nonlocal2 20 # i=1
+
+    # step 2
+translate_virtual_address__step_2:
+
+    # pte = load(a + va.vpn[i] * PTESIZE)
+    #     = load(a + (va.vpn[i] << 2))
+    #     = load(a + (va[y:x] << 2))
+    #     = load(a + (va >> (x - 2))[11:2])
+    op shr address mtval nonlocal2
+    op and address address 0b111111111100
+    op add address address $a
+
+    op add ret @counter 1
+    jump load_word always
+    # result = pte
+
+    # step 3
+
+    # if pte is not a pointer, we check pte.a here instead of step 7
+    # so pte is invalid if v=0, or if r=0 and w=1, or if (r=1 or x=1) and a=0
+
+    # a00xwrv
+
+    # a | x | w | r | v | index | valid?
+    # - | - | - | - | - | ----- | --------
+    # 0 | 0 | 0 | 0 | 0 | 0     | no (v=0)
+    # 0 | 0 | 0 | 0 | 1 | 1     | yes
+    # 0 | 0 | 0 | 1 | 0 | 2     | no (v=0)
+    # 0 | 0 | 0 | 1 | 1 | 3     | no (a=0)
+    # 0 | 0 | 1 | 0 | 0 | 4     | no (v=0)
+    # 0 | 0 | 1 | 0 | 1 | 5     | no (a=0)
+    # 0 | 0 | 1 | 1 | 0 | 6     | no (v=0)
+    # 0 | 0 | 1 | 1 | 1 | 7     | no (a=0)
+    # 0 | 1 | 0 | 0 | 0 | 8     | no (v=0)
+    # 0 | 1 | 0 | 0 | 1 | 9     | no (a=0)
+    # 0 | 1 | 0 | 1 | 0 | 10    | no (v=0)
+    # 0 | 1 | 0 | 1 | 1 | 11    | no (a=0)
+    # 0 | 1 | 1 | 0 | 0 | 12    | no (v=0)
+    # 0 | 1 | 1 | 0 | 1 | 13    | no (a=0)
+    # 0 | 1 | 1 | 1 | 0 | 14    | no (v=0)
+    # 0 | 1 | 1 | 1 | 1 | 15    | no (a=0)
+    # 1 | 0 | 0 | 0 | 0 | 64    | no (v=0)
+    # 1 | 0 | 0 | 0 | 1 | 65    | yes
+    # 1 | 0 | 0 | 1 | 0 | 66    | no (v=0)
+    # 1 | 0 | 0 | 1 | 1 | 67    | yes
+    # 1 | 0 | 1 | 0 | 0 | 68    | no (v=0)
+    # 1 | 0 | 1 | 0 | 1 | 69    | no (r=0)
+    # 1 | 0 | 1 | 1 | 0 | 70    | no (v=0)
+    # 1 | 0 | 1 | 1 | 1 | 71    | yes
+    # 1 | 1 | 0 | 0 | 0 | 72    | no (v=0)
+    # 1 | 1 | 0 | 0 | 1 | 73    | yes
+    # 1 | 1 | 0 | 1 | 0 | 74    | no (v=0)
+    # 1 | 1 | 0 | 1 | 1 | 75    | yes
+    # 1 | 1 | 1 | 0 | 0 | 76    | no (v=0)
+    # 1 | 1 | 1 | 0 | 1 | 77    | no (r=0)
+    # 1 | 1 | 1 | 1 | 0 | 78    | no (v=0)
+    # 1 | 1 | 1 | 1 | 1 | 79    | yes
+
+#% set valid_indices = [1, 65, 67, 71, 73, 75, 79]
+
+#% do reset_locals()
+    op and $a_x_w_r_v result 0b1001111
+    read $valid "{% for i in range(80) %}{{ (i in valid_indices)|int }}{% endfor %}" $a_x_w_r_v
+    jump translate_virtual_address__page_fault notEqual $valid 49 # ascii 1
+
+    # step 4
+
+    # if pte.r=1 or pte.x=1, this is a leaf PTE
+    op and $x_r result 0b1010
+    jump translate_virtual_address__step_5 notEqual $x_r 0
+
+    # otherwise, if nonlocal2 has been updated, then i-1 < 0, so raise a page fault exception
+    jump translate_virtual_address__page_fault notEqual nonlocal2 20
+
+    # otherwise, let a=pte.ppn * PAGESIZE, let i=i-1, and go to step 2
+#% do reset_locals()
+    op and $a result 0xfffffc00
+    op shl $a $a 2
+    set nonlocal2 10 # i=0
+    jump translate_virtual_address__step_2 always
+
+    # step 5
+translate_virtual_address__step_5:
+
+    # effective_privilege_mode is either S (1) or U (0)
+
+    # SUCCEED IF
+    
+    # execute:
+    #   x == 1
+    #   && (effective_privilege_mode == U ? u == 1 : u == 0)
+
+    # load:
+    #   (r == 1 || MXR == 1 && x == 1)
+    #   && (effective_privilege_mode == U ? u == 1 : (u == 0 || SUM == 1))
+
+    # store:
+    #   w == 1
+    #   && (effective_privilege_mode == U ? u == 1 : (u == 0 || SUM == 1))
+
+    # FAIL IF
+
+    # execute:
+    #   x == 0
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1
+    # load:
+    #   r == 0 && (MXR == 0 || x == 0)
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1 && SUM == 0
+    # store:
+    #   w == 0
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1 && SUM == 0
+
+    # prevent user mode from accessing non-user pages
+#% do reset_locals()
+    op and $u_priv result 0b10000
+    op or $u_priv $u_priv effective_privilege_mode
+    jump translate_virtual_address__page_fault equal $u_priv 0
+
+    # prevent supervisor mode from executing user pages
+    jump translate_virtual_address__step_5__execute equal mcause 1 # execute
+
+    # prevent supervisor mode from reading/writing user pages if mstatus.SUM is not set
+    op and $mstatus.sum csr_mstatus 0b1000000000000000000
+    jump translate_virtual_address__step_5__sum notEqual $mstatus.sum 0
+
+translate_virtual_address__step_5__execute:
+    jump translate_virtual_address__page_fault equal $u_priv 0b10001
+translate_virtual_address__step_5__sum:
+
+    # check if the required rwx bits are set
+
+    # PTE: ...daguxwrv
+    # if we mask off g and u, we can use ASCII characters 0b0011___0
+
+    # type    | mcause | MXR | PTE mask || index | char
+    # ------- | ------ | --- | -------- || ----- | ----
+    # execute | 1      | 0   | 0b1000   || 1     | '8' (0011 1000)
+    # execute | 1      | 1   | 0b1000   || 2     | '8' (0011 1000)
+    # load    | 5      | 0   | 0b0010   || 5     | '2' (0011 0010)
+    # load    | 5      | 1   | 0b1010   || 6     | ':' (0011 1010)
+    # store   | 7      | 0   | 0b0100   || 7     | '4' (0011 0100)
+    # store   | 7      | 1   | 0b0100   || 8     | '4' (0011 0100)
+
+    # extract fields from PTE
+    # this value is also used in step 7
+#% do reset_locals()
+    # ------- DO NOT RESET LOCALS AFTER THIS LINE -------
+    op and $d_x_w_r result 0b10001110
+
+    # extract MXR bit
+    op shr $mstatus.mxr csr_mstatus 19
+    op and $mstatus.mxr $mstatus.mxr 0b1
+
+    # fetch the bitmask from the string as per the above table
+    op add $mask mcause $mstatus.mxr
+    read $mask "_88__2:44" $mask
+
+    # fail if NONE of the required bits are set in pte
+    # this is fine because none of the things we're checking here require more than one bit to be set
+    # in particular, if MXR is 1, loads succeed if r is 1 OR x is 1
+    op and $mask $d_x_w_r $mask
+    jump translate_virtual_address__page_fault equal $mask 0
+
+    # step 6
+
+    # skip this step if i == 0
+    # nonlocal2 == (i + 1) * 10
+    jump translate_virtual_address__step_7 equal nonlocal2 10
+
+    # if i > 0 and pte.ppn[i-1:0] != 0, this is a misaligned superpage
+    # in Sv32, i is either 1 or 0
+    # so we need to check pte.ppn[0]
+
+    op and $pte.ppn[0] result 0x3ff000
+    jump translate_virtual_address__page_fault notEqual $pte.ppn[0] 0
+
+    # step 7
+translate_virtual_address__step_7:
+
+    # we implement Svade for this step because it's simpler
+    # if pte.a=0, or if the original memory access is a store and pte.d=0, raise a page fault exception
+
+    # pte.a was checked in step 3
+
+    # fault if storing and pte.d=0
+    jump translate_virtual_address__step_8 notEqual mcause 7 # store/AMO
+    jump translate_virtual_address__page_fault lessThan $d_x_w_r 0b10000000
+    # ------- end critical locals section -------
+
+    # step 8
+translate_virtual_address__step_8:
+
+    # move the pte.ppn fields into position
+    op shl result result 2
+
+    # raise an access fault exception if the resulting physical address will be wider than 32 bits
+    # TODO: is there any case where we *don't* want to do this?
+    jump trap greaterThan result 0xffffffff
+
+    # if i>0, this is a superpage
+    jump translate_virtual_address__step_8__superpage greaterThan nonlocal2 10
+
+    # pa.pgoff = va.pgoff
+    op and address mtval 0xfff
+    
+    # pa.ppn = pte.ppn
+    op and result result 0xfffff000
+    op or address address result
+
+    set @counter ret3
+
+translate_virtual_address__step_8__superpage:
+    # pa.pgoff = va.pgoff
+    # pa.ppn[0] = va.ppn[0]
+    op and address mtval 0x3fffff
+
+    # pa.ppn[1] = pte.ppn[1]
+    op and result result 0xffc00000
+    op or address address result
+
+translate_virtual_address__unchanged:
+    set @counter ret3
+
+translate_virtual_address__page_fault:
+    # we need to convert mcause from access fault to page fault
+    # instruction: 1 -> 12
+    # load:        5 -> 13
+    # store/AMO:   7 -> 15
+    # for load/store/AMO, page fault = access fault + 8
+    # for instruction, 1 + 8 = 9 < 12 < 13 < 15
+    # instruction: max(1 + 8, 12) = max(9, 12)  = 12
+    # load:        max(5 + 8, 12) = max(13, 12) = 13
+    # store/AMO:   max(7 + 8, 12) = max(15, 12) = 15
+    op add mcause mcause 8
+    op max mcause mcause 12
+    jump trap always
 
 # in-place variable length sign extension function for rd
 # if length is known statically, a sequence of xor-sub-and can be used instead
@@ -500,6 +797,8 @@ access_uart:
 # loads the word from memory that contains the specified address
 # mcause is required in order to raise the correct exception in case of access fault
 # address, mcause, mtval -> result
+# ret: ret
+# clobbers: locals, ret2, value
 load_word:
     jump load_rom_word_unchecked lessThan address ROM_SIZE
 
@@ -596,18 +895,18 @@ load_rom_word_unchecked:
 load_mmio_word:
 #% do reset_locals()
 #% do declare_locals(access_uart_locals)
+    # the extra 3 at the start is in case we jump here from address translation
+    # in that case, address may be up to 34 bits
     op sub $$offset address {{MMIO_START}}
-    op and $$offset $$offset 0xfffffffc
+    op and $$offset $$offset 0x3fffffffc
     jump trap greaterThanEq $$offset 0x90
 
     # if we're in UART range, look it up
-    op add ret2 @counter 4 # skip privilege check if accessing uart
+    op add ret2 @counter 2 # skip privilege check if accessing uart
     jump access_uart greaterThanEq $$offset 0x10
-    # otherwise, we're in machine timer range, so trap if not in M-mode
+    # otherwise, we're in machine timer range, so trap for PMA if not in M-mode
     # MMIO is not executable, so always use the effective privilege mode here
-    op add ret2 @counter 1
-    jump get_effective_privilege_mode always
-    jump trap lessThan result 0b11
+    jump trap lessThan effective_privilege_mode 0b11
 
     # MCR, MSR, and SPR are all hardwired to zero
     set result 0
@@ -647,12 +946,12 @@ load_mmio_word__not_zero:
     set @counter ret
 
 load_mmio_word__uart_rhr:
+    # HACK: if mcause is 7, we're loading this word as part of a store instruction, so return 0 and don't modify UART state
+    jump load_mmio_word__uart_rhr__empty equal mcause 7
+
     # read one byte from the FIFO
     read result $$uart $$rx_read
     op and result result 0xff
-
-    # HACK: if mcause is 7, we're loading this word as part of a store instruction, so don't modify UART state
-    jump load_mmio_word__uart_rhr__empty equal mcause 7
 
     # else, advance read
     op add $$rx_read $$rx_read 1
@@ -691,7 +990,7 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 # instruction decoder
 
 # decoder entry point: decodes a single instruction and writes it to the icache
-# the caller MUST set decode_var to null before the first consecutive call to this function
+# the caller MUST set address (skip write) or variable (prevent fast write) to null before the first consecutive call to this function
 # value (instruction), address -> op_id, imm, payload
 # ret: ret3
 decode:
@@ -738,48 +1037,11 @@ decode__ok:
     op shr $$funct3 value 12
     op and $$funct3 $$funct3 0b111
 
-    # counter array based on (opcode >> 2), since the low 2 bits don't matter
+    # jump table based on (opcode >> 2) since the low 2 bits don't matter
+    # the jump table is stored in LABELS by the controller, starting at index 128
     op shr $tmp $opcode 2
-
-    # skip the section of illegal instructions that we already handled above
-    jump decode__before_OP-32 lessThan $opcode 0b0111011 # OP-32
-    op sub $tmp $tmp 10
-decode__before_OP-32:
-
-    op add @counter @counter $tmp
-
-    jump decode_LOAD always
-    jump decode_illegal_instruction always # LOAD-FP
-    jump decode_custom-0 always
-    jump decode_MISC-MEM always
-    jump decode_OP-IMM always
-    jump decode_AUIPC always
-    jump decode_illegal_instruction always # OP-IMM-32
-    jump decode_illegal_instruction always # 48b
-    jump decode_STORE always
-    jump decode_illegal_instruction always # STORE-FP
-    jump decode_illegal_instruction always # custom-1
-    jump decode_AMO always
-    jump decode_OP always
-    jump decode_LUI always
-    # OP-32
-    # 64b
-    # MADD
-    # MSUB
-    # NMSUB
-    # NMADD
-    # OP-FP
-    # OP-V
-    # custom-2/rv128
-    # 48b
-    jump decode_BRANCH always
-    jump decode_JALR always
-    jump decode_illegal_instruction always # reserved
-    jump decode_JAL always
-    jump decode_SYSTEM always
-    # OP-VE
-    # custom-3/rv128
-    # >=80b
+    op add $tmp $tmp 128
+    read @counter {{LABELS}} $tmp
 
 decode_LUI:
     set op_id -53 # LUI
@@ -1087,13 +1349,11 @@ end_decode:
     jump end_decode__no_write_icache strictEqual address null
 
     # get the current instruction cache processor and variable
-    jump end_decode__decode_var_valid notEqual decode_var null
+    jump end_decode__decode_var_valid notEqual variable null
 
     op add _address RAM_SIZE address
     op add ret2 @counter 1
     jump access_ram_raw always
-    set decode_ram ram
-    set decode_var variable
 end_decode__decode_var_valid:
 
     # pack op_id, registers (already in icache_payload), and imm into a single double
@@ -1104,8 +1364,7 @@ end_decode__decode_var_valid:
     op or icache_payload icache_payload imm
 
     # write to the icache
-    write icache_payload decode_ram decode_var
-    read decode_var {{INCR}} decode_var
+    write icache_payload ram variable
 
 end_decode__no_write_icache:
     set @counter ret3
@@ -1236,8 +1495,12 @@ load_value:
     set mtval address
     jump trap notEqual $alignment 0
 
-    # load the word containing the address
+    # translate to physical address
     set mcause 5 # load access fault
+    op add ret3 @counter 1
+    jump translate_virtual_address lessThan effective_privilege_mode 0b11
+
+    # load the word containing the address
     op add ret @counter 1
     jump load_word always
 
@@ -1286,14 +1549,20 @@ store_value:
     op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
-    jump store_value__syscon equal address {{SYSCON}}
-
     # check alignment
     op idiv $bytes length 8
     op mod $alignment address $bytes
     set mcause 6 # store/AMO address misaligned
     set mtval address
     jump trap notEqual $alignment 0
+
+    # translate to physical address
+    set mcause 7 # store/AMO access fault
+    op add ret3 @counter 1
+    jump translate_virtual_address lessThan effective_privilege_mode 0b11
+
+    # handle write-only MMIO
+    jump store_value__syscon equal address {{SYSCON}}
 
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
     op mod $shift address 4
@@ -1309,7 +1578,6 @@ store_value:
     op shl nonlocal2 nonlocal2 $shift
 
     # load the word containing the address
-    set mcause 7 # store/AMO access fault
     op add ret @counter 1
     jump load_ram_or_mmio_word always
 
@@ -1332,15 +1600,15 @@ store_ram_word_unchecked:
 
     write result ram variable
 
-    # decode the new value and update the icache to allow executing from RAM and self-modifying code
+    # if out of icache range, we're done
+    jump end_instruction_with_rd greaterThanEq address ICACHE_SIZE
+
+    # if in icache range, decode the new value and update the icache to allow executing from RAM and self-modifying code
     # TODO: add a way for the CPU to temporarily disable this for performance?
-    set decode_var null
-
-    # only decode if we're in icache range
-    op add ret3 @counter 1
-    jump decode lessThan address ICACHE_SIZE
-
-    jump end_instruction_with_rd always
+    # or make use of FENCE.I
+    set variable null
+    set ret3 {{# labels.end_instruction_with_rd }}
+    jump decode always
 
     # atomics are not supported for MMIO, so we don't need to write to rd here
     # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
@@ -1377,8 +1645,9 @@ store_mmio_word_unchecked:
     # Transmitter Holding Register
     # append value to queue
     # NOTE: we don't check for overflow here, see readme
+    # also, we don't truncate the value to 8 bits when writing
+    # software can take advantage of this to send larger packets if the receiver can handle them
     op add $tmp $$tx_write {{UART_TX_START}}
-    op and value value 0xff
     write value $$uart $tmp
 
     # advance write
@@ -1413,7 +1682,7 @@ LR.W:
 
     # check address and alignment
     set mcause 4 # load address misaligned
-    op add ret @counter 1
+    op add ret4 @counter 1
     jump atomic_validate_address always
 
     # load value
@@ -1421,12 +1690,13 @@ LR.W:
     jump load_ram_word_unchecked always
     set rd result
 
-    # register reservation set
+    # register reservation set for physical address
     # TODO: implement Za64rs?
     write address {{CONTROLLER}} "reservation_set"
 
     jump end_instruction_with_rd always
 
+# ret: ret4
 atomic_validate_address:
 #% do reset_locals()
     set address rs1
@@ -1435,11 +1705,15 @@ atomic_validate_address:
     op mod $alignment address 4
     jump trap notEqual $alignment 0
 
+    # translate to physical address
     op add mcause mcause 1 # load/store/AMO access fault
+    op add ret3 @counter 1
+    jump translate_virtual_address lessThan effective_privilege_mode 0b11
+
     jump trap lessThan address {{RAM_START}}
     jump trap greaterThanEq address RAM_END
 
-    set @counter ret
+    set @counter ret4
 
 SC.W:
     # R-type: rs1, rs2, rd_id
@@ -1447,10 +1721,10 @@ SC.W:
 
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
-    op add ret @counter 1
+    op add ret4 @counter 1
     jump atomic_validate_address always
 
-    # check if reservation is valid and contains rs1
+    # check if reservation is valid and contains the physical address corresponding to rs1
     read $reservation_set {{CONTROLLER}} "reservation_set"
     op strictEqual $success address $reservation_set
 
@@ -1477,7 +1751,7 @@ AMOSWAP.W:
 amo:
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
-    op add ret @counter 1
+    op add ret4 @counter 1
     jump atomic_validate_address always
 
     # read
@@ -1916,7 +2190,10 @@ xRET:
 xRET__mprv_m_mode:
 
     set rd_id 0
-    jump end_instruction_with_rd_and_fire_interrupts always
+
+    # update effective_privilege_mode, and tail call
+    set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
+    jump get_effective_privilege_mode always
 
 SFENCE.VMA:
 #% do reset_locals()
@@ -2138,10 +2415,8 @@ modify_csr__readonly_zero:
 #% do declare_locals(modify_csr_locals)
     set rd 0
 modify_csr__readonly:
-    op add $$modify_csr_write @counter 1
+    set $$modify_csr_write {{# labels.end_instruction_with_rd }}
     set @counter $$modify_csr_op
-
-    jump end_instruction_with_rd always
 
 modify_csr__align_4B:
 #% do reset_locals(modify_csr_start)
@@ -2181,7 +2456,7 @@ modify_csr__sstatus:
     op and $$new_value $$new_value 0b00000000000011000000000100100010
     op or csr_mstatus csr_mstatus $$new_value
 
-    jump end_instruction_with_rd_and_fire_interrupts always
+    jump modify_csr__xstatus always
 
 modify_csr__mstatus:
 #% do reset_locals(modify_csr_start)
@@ -2199,10 +2474,13 @@ modify_csr__mstatus:
 
     # if MPP was set to 10 (reserved), set it to 0
     op and $mstatus.mpp csr_mstatus 0b1100000000000
-    jump end_instruction_with_rd_and_fire_interrupts notEqual $mstatus.mpp 0b1000000000000
-
+    jump modify_csr__xstatus notEqual $mstatus.mpp 0b1000000000000
     op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
-    jump end_instruction_with_rd_and_fire_interrupts always
+
+modify_csr__xstatus:
+    # update effective_privilege_mode
+    set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
+    jump get_effective_privilege_mode always
 
 modify_csr__sip:
 #% do reset_locals(modify_csr_start)
@@ -2306,8 +2584,12 @@ modify_csr__satp__ok:
     op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
-    # ASIDLEN=0
+    # ASIDLEN=0                    ---------
     op and csr_satp $$new_value 0b10000000001111111111111111111111
+
+    # invalidate icache_var when writing satp because next_pc may now point to a different page
+    # TODO: we might be able to move this into SFENCE.VMA
+    set icache_var null
 
     jump end_instruction_with_rd always
 
@@ -2365,21 +2647,25 @@ MLOGSYS:
     jump ILLEGAL_OP greaterThan imm 0
 
     # init icache
+    # require M-mode so that we don't need to do address translation
+    jump ILLEGAL_OP lessThan privilege_mode 0b11
     set state "decoding"
 
     op min __etext rs1 ROM_SIZE
     op min __etext __etext ICACHE_SIZE
 
     set address 0
-    set decode_var null
+    set variable null
 
 MLOGSYS__decode_loop:
+    # load_rom_word_unchecked does not clobber ram or variable
     op add ret @counter 1
     jump load_rom_word_unchecked always
     set value result
 
     op add ret3 @counter 1
     jump decode always
+    read variable {{INCR}} variable
 
     op add address address 4
     jump MLOGSYS__decode_loop lessThan address __etext
@@ -2418,7 +2704,8 @@ set {{CONFIG}} null
 set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
 set {{SINGLE_STEP_SWITCH}} null
-set {{NEXT_TICK_LINE}} null
+set {{PAGESIZE}} null
+set {{labels.next_tick}} null
 # unused variables
 set _ {{local_variable()}}
 # unused labels
@@ -2488,4 +2775,18 @@ jump SRLI always
 jump SRAI always
 jump ILLEGAL_OP always
 jump MLOGSYS always
+jump END_BREAKPOINT always
+jump decode_LOAD always
+jump decode_custom-0 always
+jump decode_MISC-MEM always
+jump decode_OP-IMM always
+jump decode_AUIPC always
+jump decode_STORE always
+jump decode_AMO always
+jump decode_OP always
+jump decode_LUI always
+jump decode_BRANCH always
+jump decode_JALR always
+jump decode_JAL always
+jump decode_SYSTEM always
 # {% endraw %}

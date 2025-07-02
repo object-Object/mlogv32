@@ -9,6 +9,7 @@ schematics:
 configs: ../config/configs.yaml
 
 instructions:
+  # runtime handlers
   - label: BEQ
   - label: BNE
   - label: JAL
@@ -75,3 +76,39 @@ instructions:
   - label: SRAI
   - label: ILLEGAL_OP
   - label: MLOGSYS
+  # padding
+  - label: ILLEGAL_OP
+    up_to: 127
+  # decoders, starting at index 128
+  - label: decode_LOAD
+  - label: decode_illegal_instruction # LOAD-FP
+  - label: decode_custom-0
+  - label: decode_MISC-MEM
+  - label: decode_OP-IMM
+  - label: decode_AUIPC
+  - label: decode_illegal_instruction # OP-IMM-32
+  - label: decode_illegal_instruction # 48b
+  - label: decode_STORE
+  - label: decode_illegal_instruction # STORE-FP
+  - label: decode_illegal_instruction # custom-1
+  - label: decode_AMO
+  - label: decode_OP
+  - label: decode_LUI
+  - label: decode_illegal_instruction # OP-32
+  - label: decode_illegal_instruction # 64b
+  - label: decode_illegal_instruction # MADD
+  - label: decode_illegal_instruction # MSUB
+  - label: decode_illegal_instruction # NMSUB
+  - label: decode_illegal_instruction # NMADD
+  - label: decode_illegal_instruction # OP-FP
+  - label: decode_illegal_instruction # OP-V
+  - label: decode_illegal_instruction # custom-2/rv128
+  - label: decode_illegal_instruction # 48b
+  - label: decode_BRANCH
+  - label: decode_JALR
+  - label: decode_illegal_instruction # reserved
+  - label: decode_JAL
+  - label: decode_SYSTEM
+  - label: decode_illegal_instruction # OP-VE
+  - label: decode_illegal_instruction # custom-3/rv128
+  - label: decode_illegal_instruction # >=80b

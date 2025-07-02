@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 import yaml
-from pydantic import AfterValidator, BaseModel
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 _relative_path_root_var = ContextVar[Path]("_relative_path_root_var")
 
@@ -41,6 +41,31 @@ class BuildConfig(BaseModel):
 
     class Instruction(BaseModel):
         label: str
+        count: int = Field(default=1, ge=1)
+        up_to: int | None = None
+
+    @field_validator("instructions", mode="after")
+    @classmethod
+    def _resolve_instructions(cls, instructions: list[Instruction]):
+        result = list[BuildConfig.Instruction]()
+        address = 0
+
+        for i, value in enumerate(instructions):
+            if value.up_to is not None:
+                value = value.model_copy()
+                assert value.up_to is not None
+
+                if value.up_to < address:
+                    raise ValueError(
+                        f"Instruction {i} is at address {address}, but up_to is {value.up_to}: {value}"
+                    )
+
+                value.count = value.up_to - address + 1
+
+            result.append(value)
+            address += value.count
+
+        return result
 
     @classmethod
     def load(cls, path: str | Path):

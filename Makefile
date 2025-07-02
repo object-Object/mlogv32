@@ -15,6 +15,7 @@ rust: $(RUST_PROGRAMS)
 
 .PHONY: mlog
 mlog: $(MLOG_PROGRAMS) mlog-configs
+	poe build -s 16
 
 .PHONY: coremark
 coremark:

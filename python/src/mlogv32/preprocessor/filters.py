@@ -2,6 +2,7 @@ import functools
 from typing import Any, Callable
 
 from jinja2.runtime import Context
+from jinja2.utils import Namespace
 
 from mlogv32.scripts.ram_proc import VariableFormat
 
@@ -67,6 +68,14 @@ def memory_size(size: int):
     if size % MEMORY_K == 0:
         return f"{size // MEMORY_K}K"
     return hex(size)
+
+
+@make_jinja_exceptions_suck_a_bit_less
+@register_filter
+def namespace_dict(namespace: Namespace):
+    # cursed
+    attrs: dict[str, Any] = namespace._Namespace__attrs
+    return attrs
 
 
 CSRS: dict[str, int] = {

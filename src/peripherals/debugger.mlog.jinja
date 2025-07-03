@@ -34,9 +34,10 @@ reset_markers:
     setmarker remove i
     jump reset_markers greaterThan i MARKER_START_ID
 
+reset_loop:
     wait 1e-5
     sensor enabled {{SWITCH}} @enabled
-    jump reset equal enabled false
+    jump reset_loop equal enabled false
 
     set i -1
 reset__find_lookup_start:
@@ -46,8 +47,6 @@ reset__find_lookup_start:
     jump reset__find_lookup_start notEqual type @micro-processor
     read type_var block "_type"
     jump reset__find_lookup_start notEqual type_var "lookup"
-
-    set LOOKUP_START i
 
     control enabled {{SWITCH}} true
 
@@ -191,11 +190,6 @@ loop:
     read rd {{CPU}} "rd_id"
     read imm {{CPU}} "imm"
 
-    set address pc
-    op add ret @counter 1
-    jump load_word always
-    set instruction result
-
     read __etext {{CPU}} "__etext"
     read reservation_set {{CPU}} "reservation_set"
     read privilege_mode {{CPU}} "privilege_mode"
@@ -334,35 +328,18 @@ loop__no_mark_icache:
 
     #{ print(14, 0)
 
-    print "pc          = {0}\n"
+    print "pc    = {0}\n"
     set n pc
     op add ret @counter 1
     jump format_hex always
 
-    print "instruction = {0}\n"
-    set n instruction
-    op add ret @counter 1
-    jump format_hex always
-
-    print "op_id       = {0}\n"
-    print "imm         = {1}\n"
-    print "rs1         = {2}\n"
-    print "rs2         = {3}\n"
-    print "rd          = {4}\n\n"
+    print "op_id = {0}\n"
+    print "imm   = {1}\n"
+    print "rs1   = {2}\n"
+    print "rs2   = {3}\n"
+    print "rd    = {4}\n\n"
     op add ret2 @counter 1
     jump format_op_id always
-
-    print "mtimecmp = {0}\n"
-    format mtimecmp
-
-    print "mtime    = {0}\n"
-    format mtime
-
-    print "mcycle   = {0}\n"
-    format mcycle
-
-    print "minstret = {0}\n\n"
-    format minstret
 
     #{ print(0, 17)
 
@@ -386,7 +363,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    print "mscratch = {0}\n"
+    print "mscratch = {0}\n\n"
     set n mscratch
     op add ret @counter 1
     jump format_hex always
@@ -406,7 +383,21 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_bin always
 
-    #{ print(0, 30)
+    #{ print(0, 24)
+
+    print "mtimecmp = {0}\n"
+    format mtimecmp
+
+    print "mtime    = {0}\n"
+    format mtime
+
+    print "mcycle   = {0}\n"
+    format mcycle
+
+    print "minstret = {0}\n"
+    format minstret
+
+    #{ print(0, 34)
 
     # column 2
 
@@ -515,28 +506,7 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_privilege_mode always
 
-    set uart {{UART0}}
-    set uart_index 0
-    op add ret @counter 1
-    jump format_uart always
-
-    set uart {{UART1}}
-    set uart_index 1
-    op add ret @counter 1
-    jump format_uart always
-
-    set uart {{UART2}}
-    set uart_index 2
-    op add ret @counter 1
-    jump format_uart always
-
-    set uart {{UART3}}
-    set uart_index 3
-    op add ret @counter 1
-    jump format_uart always
-    print "\n"
-
-    print "satp = {0}\n\n"
+    print "satp     = {0}\n"
     set n satp
     op add ret @counter 1
     jump format_hex always
@@ -567,6 +537,28 @@ loop__no_mark_icache:
     jump format_hex always
 
     #{ print(35, 17)
+
+    set uart {{UART0}}
+    set uart_index 0
+    op add ret @counter 1
+    jump format_uart always
+
+    set uart {{UART1}}
+    set uart_index 1
+    op add ret @counter 1
+    jump format_uart always
+
+    set uart {{UART2}}
+    set uart_index 2
+    op add ret @counter 1
+    jump format_uart always
+
+    set uart {{UART3}}
+    set uart_index 3
+    op add ret @counter 1
+    jump format_uart always
+
+    #{ print(30, 34)
 
     wait 0.02
     jump loop always
@@ -803,16 +795,19 @@ format_uart:
     op notEqual rx_overflow_flag rx_wptr rx_wptr_raw
     op land rx_overrun rx_full rx_overflow_flag
 
-    print "uart{0}: r={1} ({2}-{3})"
+    print "uart{0}: rx={1}"
     jump format_uart__rx_fifo_size__no_overrun notEqual rx_overrun true
-    print " !!"
+    print "!"
+    jump format_uart__rx_fifo_size__no_overrun__done always
 format_uart__rx_fifo_size__no_overrun:
+    print " "
+format_uart__rx_fifo_size__no_overrun__done:
+    print "({2}-{3}) tx={4} ({5}-{6})\n"
+
     format uart_index
     format rx_fifo_size
     format rx_rptr
     format rx_wptr
-
-    print " t={0} ({1}-{2})\n"
     format tx_fifo_size
     format tx_rptr
     format tx_wptr
@@ -918,140 +913,22 @@ mark_memory__found:
 
     setmarker remove mark_memory_id
     makemarker shapeText mark_memory_id x y false
+
     op sub layer 120 mark_memory_id
     op add layer layer MARKER_START_ID
     setmarker drawLayer mark_memory_id layer
+
+    setmarker radius mark_memory_id 3
+    setmarker textHeight mark_memory_id 0.5
+    setmarker fontSize mark_memory_id 0.9
+
     setmarker flushText mark_memory_id false
 
     op add mark_memory_id mark_memory_id 1
     set @counter mark_memory__ret
 
-# helper function to find the ram proc and variable for a given address
-# address -> ram, variable
-access_ram:
-    op sub _address address {{RAM_START}}
-
-    # we store 4 bytes in each value
-    op idiv _address _address 4
-
-    # get the ram proc containing this address
-    op idiv _ram_index _address {{RAM_PROC_VARS}}
-    op add _ram_index _ram_index RAM_START_PROC
-
-    op mod _ram_x _ram_index MEMORY_WIDTH
-    op add _ram_x _ram_x MEMORY_X
-
-    op idiv _ram_y _ram_index MEMORY_WIDTH
-    op add _ram_y _ram_y MEMORY_Y
-
-    getblock building ram _ram_x _ram_y
-
-    # get the variable within the ram proc containing this address
-    op mod _address _address {{RAM_PROC_VARS}}
-    set lookup_variable__ret access_ram__ret
-
-# given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
-# this must stay directly after access_ram
-# _address -> variable
-    op idiv _lookup _address {{LOOKUP_PROC_SIZE}}
-    op add _lookup _lookup LOOKUP_START
-    getlink _lookup _lookup
-
-    op mod variable _address {{LOOKUP_PROC_SIZE}}
-    lookup block variable variable
-    sensor variable variable @name
-    read variable _lookup variable
-
-    set @counter lookup_variable__ret
-
-# loads the word from memory that contains the specified address
-# mcause is required in order to raise the correct exception in case of access fault
-# address, mcause -> result
-load_word:
-    jump load_rom_word_unchecked lessThan address ROM_SIZE
-
-    jump inaccessible_load lessThan address {{RAM_START}}
-    jump inaccessible_load greaterThanEq address RAM_END
-
-    # locate and read value from ram
-    op add access_ram__ret @counter 1
-    jump access_ram always
-    read value ram variable
-    # null is coerced to 0 by swap_endianness
-
-    # tail call, swap_endianness will jump to the ret value of load_word's caller
-
-# converts a little endian 32-bit number to big endian, or vice versa
-# https://stackoverflow.com/a/2182184
-# this MUST stay directly after load_word
-# value -> result
-# swap_endianness:
-    # byte 3 -> byte 0
-    op shr result value 24
-    op and result result 0xff
-
-    # byte 1 -> byte 2
-    op shl _tmp value 8
-    op and _tmp _tmp 0xff0000
-    op or result result _tmp
-
-    # byte 2 -> byte 1
-    op shr _tmp value 8
-    op and _tmp _tmp 0xff00
-    op or result result _tmp
-
-    # byte 0 -> byte 3
-    op shl _tmp value 24
-    op and _tmp _tmp 0xff000000
-    op or result result _tmp
-
-    set @counter ret
-
-# loads a word from ROM
-# address -> result
-load_rom_word_unchecked:
-    # align to 4 bytes
-    op and _address address 0xfffffffc
-
-    # get rom proc data
-    op idiv _rom_index _address {{ROM_PROC_BYTES}}
-
-    op mod _rom_x _rom_index MEMORY_WIDTH
-    op add _rom_x _rom_x MEMORY_X
-
-    op idiv _rom_y _rom_index MEMORY_WIDTH
-    op add _rom_y _rom_y MEMORY_Y
-
-    getblock building _rom _rom_x _rom_y
-    read _rom _rom "v"
-
-    # read word and convert to big endian
-    set result 0
-
-    op mod _str_index _address {{ROM_PROC_BYTES}}
-    set _shift 0 # leftmost byte in memory becomes rightmost byte in word
-load_rom_word__loop:
-    read _byte _rom _str_index
-    op sub _byte _byte {{ROM_BYTE_OFFSET}}
-    op max _byte _byte 0 # if we're reading out of bounds, default to 0
-    op shl _byte _byte _shift
-    op add result result _byte
-
-    op add _str_index _str_index 1
-    op add _shift _shift 8
-    jump load_rom_word__loop lessThan _shift 32 # stop when we've read 4 bytes
-
-    set _rom null # avoid issues with the vars menu and block data size
-    set @counter ret
-
-inaccessible_load:
-    set result null
-    set @counter ret
-
 #% if false
 # {% raw %}
-set {{LOOKUP_PROC_SIZE}} null
-set {{ROM_BYTE_OFFSET}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{ROM_START}} null

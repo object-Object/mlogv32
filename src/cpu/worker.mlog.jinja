@@ -2201,10 +2201,14 @@ xRET__mprv_m_mode:
 SFENCE.VMA:
 #% do reset_locals()
     # if executing in S-mode, raise an illegal instruction exception if TVM=1
-    # otherwise, no-op
-    jump end_instruction notEqual privilege_mode 0b01
+    jump SFENCE.VMA__no_tvm notEqual privilege_mode 0b01
     op and $mstatus.tvm csr_mstatus 0b100000000000000000000
     jump ILLEGAL_OP notEqual $mstatus.tvm 0
+SFENCE.VMA__no_tvm:
+
+    # invalidate icache_var to force a page table walk
+    set icache_var null
+
     jump end_instruction always
 
 #% set modify_csr_start = 2
@@ -2585,7 +2589,7 @@ modify_csr__satp__ok:
     set csr_satp $$new_value
 
     # invalidate icache_var when writing satp because next_pc may now point to a different page
-    # TODO: we might be able to move this into SFENCE.VMA
+    # TODO: this may not be strictly required by the spec
     set icache_var null
 
     jump end_instruction_with_rd always

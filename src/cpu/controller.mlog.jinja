@@ -310,7 +310,9 @@ breakpoint__loop:
 breakpoint__end_loop:
     control enabled {{PAUSE_SWITCH}} false
 
-    write {{labels.END_BREAKPOINT}} prev_proc "@counter"
+    read counter prev_proc "@counter"
+    op add counter counter 1
+    write counter prev_proc "@counter"
 
     set state "running"
     write state prev_proc "state"
@@ -360,7 +362,6 @@ set {{SINGLE_STEP_SWITCH}} null
 set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{labels[instruction.label]}} null
-set {{labels.END_BREAKPOINT}} null
 set {{loop.index0}} null
 set {{ns.i}} null
 # unused variables

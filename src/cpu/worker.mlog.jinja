@@ -91,7 +91,7 @@
 
 #% set labels.next_tick = 11
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 143
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 144
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -134,9 +134,7 @@ reset:
 
 #directive end_fetch
 
-    jump reset__running equal state "decoding"
     jump reset notEqual state "running"
-reset__running:
 
     # tell the next worker to fetch the hart state from us
     write @this {{CONTROLLER}} "prev_proc"
@@ -287,9 +285,14 @@ main__read_icache:
     read rs2 {{REGISTERS}} rs2_id
 
     # TODO: should breakpoints use virtual or physical addresses?
-    jump state->breakpoint strictEqual pc breakpoint_address
-    jump state->breakpoint equal single_step_enabled true
-END_BREAKPOINT:
+    jump main__breakpoint strictEqual pc breakpoint_address
+    jump main__no_breakpoint notEqual single_step_enabled true
+
+main__breakpoint:
+    # the controller will increment @counter and set state to "running" when it's time to unpause
+    set state "breakpoint"
+    stop
+main__no_breakpoint:
 
 #% do reset_locals()
     # jump to instruction handler
@@ -354,11 +357,6 @@ state->halt:
 state->reset:
     set state "reset"
     jump reset always
-
-# the controller will set @counter to END_BREAKPOINT and set state to "running" when it's time to unpause
-state->breakpoint:
-    set state "breakpoint"
-    stop
 
 ILLEGAL_OP:
 #% do reset_locals()
@@ -2098,13 +2096,13 @@ WFI:
     # the simplest possible implementation of WFI would be a plain no-op
     # however, it seems like another valid implementation is to just stall for a bounded amount of time
     # since the wait is bounded, we don't need to check mstatus.TW
-    # we check mip/mie first to avoid unnecessarily stalling if an interrupt is already pending and enabled
-    op and $interrupts csr_mip csr_mie
-    jump end_instruction notEqual $interrupts 0
+    # we check interrupt_flags first to avoid unnecessarily stalling if there may be an interrupt ready
+    jump end_instruction notEqual interrupt_flags 0b00
 
     set state "pause"
     wait 1e-5
-    jump end_instruction_and_state->running always
+    set state "running"
+    jump end_instruction always
 
 PRIV:
     # I-type: rs1, rs1_id=uimm, imm=funct12/csr, rd_id
@@ -2657,7 +2655,6 @@ MLOGSYS:
     # init icache
     # require M-mode so that we don't need to do address translation
     jump ILLEGAL_OP lessThan privilege_mode 0b11
-    set state "decoding"
 
     op min __etext rs1 ROM_SIZE
     op min __etext __etext ICACHE_SIZE
@@ -2679,8 +2676,6 @@ MLOGSYS__decode_loop:
     jump MLOGSYS__decode_loop lessThan address __etext
 
     # this is also used by PAUSE/WFI
-end_instruction_and_state->running:
-    set state "running"
     jump end_instruction always
 
 #% endblock contents

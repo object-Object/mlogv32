@@ -83,7 +83,7 @@ class mlogv32(pluginTemplate):
         # runTests function
         self.compile_cmd = (
             "riscv{xlen}-unknown-elf-gcc -march={isa} \
- -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
+ -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles\
  -D 'MLOGV32_TEST_NAME=\"{test_name}\"'\
  -T "
             + self.pluginpath
@@ -239,7 +239,8 @@ class mlogv32(pluginTemplate):
             for cmd in [
                 compile_cmd,
                 objcopy_cmd,
-                objdump_cmd,
+                # comment out objdump command to make the tests run faster
+                "#" + objdump_cmd,
             ]
         )
 

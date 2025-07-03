@@ -125,7 +125,7 @@ class sail_cSim(pluginTemplate):
 
             elf = "ref.elf"
 
-            execute = "@cd " + testentry["work_dir"] + ";"
+            execute = ""
 
             cmd = (
                 self.compile_cmd.format(testentry["isa"].lower(), self.xlen)
@@ -137,7 +137,8 @@ class sail_cSim(pluginTemplate):
             compile_cmd = cmd + " -D" + " -D".join(testentry["macros"])
             execute += compile_cmd + ";"
 
-            execute += self.objdump_cmd.format(elf, self.xlen, "ref.dump")
+            # comment out objdump command to make the tests run faster
+            execute += "#" + self.objdump_cmd.format(elf, self.xlen, "ref.dump")
             sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
             log_file = os.path.join(test_dir, test_name + ".log")
 
@@ -179,8 +180,11 @@ class sail_cSim(pluginTemplate):
             execute += coverage_cmd
 
             make.add_target(
-                " \\\n&& ".join(
-                    re.sub(r" +", " ", cmd.strip())
+                "\n\n".join(
+                    "@cd "
+                    + testentry["work_dir"]
+                    + "; "
+                    + re.sub(r" +", " ", cmd.strip())
                     for cmd in execute.split(";")
                     if cmd.strip()
                 )

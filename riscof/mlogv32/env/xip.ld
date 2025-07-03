@@ -3,7 +3,7 @@ ENTRY(rvtest_entry_point)
 
 MEMORY {
     ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 18M
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 18M
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 21M
 }
 
 __stext = 0;

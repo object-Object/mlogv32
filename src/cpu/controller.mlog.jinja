@@ -175,7 +175,6 @@ end_slow_init:
     # clear pending/enabled interrupts
     set csr_mip 0
     set csr_mie 0
-    set interrupt_flags 0b00
 
     # reset mtvec and stvec to implementation-defined value to help catch bugs
     write {{SYSCON}} {{CSRS}} "{{ 'mtvec'|csr }}"
@@ -281,7 +280,8 @@ end_breakpoint:
     set last_mcycle_update @tick
 
     # tell the next worker to poll and fire interrupts
-    write 0b11 prev_proc "interrupt_flags"
+    op or csr_mip csr_mip 0b11000000000000000000000000000000
+    write csr_mip prev_proc "csr_mip"
 
     # go to next tick
 
@@ -385,5 +385,4 @@ set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
 set _ csr_satp
-set _ interrupt_flags
 # {% endraw %}

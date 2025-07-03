@@ -18,7 +18,6 @@
     read icache_ram prev_proc "icache_ram"
     read icache_var prev_proc "icache_var"
     read imm prev_proc "imm"
-    read interrupt_flags prev_proc "interrupt_flags"
     read length prev_proc "length"
     read mcause prev_proc "mcause"
     read mtval prev_proc "mtval"
@@ -91,7 +90,7 @@
 
 #% set labels.next_tick = 11
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 144
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 142
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -154,8 +153,6 @@ reset:
 # this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
 poll_interrupts:
 #% do reset_locals()
-    op and interrupt_flags interrupt_flags 0b01 # clear interrupt_flags.poll
-
     # machine timer interrupt
     op greaterThan $high_gt csr_mtimeh csr_mtimecmph
     op equal $high_eq csr_mtimeh csr_mtimecmph
@@ -165,14 +162,16 @@ poll_interrupts:
     op or $mip.mtip $mip.mtip $high_gt
     op shl $mip.mtip $mip.mtip 7
 
-    op and csr_mip csr_mip 0b11111111111111111111111101111111
+    # poll                   -
+    # mtip                                           -
+    op and csr_mip csr_mip 0b01111111111111111111111101111111
     op or csr_mip csr_mip $mip.mtip
 
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, if certain CSRs are modified, and after an xRET instruction
 fire_interrupts:
 #% do reset_locals()
-    op and interrupt_flags interrupt_flags 0b10 # clear interrupt_flags.fire
+    op and csr_mip csr_mip 0b10111111111111111111111111111111 # clear interrupt_flags.fire
 
     # if privilege_mode < M, machine interrupts are globally enabled
     jump fire_interrupts__machine lessThan privilege_mode 0b11
@@ -302,13 +301,13 @@ main__no_breakpoint:
 # this is a normal length for a label
 #directive assert_counter {{ labels.end_instruction_with_rd_and_poll_interrupts }}
 end_instruction_with_rd_and_poll_interrupts:
-    op or interrupt_flags interrupt_flags 0b10 # set interrupt_flags.poll
+    op or csr_mip csr_mip 0b10000000000000000000000000000000 # set interrupt_flags.poll
     # continue into end_instruction_with_rd_and_fire_interrupts
 
 # this is too
 #directive assert_counter {{ labels.end_instruction_with_rd_and_fire_interrupts }}
 end_instruction_with_rd_and_fire_interrupts:
-    op or interrupt_flags interrupt_flags 0b01 # set interrupt_flags.fire
+    op or csr_mip csr_mip 0b01000000000000000000000000000000 # set interrupt_flags.fire
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
@@ -337,8 +336,8 @@ end_instruction_trap:
     # if next_pc was modified, icache_var should have also been set to null
     set pc next_pc
 
-    jump main equal interrupt_flags 0b00
-    jump poll_interrupts greaterThanEq interrupt_flags 0b10
+    jump main lessThan csr_mip 0b01000000000000000000000000000000
+    jump poll_interrupts greaterThanEq csr_mip 0b10000000000000000000000000000000
     jump fire_interrupts always
 
 # exceptions
@@ -2097,7 +2096,7 @@ WFI:
     # however, it seems like another valid implementation is to just stall for a bounded amount of time
     # since the wait is bounded, we don't need to check mstatus.TW
     # we check interrupt_flags first to avoid unnecessarily stalling if there may be an interrupt ready
-    jump end_instruction notEqual interrupt_flags 0b00
+    jump end_instruction greaterThanEq csr_mip 0b01000000000000000000000000000000
 
     set state "pause"
     wait 1e-5
@@ -2489,11 +2488,11 @@ modify_csr__sip:
 #% do reset_locals(modify_csr_start)
 #% do declare_locals(modify_csr_locals)
     # subset of mip
-    # platform          ----------------
+    # platform            --------------
     # SEIP                                    -
     # STIP                                        -
     # SSIP                                            -
-    op and rd csr_mip 0b11111111111111110000001000100010
+    op and rd csr_mip 0b00111111111111110000001000100010
 
     op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
@@ -2509,25 +2508,19 @@ modify_csr__sip:
 modify_csr__mip:
 #% do reset_locals(modify_csr_start)
 #% do declare_locals(modify_csr_locals)
-    set rd csr_mip
+    # hide internal interrupt flags
+    op and rd csr_mip 0b00111111111111111111111111111111
 
     op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
-    # get current read-only non-zero fields
-    # MEIP                                    -
-    # MTIP                                        -
-    op and $tmp csr_mip 0b00000000000000000000100010000000
-
-    # get new writable fields
-    # SEIP                                             -
-    # STIP                                                 -
-    # SSIP                                                     -
-    op and csr_mip $$new_value 0b00000000000000000000001000100010
-
-    # merge read-only and writable fields
-    # all other fields are read-only zero
-    op or csr_mip csr_mip $tmp
+    # insert new writable fields
+    # SEIP                                                 -
+    # STIP                                                     -
+    # SSIP                                                         -
+    op and csr_mip csr_mip         0b11111111111111111111110111011101
+    op and $$new_value $$new_value 0b00000000000000000000001000100010
+    op or csr_mip csr_mip $$new_value
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
@@ -2778,7 +2771,6 @@ jump SRLI always
 jump SRAI always
 jump ILLEGAL_OP always
 jump MLOGSYS always
-jump END_BREAKPOINT always
 jump decode_LOAD always
 jump decode_custom-0 always
 jump decode_MISC-MEM always

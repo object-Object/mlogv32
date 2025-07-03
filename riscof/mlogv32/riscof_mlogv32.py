@@ -57,6 +57,8 @@ class mlogv32(pluginTemplate):
         self.host_repo_path: str = config["host_repo_path"]
         self.riscof_repo_path: str = config["riscof_repo_path"]
 
+        self.reloc_tests: list[str] = config["reloc_tests"].split(",")
+
         self.make = config["make"] if "make" in config else "make"
 
         # We capture if the user would like the run the tests on the target or
@@ -201,8 +203,10 @@ class mlogv32(pluginTemplate):
         compile_macros = " -D" + " -D".join(testentry["macros"])
 
         # use a different linker script for tests that require .text to be writable
-        if testname.endswith("/Zifencei/src/Fencei.S"):
-            linker_script = "reloc.ld"
+        for reloc_test in self.reloc_tests:
+            if reloc_test in testname:
+                linker_script = "reloc.ld"
+                break
         else:
             linker_script = "xip.ld"
 

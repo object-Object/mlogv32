@@ -16,7 +16,12 @@ def main(
     with open(config, "r") as f:
         cfg = ConfigParser()
         cfg.read_file(f)
-        skip_tests = cfg.get("mlogv32", "skip_tests").split(",")
+        skip_tests = cfg.get("mlogv32", "skip_tests")
+
+    if not skip_tests:
+        return
+
+    skip_tests = skip_tests.split(",")
 
     with open(work_dir / "test_list.yaml", "rb") as f:
         test_list: dict[str, Any] = yaml.load(f, yaml.Loader)

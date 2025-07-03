@@ -2383,8 +2383,9 @@ modify_csr__read__machine:
     jump modify_csr__mip equal imm 0x344 # mip
 
     # PMP registers (unimplemented)
+    # the spec seems to imply these can be read-only zero if not implemented, but sail throws illegal op
     jump modify_csr__read__privileged lessThan imm 0x3a0 # pmpcfg0
-    jump modify_csr__readonly_zero lessThanEq imm 0x3ef # pmpaddr63
+    jump ILLEGAL_OP lessThanEq imm 0x3ef # pmpaddr63
 
 modify_csr__read__privileged:
     # CSRs that use the same handler for supervisor- and machine-level

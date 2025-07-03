@@ -345,23 +345,12 @@ loop__no_mark_icache:
     jump format_hex always
 
     print "op_id       = {0}\n"
-    set n op_id
-    op add ret @counter 1
+    print "imm         = {1}\n"
+    print "rs1         = {2}\n"
+    print "rs2         = {3}\n"
+    print "rd          = {4}\n\n"
+    op add ret2 @counter 1
     jump format_op_id always
-
-    print "rs1         = {0}\n"
-    format rs1
-
-    print "rs2         = {0}\n"
-    format rs2
-
-    print "rd          = {0}\n"
-    format rd
-
-    print "imm         = {0}\n\n"
-    set n imm
-    op add ret @counter 1
-    jump format_hex always
 
     print "mtimecmp = {0}\n"
     format mtimecmp
@@ -646,93 +635,144 @@ format_bin__next:
     format "0b"
     set @counter ret
 
+# format order: op_id, imm, rs1, rs2, rd
 format_op_id:
-    jump format_null strictEqual n null
-    jump format_unknown lessThan n -64
-    jump format_unknown greaterThan n 1
-    op add n n 64
-    op mul n n 2
-    op add @counter @counter n
-    format "BEQ"; set @counter ret
-    format "BNE"; set @counter ret
-    format "JAL"; set @counter ret
-    format "JALR"; set @counter ret
-    format "BLT"; set @counter ret
-    format "BGE"; set @counter ret
-    format "BLTU"; set @counter ret
-    format "BGEU"; set @counter ret
-    format "LB"; set @counter ret
-    format "LH"; set @counter ret
-    format "LW"; set @counter ret
-    format "LUI"; set @counter ret
-    format "LBU"; set @counter ret
-    format "LHU"; set @counter ret
-    format "SB"; set @counter ret
-    format "SH"; set @counter ret
-    format "SW"; set @counter ret
-    format "AMOADD.W"; set @counter ret
-    format "AMOSWAP.W"; set @counter ret
-    format "LR.W"; set @counter ret
-    format "SC.W"; set @counter ret
-    format "AMOXOR.W"; set @counter ret
-    format "AMOOR.W"; set @counter ret
-    format "AMOAND.W"; set @counter ret
-    format "AMOMIN.W"; set @counter ret
-    format "AMOMAX.W"; set @counter ret
-    format "AMOMINU.W"; set @counter ret
-    format "AMOMAXU.W"; set @counter ret
-    format "ADDI"; set @counter ret
-    format "SUB"; set @counter ret
-    format "SLTI"; set @counter ret
-    format "SLTIU"; set @counter ret
-    format "XORI"; set @counter ret
-    format "SRA"; set @counter ret
-    format "ORI"; set @counter ret
-    format "ANDI"; set @counter ret
-    format "ADD"; set @counter ret
-    format "SLL"; set @counter ret
-    format "SLT"; set @counter ret
-    format "SLTU"; set @counter ret
-    format "XOR"; set @counter ret
-    format "SRL"; set @counter ret
-    format "OR"; set @counter ret
-    format "AND"; set @counter ret
-    format "MUL"; set @counter ret
-    format "MULH"; set @counter ret
-    format "MULHSU"; set @counter ret
-    format "MULHU"; set @counter ret
-    format "DIV"; set @counter ret
-    format "DIVU"; set @counter ret
-    format "REM"; set @counter ret
-    format "REMU"; set @counter ret
+    jump format_op_id__unknown strictEqual op_id null
+    jump format_op_id__unknown lessThan op_id -64
+    jump format_op_id__unknown greaterThan op_id 1
+    op add jump op_id 64
+    op mul jump jump 2
+    op add @counter @counter jump
+    format "BEQ";           jump format_op_id__B-type always
+    format "BNE";           jump format_op_id__B-type always
+    format "JAL";           jump format_op_id__J-type always
+    format "JALR";          jump format_op_id__I-type always
+    format "BLT";           jump format_op_id__B-type always
+    format "BGE";           jump format_op_id__B-type always
+    format "BLTU";          jump format_op_id__B-type always
+    format "BGEU";          jump format_op_id__B-type always
+    format "LB";            jump format_op_id__I-type always
+    format "LH";            jump format_op_id__I-type always
+    format "LW";            jump format_op_id__I-type always
+    format "LUI";           jump format_op_id__U-type always
+    format "LBU";           jump format_op_id__I-type always
+    format "LHU";           jump format_op_id__I-type always
+    format "SB";            jump format_op_id__S-type always
+    format "SH";            jump format_op_id__S-type always
+    format "SW";            jump format_op_id__S-type always
+    format "AMOADD.W";      jump format_op_id__R-type always
+    format "AMOSWAP.W";     jump format_op_id__R-type always
+    format "LR.W";          jump format_op_id__R-type always
+    format "SC.W";          jump format_op_id__R-type always
+    format "AMOXOR.W";      jump format_op_id__R-type always
+    format "AMOOR.W";       jump format_op_id__R-type always
+    format "AMOAND.W";      jump format_op_id__R-type always
+    format "AMOMIN.W";      jump format_op_id__R-type always
+    format "AMOMAX.W";      jump format_op_id__R-type always
+    format "AMOMINU.W";     jump format_op_id__R-type always
+    format "AMOMAXU.W";     jump format_op_id__R-type always
+    format "ADDI";          jump format_op_id__I-type always
+    format "SUB";           jump format_op_id__R-type always
+    format "SLTI";          jump format_op_id__I-type always
+    format "SLTIU";         jump format_op_id__I-type always
+    format "XORI";          jump format_op_id__I-type always
+    format "SRA";           jump format_op_id__R-type always
+    format "ORI";           jump format_op_id__I-type always
+    format "ANDI";          jump format_op_id__I-type always
+    format "ADD";           jump format_op_id__R-type always
+    format "SLL";           jump format_op_id__R-type always
+    format "SLT";           jump format_op_id__R-type always
+    format "SLTU";          jump format_op_id__R-type always
+    format "XOR";           jump format_op_id__R-type always
+    format "SRL";           jump format_op_id__R-type always
+    format "OR";            jump format_op_id__R-type always
+    format "AND";           jump format_op_id__R-type always
+    format "MUL";           jump format_op_id__R-type always
+    format "MULH";          jump format_op_id__R-type always
+    format "MULHSU";        jump format_op_id__R-type always
+    format "MULHU";         jump format_op_id__R-type always
+    format "DIV";           jump format_op_id__R-type always
+    format "DIVU";          jump format_op_id__R-type always
+    format "REM";           jump format_op_id__R-type always
+    format "REMU";          jump format_op_id__R-type always
     jump format_op_id__priv always; stop
-    format "CSRRW"; set @counter ret
-    format "CSRRS"; set @counter ret
-    format "CSRRC"; set @counter ret
-    format "AUIPC"; set @counter ret
-    format "CSRRWI"; set @counter ret
-    format "CSRRSI"; set @counter ret
-    format "CSRRCI"; set @counter ret
-    format "FENCE"; set @counter ret
-    format "SLLI"; set @counter ret
-    format "SRLI"; set @counter ret
-    format "SRAI"; set @counter ret
-    format "illegal_instruction"; set @counter ret
-    format "MLOGSYS"; set @counter ret
+    format "CSRRW";         jump format_op_id__I-type always
+    format "CSRRS";         jump format_op_id__I-type always
+    format "CSRRC";         jump format_op_id__I-type always
+    format "AUIPC";         jump format_op_id__U-type always
+    format "CSRRWI";        jump format_op_id__I-type always
+    format "CSRRSI";        jump format_op_id__I-type always
+    format "CSRRCI";        jump format_op_id__I-type always
+    format "FENCE";         jump format_op_id__I-type always
+    format "SLLI";          jump format_op_id__I-type always
+    format "SRLI";          jump format_op_id__I-type always
+    format "SRAI";          jump format_op_id__I-type always
+    format "ILLEGAL_OP";    jump format_op_id__empty always
+    format "MLOGSYS";       jump format_op_id__I-type always
 
 format_op_id__priv:
-    set name "ECALL"
-    jump format_op_id__priv__ok equal imm 0
-    set name "EBREAK"
-    jump format_op_id__priv__ok equal imm 1
-    set name "MRET"
-    jump format_op_id__priv__ok equal imm 0b001100000010
-    set name "WFI"
-    jump format_op_id__priv__ok equal imm 0b000100000101
-    jump format_unknown always
+    op shr funct7 imm 5
+    set name "ECALL";       jump format_op_id__priv__ok equal imm 0b000000000000
+    set name "EBREAK";      jump format_op_id__priv__ok equal imm 0b000000000001
+    set name "SRET";        jump format_op_id__priv__ok equal imm 0b000100000010
+    set name "MRET";        jump format_op_id__priv__ok equal imm 0b001100000010
+    set name "WFI";         jump format_op_id__priv__ok equal imm 0b000100000101
+    set name "SFENCE.VMA";  jump format_op_id__priv__ok equal funct7 0b0001001
+    jump format_op_id__unknown always
 format_op_id__priv__ok:
     format name
-    set @counter ret
+    jump format_op_id__I-type always
+
+format_op_id__unknown:
+    format op_id
+    set n imm; op add ret @counter 1; jump format_hex always
+    format rs1
+    format rs2
+    format rd
+    set @counter ret2
+
+format_op_id__empty:
+    format ""
+    format ""
+    format ""
+    format ""
+    set @counter ret2
+
+format_op_id__R-type:
+    format ""
+    format rs1
+    format rs2
+    format rd
+    set @counter ret2
+
+format_op_id__I-type:
+    set n imm; op add ret @counter 1; jump format_hex always
+    format rs1
+    format ""
+    format rd
+    set @counter ret2
+
+format_op_id__S-type:
+    set n imm; op add ret @counter 1; jump format_hex always
+    format rs1
+    format rs2
+    format ""
+    set @counter ret2
+
+format_op_id__B-type:
+    set n imm; op add ret @counter 1; jump format_hex always
+    format rs1
+    format rs2
+    format ""
+    set @counter ret2
+
+format_op_id__U-type:
+format_op_id__J-type:
+    set n imm; op add ret @counter 1; jump format_hex always
+    format ""
+    format ""
+    format rd
+    set @counter ret2
 
 format_unknown:
     format n

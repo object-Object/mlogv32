@@ -14,7 +14,7 @@ RUN mkdir -p /usr/local \
     && cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DDOWNLOAD_GMP=FALSE -GNinja \
     && cmake --build build \
     && mkdir -p /opt/sail-riscv \
-    && mv build/c_emulator/* /opt/sail-riscv
+    && mv build/c_emulator/sail_riscv_sim /opt/sail-riscv/sail_riscv_sim
 
 FROM mcr.microsoft.com/devcontainers/rust:bookworm
 

@@ -1,10 +1,13 @@
 import logging
 import os
+import re
 import subprocess
 from typing import Any
 
+import colorlog
 from mlogv32.processor_access import ProcessorAccess
 
+import riscof.log
 import riscof.utils as utils
 from riscof.pluginTemplate import pluginTemplate
 
@@ -20,6 +23,15 @@ class mlogv32(pluginTemplate):
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
+
+        riscof.log.logger.format = "%(log_color)s%(levelname)8s%(reset)s | %(log_color)s%(asctime)s%(reset)s | %(log_color)s%(message)s%(reset)s"
+        riscof.log.logger.stream.setFormatter(
+            colorlog.ColoredFormatter(
+                fmt=riscof.log.logger.format,
+                datefmt="%Y-%m-%d %H:%M:%S",
+                log_colors=riscof.log.logger.colors,
+            )
+        )
 
         config = kwargs.get("config")
 
@@ -45,6 +57,8 @@ class mlogv32(pluginTemplate):
         self.host_repo_path: str = config["host_repo_path"]
         self.riscof_repo_path: str = config["riscof_repo_path"]
 
+        self.make = config["make"] if "make" in config else "make"
+
         # We capture if the user would like the run the tests on the target or
         # not. If you are interested in just compiling the tests and not running
         # them on the target, then following variable should be set to False
@@ -67,15 +81,15 @@ class mlogv32(pluginTemplate):
         # runTests function
         self.compile_cmd = (
             "riscv{xlen}-unknown-elf-gcc -march={isa} \
-         -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
-         -D 'MLOGV32_TEST_NAME=\"{test_name}\"'\
-         -T "
+ -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
+ -D 'MLOGV32_TEST_NAME=\"{test_name}\"'\
+ -T "
             + self.pluginpath
             + "/env/{linker_script}\
-         -I "
+ -I "
             + self.pluginpath
             + "/env/\
-         -I "
+ -I "
             + env
             + " {test} -o {elf} {macros}"
         )
@@ -119,6 +133,26 @@ class mlogv32(pluginTemplate):
         )
 
     def runTests(self, testlist: dict[str, Any]):
+        # build tests
+
+        logger.info(f"Building {len(testlist)} tests.")
+
+        make = utils.makeUtil(
+            makeCommand=self.make + " -j" + self.num_jobs,
+            makefilePath=os.path.join(self.work_dir, "Makefile." + self.name[:-1]),
+            clean=True,
+        )
+        for testname in testlist:
+            make.add_target(self.get_compile_command(testlist, testname))
+        make.execute_all(timeout=10 * 60)
+
+        # if target runs are not required then we simply exit at this point after running all
+        # the makefile targets.
+        if not self.target_run:
+            raise SystemExit(0)
+
+        # run tests
+
         with ProcessorAccess(
             "host.docker.internal",
             5000,
@@ -126,138 +160,147 @@ class mlogv32(pluginTemplate):
         ) as processor:
             # we will iterate over each entry in the testlist. Each entry node will be refered to by the
             # variable testname.
-            for testname in testlist:
+            for i, testname in enumerate(testlist):
                 # hack
                 _, _, test_display_name = testname.partition(
                     "riscv-arch-test/riscv-test-suite/"
                 )
-
-                logger.info(f"Building test: {test_display_name}")
-
-                # for each testname we get all its fields (as described by the testlist format)
-                testentry = testlist[testname]
-
-                # we capture the path to the assembly file of this test
-                test = testentry["test_path"]
-
-                # capture the directory where the artifacts of this test will be dumped/created. RISCOF is
-                # going to look into this directory for the signature files
-                test_dir = testentry["work_dir"]
-
-                # name of the elf file after compilation of the test
-                elf = "dut.elf"
-                binary = "dut.bin"
-                dump = "dut.dump"
-                out = "out.bin"
-
-                binary_file = os.path.join(test_dir, binary)
-                out_file = os.path.join(test_dir, out)
-
-                # hack
-                binary_file_host = binary_file.replace(
-                    self.riscof_repo_path, self.host_repo_path
+                logger.info(
+                    f"Running test {i + 1}/{len(testlist)}: {test_display_name}"
                 )
-                out_file_host = out_file.replace(
-                    self.riscof_repo_path, self.host_repo_path
-                )
+                self.run_test(testlist, testname, processor)
 
-                # name of the signature file as per requirement of RISCOF. RISCOF expects the signature to
-                # be named as DUT-<dut-name>.signature. The below variable creates an absolute path of
-                # signature file.
-                sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
+    def get_compile_command(self, testlist: dict[str, Any], testname: str):
+        # hack
+        _, _, test_display_name = testname.partition(
+            "riscv-arch-test/riscv-test-suite/"
+        )
 
-                # for each test there are specific compile macros that need to be enabled. The macros in
-                # the testlist node only contain the macros/values. For the gcc toolchain we need to
-                # prefix with "-D". The following does precisely that.
-                compile_macros = " -D" + " -D".join(testentry["macros"])
+        # for each testname we get all its fields (as described by the testlist format)
+        testentry = testlist[testname]
 
-                # use a different linker script for tests that require .text to be writable
-                if testname.endswith("/Zifencei/src/Fencei.S"):
-                    linker_script = "reloc.ld"
-                else:
-                    linker_script = "xip.ld"
+        # capture the directory where the artifacts of this test will be dumped/created. RISCOF is
+        # going to look into this directory for the signature files
+        test_dir = testentry["work_dir"]
 
-                # substitute all variables in the compile command that we created in the initialize
-                # function
-                compile_cmd = self.compile_cmd.format(
-                    isa=testentry["isa"].lower(),
-                    xlen=self.xlen,
-                    test=test,
-                    elf=elf,
-                    macros=compile_macros,
-                    linker_script=linker_script,
-                    test_name=test_display_name,
-                )
+        # we capture the path to the assembly file of this test
+        test = testentry["test_path"]
 
-                objcopy_cmd = self.objcopy_cmd.format(
-                    xlen=self.xlen,
-                    elf=elf,
-                    binary=binary,
-                )
+        # name of the elf file after compilation of the test
+        elf = "dut.elf"
+        binary = "dut.bin"
+        dump = "dut.dump"
 
-                objdump_cmd = self.objdump_cmd.format(
-                    xlen=self.xlen,
-                    elf=elf,
-                    dump=dump,
-                )
+        elf_file = os.path.join(test_dir, elf)
+        binary_file = os.path.join(test_dir, binary)
+        dump_file = os.path.join(test_dir, dump)
 
-                logger.debug(f"Compile command: {compile_cmd}")
-                if utils.shellCommand(compile_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError(f"Compile failed: {testname}")
+        # for each test there are specific compile macros that need to be enabled. The macros in
+        # the testlist node only contain the macros/values. For the gcc toolchain we need to
+        # prefix with "-D". The following does precisely that.
+        compile_macros = " -D" + " -D".join(testentry["macros"])
 
-                logger.debug(f"Objcopy command: {objcopy_cmd}")
-                if utils.shellCommand(objcopy_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError(f"Objcopy failed: {testname}")
+        # use a different linker script for tests that require .text to be writable
+        if testname.endswith("/Zifencei/src/Fencei.S"):
+            linker_script = "reloc.ld"
+        else:
+            linker_script = "xip.ld"
 
-                logger.debug(f"Objdump command: {objdump_cmd}")
-                if utils.shellCommand(objdump_cmd).run(cwd=test_dir) != 0:
-                    raise RuntimeError(f"Objdump failed: {testname}")
+        # substitute all variables in the compile command that we created in the initialize
+        # function
+        compile_cmd = self.compile_cmd.format(
+            isa=testentry["isa"].lower(),
+            xlen=self.xlen,
+            test=test,
+            elf=elf_file,
+            macros=compile_macros,
+            linker_script=linker_script,
+            test_name=test_display_name,
+        )
 
-                if not self.target_run:
-                    continue
+        objcopy_cmd = self.objcopy_cmd.format(
+            xlen=self.xlen,
+            elf=elf_file,
+            binary=binary_file,
+        )
 
-                begin_signature = self.get_symbol_address(
-                    cwd=test_dir,
-                    elf=elf,
-                    symbol="begin_signature",
-                )
-                end_signature = self.get_symbol_address(
-                    cwd=test_dir,
-                    elf=elf,
-                    symbol="end_signature",
-                )
-                signature_length = end_signature - begin_signature
-                logger.debug(
-                    f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}"
-                )
+        objdump_cmd = self.objdump_cmd.format(
+            xlen=self.xlen,
+            elf=elf_file,
+            dump=dump_file,
+        )
 
-                logger.info(f"Running test:  {test_display_name}")
+        return "\n\n".join(
+            re.sub(r" +", " ", cmd.strip())
+            for cmd in [
+                compile_cmd,
+                objcopy_cmd,
+                objdump_cmd,
+            ]
+        )
 
-                processor.stop()
-                processor.flash(binary_file_host)
-                processor.start()
-                processor.wait(stopped=True, paused=False)
-                processor.dump(out_file_host, begin_signature, signature_length)
+    def run_test(
+        self, testlist: dict[str, Any], testname: str, processor: ProcessorAccess
+    ):
+        # for each testname we get all its fields (as described by the testlist format)
+        testentry = testlist[testname]
 
-                with open(out_file, "rb") as out, open(sig_file, "w") as sig:
-                    data = out.read()
-                    data += b"\0" * (len(data) % 4)
+        # capture the directory where the artifacts of this test will be dumped/created. RISCOF is
+        # going to look into this directory for the signature files
+        test_dir = testentry["work_dir"]
 
-                    for i in range(0, len(data), 4):
-                        # LE -> BE
-                        word = data[i : i + 4][::-1]
-                        sig.write(word.hex() + "\n")
+        # name of the elf file after compilation of the test
+        elf = "dut.elf"
+        binary = "dut.bin"
+        out = "out.bin"
 
-                if msg := processor.status().error_output:
-                    # logger.error(f"Processor execution failed: {msg}")
-                    raise RuntimeError(f"Processor execution failed: {msg}")
+        binary_file = os.path.join(test_dir, binary)
+        out_file = os.path.join(test_dir, out)
 
-                logger.debug(f"Finished test: {testname}")
+        # hack
+        binary_file_host = binary_file.replace(
+            self.riscof_repo_path, self.host_repo_path
+        )
+        out_file_host = out_file.replace(self.riscof_repo_path, self.host_repo_path)
 
-        # if target runs are not required then we simply exit as this point after running all
-        # the makefile targets.
-        if not self.target_run:
-            raise SystemExit(0)
+        # name of the signature file as per requirement of RISCOF. RISCOF expects the signature to
+        # be named as DUT-<dut-name>.signature. The below variable creates an absolute path of
+        # signature file.
+        sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
+
+        begin_signature = self.get_symbol_address(
+            cwd=test_dir,
+            elf=elf,
+            symbol="begin_signature",
+        )
+        end_signature = self.get_symbol_address(
+            cwd=test_dir,
+            elf=elf,
+            symbol="end_signature",
+        )
+        signature_length = end_signature - begin_signature
+        logger.debug(f"{begin_signature=:#x} {end_signature=:#x} {signature_length=}")
+
+        processor.stop()
+        processor.flash(binary_file_host)
+        processor.start()
+        processor.wait(stopped=True, paused=False)
+        processor.dump(out_file_host, begin_signature, signature_length)
+
+        with open(out_file, "rb") as out, open(sig_file, "w") as sig:
+            data = out.read()
+            data += b"\0" * (len(data) % 4)
+
+            for i in range(0, len(data), 4):
+                # LE -> BE
+                word = data[i : i + 4][::-1]
+                sig.write(word.hex() + "\n")
+
+        if msg := processor.status().error_output:
+            # logger.error(f"Processor execution failed: {msg}")
+            raise RuntimeError(f"Processor execution failed: {msg}")
+
+        logger.debug(f"Finished test: {testname}")
 
     def get_symbol_address(self, elf: str, symbol: str, cwd: str):
         output = subprocess.check_output(

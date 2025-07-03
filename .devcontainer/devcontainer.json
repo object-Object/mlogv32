@@ -11,9 +11,8 @@
     ],
 
     "postAttachCommand": {
-        "Fix workspaces permissions": "sudo chown -R vscode /workspaces",
         "Fix commandhistory permissions": "sudo chown -R vscode: /commandhistory",
-        "uv sync": "uv sync"
+        "Fix workspaces permissions and uv sync": "sudo chown -R vscode /workspaces && uv sync"
     },
 
     "customizations": {

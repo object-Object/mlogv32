@@ -37,4 +37,5 @@ $(WORK_DIR)/test_list.yaml: $(DB_DIR)/test_list.yaml
 $(DB_DIR)/test_list.yaml: mlogv32/mlogv32_isa.yaml mlogv32/mlogv32_platform.yaml $(CONFIG)
 	rm -rf $(DB_DIR)
 	riscof testlist $(ARGS)
+	python filter_test_list.py --work-dir $(WORK_DIR) --config $(CONFIG)
 	mv $(WORK_DIR) $(DB_DIR)

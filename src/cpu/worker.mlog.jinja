@@ -624,7 +624,7 @@ translate_virtual_address__step_5__sum:
     # in Sv32, i is either 1 or 0
     # so we need to check pte.ppn[0]
 
-    op and $pte.ppn[0] result 0x3ff000
+    op and $pte.ppn[0] result 0xffc00
     jump translate_virtual_address__page_fault notEqual $pte.ppn[0] 0
 
     # step 7

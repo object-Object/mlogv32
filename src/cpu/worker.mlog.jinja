@@ -2283,13 +2283,9 @@ modify_csr:
 #% do declare_locals(modify_csr_locals)
 
     # csr is stored in imm
-    # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
-    op and $$readonly imm 0b110000000000
-    op equal $$readonly $$readonly 0b110000000000
-
     # csr[9:8] encodes the lowest privilege level that can access the CSR
     op shr $$csr_11_8 imm 8
-    op and $required_privilege $$csr_11_8 0b1100000000
+    op and $required_privilege $$csr_11_8 0b11
     jump ILLEGAL_OP lessThan privilege_mode $required_privilege
 
     # disable all hypervisor CSRs
@@ -2303,7 +2299,7 @@ modify_csr:
 
     # IMPORTANT: the values of modify_csr_op and modify_csr_write need to be updated if anything after this line is changed
     # -----------------
-    op add $$modify_csr_write @counter 11
+    op add $$modify_csr_write @counter 12
     op add $$modify_csr_op @counter $$modify_csr_op
     jump modify_csr__read always
 
@@ -2328,7 +2324,9 @@ modify_csr__conditional_write:
     jump end_instruction_with_rd equal rs1_id 0
 
 modify_csr__always_write:
-    jump ILLEGAL_OP equal $$readonly true
+    # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
+    op and $$readonly imm 0b110000000000
+    jump ILLEGAL_OP equal $$readonly 0b110000000000
 
     set @counter $$modify_csr_write
     # -----------------
@@ -2591,8 +2589,9 @@ modify_csr__satp__ok:
     op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
-    # ASIDLEN=0                    ---------
-    op and csr_satp $$new_value 0b10000000001111111111111111111111
+    # we don't use ASID for anything, but riscv-sail doesn't allow us to configure ASIDLEN, so the tests will fail if we zero ASID
+    # https://github.com/riscv/sail-riscv/blob/d8c3006f0ff4dbd33be876d9d62abb085c7f5298/model/riscv_xlen.sail#L25
+    set csr_satp $$new_value
 
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: we might be able to move this into SFENCE.VMA

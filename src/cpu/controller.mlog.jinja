@@ -157,6 +157,11 @@ end_slow_init:
 
     # reset additional (unspecified) hart state
 
+    # clear registers
+#% for _ in range(32)
+    write 0 {{REGISTERS}} {{loop.index0}}
+#% endfor
+
     # clear timers
     set csr_mtime 0
     set csr_mtimeh 0
@@ -345,6 +350,7 @@ set {{RAM_PROC_BYTES}} null
 set {{RAM_START}} null
 set {{SYSCON}} null
 # local preprocessor constants
+set {{REGISTERS}} null
 set {{LABELS}} null
 set {{CSRS}} null
 set {{INCR}} null
@@ -355,6 +361,7 @@ set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{labels[instruction.label]}} null
 set {{labels.END_BREAKPOINT}} null
+set {{loop.index0}} null
 set {{ns.i}} null
 # unused variables
 set _ UART_FIFO_MODULO

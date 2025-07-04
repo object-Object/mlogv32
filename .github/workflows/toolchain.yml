@@ -11,6 +11,10 @@ on:
         type: string
         description: Target ABI (./configure --with-abi=...)
         default: ilp32
+      linux:
+        type: boolean
+        description: Linux
+        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -43,8 +47,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ inputs.arch }}-${{ inputs.abi }}
-            type=raw,value=${{ inputs.arch }}
+            type=raw,value=${{ inputs.arch }}-${{ inputs.abi }}${{ inputs.linux && '-linux' || '' }}
+            type=raw,value=${{ inputs.arch }}${{ inputs.linux && '-linux' || '' }}
 
       - name: Build and push image
         id: push
@@ -55,6 +59,7 @@ jobs:
           build-args: |
             ARCH=${{ inputs.arch }}
             ABI=${{ inputs.abi }}
+            MAKE_ARGS=${{ inputs.linux && 'linux' || '' }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

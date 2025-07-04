@@ -8,6 +8,7 @@ RUN apt-get update \
 
 ARG ARCH
 ARG ABI
+ARG MAKE_ARGS
 
 # require ARCH and ABI to have values
 # https://stackoverflow.com/a/42144033
@@ -17,7 +18,7 @@ RUN test -n "${ABI}"
 RUN git clone https://github.com/riscv/riscv-gnu-toolchain \
     && cd riscv-gnu-toolchain \
     && ./configure --prefix=/opt/riscv --with-arch=${ARCH} --with-abi=${ABI} \
-    && make
+    && make ${MAKE_ARGS}
 
 # main image
 

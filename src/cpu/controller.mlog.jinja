@@ -37,14 +37,16 @@ reset:
     read MEMORY_X {{CONFIG}} "MEMORY_X"
     read MEMORY_Y {{CONFIG}} "MEMORY_Y"
     read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
+    read PROGRAM_ROM_SIZE {{CONFIG}} "PROGRAM_ROM_SIZE"
+    read DATA_ROM_SIZE {{CONFIG}} "DATA_ROM_SIZE"
     read ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read RAM_SIZE {{CONFIG}} "RAM_SIZE"
     read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
+    read RAM_END {{CONFIG}} "RAM_END"
+    read ICACHE_END {{CONFIG}} "ICACHE_END"
     read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
 
     op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
-
-    op add RAM_END {{RAM_START}} RAM_SIZE
 
     op add END_PROC RAM_SIZE ICACHE_SIZE
     op idiv END_PROC END_PROC {{RAM_PROC_BYTES}}
@@ -349,7 +351,6 @@ lookup_variable:
 set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
-set {{RAM_START}} null
 set {{SYSCON}} null
 # local preprocessor constants
 set {{REGISTERS}} null
@@ -365,6 +366,9 @@ set {{labels[instruction.label]}} null
 set {{loop.index0}} null
 set {{ns.i}} null
 # unused variables
+set _ PROGRAM_ROM_SIZE
+set _ DATA_ROM_SIZE
+set _ ICACHE_END
 set _ UART_FIFO_MODULO
 set _ RAM_END
 set _ pc

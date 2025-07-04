@@ -90,9 +90,9 @@
 #% set labels = namespace()
 #% set _labels_vals = (labels|namespace_dict).values()
 
-#% set labels.next_tick = 11
+#% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 142
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 147
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -108,14 +108,16 @@ reset:
     read MEMORY_X {{CONFIG}} "MEMORY_X"
     read MEMORY_Y {{CONFIG}} "MEMORY_Y"
     read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
+    read PROGRAM_ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read RAM_SIZE {{CONFIG}} "RAM_SIZE"
     read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
+    read RAM_END {{CONFIG}} "RAM_END"
+    read ICACHE_END {{CONFIG}} "ICACHE_END"
+    read RAM_ICACHE_OFFSET {{CONFIG}} "RAM_ICACHE_OFFSET"
     read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
 
     op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
-
-    op add RAM_END {{RAM_START}} RAM_SIZE
 
     wait 1e-5
 
@@ -229,10 +231,12 @@ main:
     jump translate_virtual_address lessThan privilege_mode 0b11
 
     # fall back to slow instruction fetch/decode if not in valid icache range
-    # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= ROM_SIZE
-    jump main__access_icache lessThan address __etext
-    jump main__slow_instruction_fetch lessThan address ROM_SIZE
-    jump main__access_icache lessThan address ICACHE_SIZE
+    # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= PROGRAM_ROM_SIZE
+    jump main__access_rom_icache      lessThan address __etext
+    jump main__slow_instruction_fetch lessThan address PROGRAM_ROM_SIZE
+    jump trap                         lessThan address {{RAM_START}}
+    op add _address RAM_ICACHE_OFFSET address
+    jump main__access_ram_icache      lessThan address ICACHE_END
 
 main__slow_instruction_fetch:
     jump default_mtvec_handler equal address {{SYSCON}}
@@ -249,14 +253,13 @@ main__slow_instruction_fetch:
     op add ret3 @counter {{# start_assert_length(10) }}
     jump decode always
 
-main__access_icache:
+main__access_rom_icache:
     # the icache is stored in RAM cells immediately after the end of RAM with the same density as regular memory
-    # icache address = RAM_END + pc = RAM_START + RAM_SIZE + pc
-    # _address @ access_ram_raw = address - RAM_START
-    #                           = RAM_START + RAM_SIZE + pc - RAM_START
-    #                           = RAM_SIZE + pc
-    # so just calculate that and skip the extra subtraction
+    # if address in ROM: _address = RAM_SIZE + address
+    # else:              _address = RAM_SIZE + PROGRAM_ROM_SIZE + address - RAM_START
+    #                             = RAM_ICACHE_OFFSET + address
     op add _address RAM_SIZE address
+main__access_ram_icache:
     op add ret2 @counter 1
     jump access_ram_raw always
     set icache_ram ram
@@ -1323,10 +1326,13 @@ end_decode:
     jump end_decode__decode_var_valid notEqual variable null
 
     op add _address RAM_SIZE address
+    jump end_decode__rom lessThan address {{RAM_START}}
+    op add _address RAM_ICACHE_OFFSET address
+end_decode__rom:
     op add ret2 @counter 1
     jump access_ram_raw always
-end_decode__decode_var_valid:
 
+end_decode__decode_var_valid:
     # pack op_id, registers (already in icache_payload), and imm into a single double
     # this is skipped if decoding for instruction fetch because op_id and imm are already in variables
     # IMPORTANT: use or instead of add because op_id may be negative
@@ -1595,7 +1601,7 @@ store_ram_word_unchecked:
     write result ram variable
 
     # if out of icache range, we're done
-    jump end_instruction_with_rd greaterThanEq address ICACHE_SIZE
+    jump end_instruction_with_rd greaterThanEq address ICACHE_END
 
     # if in icache range, decode the new value and update the icache to allow executing from RAM and self-modifying code
     # TODO: add a way for the CPU to temporarily disable this for performance?
@@ -2661,7 +2667,7 @@ MLOGSYS:
     # require M-mode so that we don't need to do address translation
     jump ILLEGAL_OP lessThan privilege_mode 0b11
 
-    op min __etext rs1 ROM_SIZE
+    op min __etext rs1 PROGRAM_ROM_SIZE
     op min __etext __etext ICACHE_SIZE
 
     set address 0

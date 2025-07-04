@@ -1,26 +1,49 @@
     # per-world config options for mlogv32
 
     # reloaded after unpausing
-    set BREAKPOINT_ADDRESS {{#BREAKPOINT_ADDRESS}}
+
+    set BREAKPOINT_ADDRESS {{# '0x' }}
 
     # loaded at reset only
-    set MEMORY_X_OFFSET {{#MEMORY_X_OFFSET}}  # x offset from this proc to bottom left memory proc
-    set MEMORY_Y_OFFSET {{#MEMORY_Y_OFFSET}}  # y offset from this proc to bottom left memory proc
-    set MEMORY_WIDTH {{#MEMORY_WIDTH}}  # physical width of the memory procs
 
-#%+ set ROM_SIZE = ROM_ROWS * MEMORY_WIDTH * 16384
-#% set RAM_SIZE = RAM_ROWS * MEMORY_WIDTH * 16384
-#% set ICACHE_SIZE = ICACHE_ROWS * MEMORY_WIDTH * 16384
+    set MEMORY_X_OFFSET {{# MEMORY_X_OFFSET }}  # x offset from this proc to bottom left memory proc
+    set MEMORY_Y_OFFSET {{# MEMORY_Y_OFFSET }}  # y offset from this proc to bottom left memory proc
+    set MEMORY_WIDTH {{# MEMORY_WIDTH }}  # physical width of the memory procs
 
-    set ROM_SIZE    {{# '%#0x'|format(ROM_SIZE) }}  # ROM size in bytes ({{ ROM_SIZE|memory_size }})
-    set RAM_SIZE    {{# '%#0x'|format(RAM_SIZE) }}  # RAM size in bytes ({{ RAM_SIZE|memory_size }})
-    set ICACHE_SIZE {{# '%#0x'|format(ICACHE_SIZE) }}  # icache size in bytes ({{ ICACHE_SIZE|memory_size }})
+#%+ set rows_to_bytes = MEMORY_WIDTH * 16384
+#% set PROGRAM_ROM_SIZE = PROGRAM_ROM_ROWS * rows_to_bytes
+#% set DATA_ROM_SIZE = DATA_ROM_ROWS * rows_to_bytes
+#% set RAM_SIZE = RAM_ROWS * rows_to_bytes
+#% set ICACHE_SIZE = ICACHE_ROWS * rows_to_bytes
 
-    set UART_FIFO_CAPACITY {{#UART_FIFO_CAPACITY}}  # UART TX/RX FIFO capacity in bytes (max 253)
+    set PROGRAM_ROM_SIZE {{# '%#0x'|format(PROGRAM_ROM_SIZE) }}  # Program ROM size in bytes ({{ PROGRAM_ROM_SIZE|memory_size }})
+    set DATA_ROM_SIZE    {{# '%#0x'|format(DATA_ROM_SIZE) }}  # Data ROM size in bytes ({{ DATA_ROM_SIZE|memory_size }})
+    set RAM_SIZE         {{# '%#0x'|format(RAM_SIZE) }}  # RAM size in bytes ({{ RAM_SIZE|memory_size }})
+    set ICACHE_SIZE      {{# '%#0x'|format(ICACHE_SIZE) }}  # icache size in bytes ({{ ICACHE_SIZE|memory_size }})
+
+    set UART_FIFO_CAPACITY {{# UART_FIFO_CAPACITY }}  # UART TX/RX FIFO capacity in bytes (max 253)
 
     # computed values
+#%+ set RAM_START = '0x80000000'
+
     op add MEMORY_X @thisx MEMORY_X_OFFSET  # absolute x position of bottom left memory proc
     op add MEMORY_Y @thisy MEMORY_Y_OFFSET  # absolute y position of bottom left memory proc
+    
+    op add ROM_SIZE PROGRAM_ROM_SIZE DATA_ROM_SIZE
+
+    op add RAM_END {{RAM_START}} RAM_SIZE
+
+    set ICACHE_END ICACHE_SIZE
+    jump done_icache lessThanEq ICACHE_SIZE PROGRAM_ROM_SIZE
+
+    op sub ICACHE_END ICACHE_SIZE PROGRAM_ROM_SIZE
+    op add ICACHE_END {{RAM_START}} ICACHE_END
+    op min ICACHE_END ICACHE_END RAM_END
+done_icache:
+
+    op add RAM_ICACHE_OFFSET RAM_SIZE PROGRAM_ROM_SIZE
+    op sub RAM_ICACHE_OFFSET RAM_ICACHE_OFFSET {{RAM_START}}
+
     op add UART_FIFO_MODULO UART_FIFO_CAPACITY 1  # actual number of indices used for each FIFO, keeping one empty to check if the buffer is full (max 254)
 
     stop
@@ -28,11 +51,10 @@
 #%- if false
 # {% raw %}
 set {{ null
+set {{RAM_START}} null
 set _ BREAKPOINT_ADDRESS
 set _ MEMORY_WIDTH
 set _ ROM_SIZE
-set _ RAM_SIZE
-set _ ICACHE_SIZE
 set _ UART_FIFO_MODULO
 set _ MEMORY_X
 set _ MEMORY_Y

@@ -1,23 +1,24 @@
 template: base.mlog.jinja
 
 defaults:
-  BREAKPOINT_ADDRESS: '0x'
   UART_FIFO_CAPACITY: 253
+  DATA_ROM_ROWS: 0
 
 configs:
   riscv-arch-test:
     MEMORY_X_OFFSET: -9
-    MEMORY_Y_OFFSET: -57
+    MEMORY_Y_OFFSET: -61
     MEMORY_WIDTH: 64
-    ROM_ROWS: 18
+    PROGRAM_ROM_ROWS: 2
+    DATA_ROM_ROWS: 18
     RAM_ROWS: 21
-    ICACHE_ROWS: 2
+    ICACHE_ROWS: 4
 
   micro:
     MEMORY_X_OFFSET: -9
     MEMORY_Y_OFFSET: -32
     MEMORY_WIDTH: 16
-    ROM_ROWS: 2
+    PROGRAM_ROM_ROWS: 2
     RAM_ROWS: 12
     ICACHE_ROWS: 2
   
@@ -25,6 +26,6 @@ configs:
     MEMORY_X_OFFSET: -9
     MEMORY_Y_OFFSET: -19
     MEMORY_WIDTH: 32
-    ROM_ROWS: 1
+    PROGRAM_ROM_ROWS: 1
     RAM_ROWS: 1
     ICACHE_ROWS: 1

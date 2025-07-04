@@ -63,6 +63,8 @@ def quote(value: Any):
 @make_jinja_exceptions_suck_a_bit_less
 @register_filter
 def memory_size(size: int):
+    if size == 0:
+        return "0"
     if size % MEMORY_M == 0:
         return f"{size // MEMORY_M}M"
     if size % MEMORY_K == 0:

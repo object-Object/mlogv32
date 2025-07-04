@@ -2,8 +2,9 @@ OUTPUT_ARCH( "riscv" )
 ENTRY(rvtest_entry_point)
 
 MEMORY {
-    ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 18M
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 21M
+    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 2M
+    DROM (r)   : ORIGIN = 2M,         LENGTH = 18M
+    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 21M
 }
 
 __stext = 0;
@@ -26,7 +27,7 @@ SECTIONS
         *(.data.string);
         . = ALIGN(4);
         __edata = .;
-    } > RAM AT > ROM
+    } > RAM AT > DROM
 
     __sidata = LOADADDR(.data);
 

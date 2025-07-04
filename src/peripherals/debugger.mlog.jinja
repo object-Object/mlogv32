@@ -103,6 +103,8 @@ loop:
     read MEMORY_Y {{CPU}} "MEMORY_Y"
     read MEMORY_WIDTH {{CPU}} "MEMORY_WIDTH"
 
+    read PROGRAM_ROM_SIZE {{CPU}} "PROGRAM_ROM_SIZE"
+    read DATA_ROM_SIZE {{CPU}} "DATA_ROM_SIZE"
     read ROM_SIZE {{CPU}} "ROM_SIZE"
     read ICACHE_SIZE {{CPU}} "ICACHE_SIZE"
 
@@ -200,15 +202,32 @@ loop:
 
     # markers
 
-    print "ROM_START\n{0}"
+    print "PROGRAM_ROM_START\n{0}"
     set address {{ROM_START}}
     op add ret @counter 1
     jump mark_memory always
 
-    print "ROM_END\n{0}"
+    print "PROGRAM_ROM_END\n{0}"
+    op sub address PROGRAM_ROM_SIZE 1
+    op add ret @counter 1
+    jump mark_memory always
+
+    setmarker remove mark_memory_id
+    op add tmp mark_memory_id 1
+    setmarker remove tmp
+    jump loop__no_mark_data_rom lessThanEq DATA_ROM_SIZE 0
+
+    print "DATA_ROM_START\n{0}"
+    set address PROGRAM_ROM_SIZE
+    op add ret @counter 1
+    jump mark_memory always
+
+    print "DATA_ROM_END\n{0}"
     op sub address ROM_SIZE 1
     op add ret @counter 1
     jump mark_memory always
+
+loop__no_mark_data_rom:
 
     print "RAM_START\n{0}"
     set address {{RAM_START}}

@@ -22,7 +22,8 @@ The CPU is implemented using a variable-size build-order-independent subframe ar
 
 | Address      | Size         | Access Type | Name        |
 | ------------ | ------------ | ----------- | ----------- |
-| `0x00000000` | Configurable | R/X         | ROM         |
+| `0x00000000` | Configurable | R/X         | Program ROM |
+| Configurable | Configurable | R           | Data ROM    |
 | `0x80000000` | Configurable | R/W/X/A\*   | RAM         |
 | `0xf0000000` | `0x4`        | R/W         | `mtime`     |
 | `0xf0000004` | `0x4`        | R/W         | `mtimeh`    |
@@ -37,6 +38,8 @@ The CPU is implemented using a variable-size build-order-independent subframe ar
 \* Atomic instructions are only supported in RAM.
 
 Code begins executing at address `0x00000000` (ie. the start of ROM).
+
+ROM may optionally be partitioned into program ROM and data ROM. Data ROM begins immediately after program ROM, is not executable, and is not included in the instruction cache, allowing large amounts of data to be included in ROM while maintaining icache coverage of RAM. The division between program and data ROM must be aligned to 16K (ie. the size of one ROM proc). By default, data ROM has a size of 0.
 
 Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as MMIO.
 

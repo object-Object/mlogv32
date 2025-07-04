@@ -112,11 +112,13 @@ def build(
 
     - config_name (see src/config/configs.yaml)
 
-    - rom_rows,ram_rows[,icache_rows[,memory_width[,x_offset]]]
+    - program_rom_rows,ram_rows[,icache_rows[,memory_width[,x_offset[,data_rom_rows]]]]
 
-    - rom=rom_rows,ram=ram_rows[,icache=icache_rows[,width=memory_width[,x_offset=x_offset]]]
+    - rom=program_rom_rows,ram=ram_rows[,icache=icache_rows][,width=memory_width][,x_offset=x_offset][,drom=data_rom_rows]
 
     Defaults:
+
+    - drom: 0
 
     - icache: rom + ram
 
@@ -133,6 +135,8 @@ def build(
     - 4,4
 
     - rom=2,ram=12,icache=2,width=16
+
+    - rom=2,drom=8,ram=2,icache=4
     """
 
     if size:
@@ -493,7 +497,8 @@ Code size:
         base_y = config_link.y + config_args["MEMORY_Y_OFFSET"]
         for y in lenrange(
             0,
-            config_args["ROM_ROWS"]
+            config_args["PROGRAM_ROM_ROWS"]
+            + config_args["DATA_ROM_ROWS"]
             + config_args["RAM_ROWS"]
             + config_args["ICACHE_ROWS"],
         ):
@@ -501,7 +506,7 @@ Code size:
                 config_link.x + config_args["MEMORY_X_OFFSET"],
                 config_args["MEMORY_WIDTH"],
             ):
-                if y < config_args["ROM_ROWS"]:
+                if y < config_args["PROGRAM_ROM_ROWS"] + config_args["DATA_ROM_ROWS"]:
                     if i < len(data):
                         payload = "".join(chr(174 + c) for c in data[i : i + 16384])
                         i += 16384
@@ -567,32 +572,16 @@ Code size:
             schem.write_clipboard()
 
 
-def parse_config_str(config: str) -> dict[str, Any] | None:
-    """Format:
-
-    - `rom_rows,ram_rows[,icache_rows[,memory_width[,x_offset]]]`
-    - `rom=rom_rows,ram=ram_rows[,icache=icache_rows[,width=memory_width[,x_offset=x_offset]]]`
-
-    Defaults:
-
-    - icache: `rom + ram`
-    - width: `32`
-    - x_offset: `-9`
-
-    Examples:
-
-    - `1,1,1,32`
-    - `4,4`
-    - `rom=2,ram=12,icache=2,width=16`
-    """
-
+def parse_config_str(config: str) -> ConfigArgs | None:
     items = config.split(",")
     if not (2 <= len(items) <= 4):
         return None
 
     inputs = dict[str, int]()
 
-    for item, default_key in zip(items, ["rom", "ram", "icache", "width", "x_offset"]):
+    for item, default_key in zip(
+        items, ["rom", "ram", "icache", "width", "x_offset", "drom"]
+    ):
         if "=" not in item:
             key = default_key
             value = item
@@ -616,15 +605,18 @@ def parse_config_str(config: str) -> dict[str, Any] | None:
     if "x_offset" not in inputs:
         inputs["x_offset"] = -9
 
-    rows = inputs["rom"] + inputs["ram"] + inputs["icache"]
+    if "drom" not in inputs:
+        inputs["drom"] = 0
 
-    return dict(
-        BREAKPOINT_ADDRESS="0x",
+    rows = inputs["rom"] + inputs["drom"] + inputs["ram"] + inputs["icache"]
+
+    return ConfigArgs(
         UART_FIFO_CAPACITY=253,
         MEMORY_X_OFFSET=inputs["x_offset"],
         MEMORY_Y_OFFSET=-16 - rows,
         MEMORY_WIDTH=inputs["width"],
-        ROM_ROWS=inputs["rom"],
+        PROGRAM_ROM_ROWS=inputs["rom"],
+        DATA_ROM_ROWS=inputs["drom"],
         RAM_ROWS=inputs["ram"],
         ICACHE_ROWS=inputs["icache"],
     )
@@ -707,6 +699,18 @@ class ConfigsYaml(TypedDict):
     template: str
     defaults: dict[str, Any]
     configs: dict[str, dict[str, Any]]
+
+
+class ConfigArgs(TypedDict):
+    UART_FIFO_CAPACITY: int
+    DATA_ROM_ROWS: int
+
+    MEMORY_X_OFFSET: int
+    MEMORY_Y_OFFSET: int
+    MEMORY_WIDTH: int
+    PROGRAM_ROM_ROWS: int
+    RAM_ROWS: int
+    ICACHE_ROWS: int
 
 
 if __name__ == "__main__":

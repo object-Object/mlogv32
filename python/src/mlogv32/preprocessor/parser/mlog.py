@@ -65,27 +65,78 @@ def parse_mlog(text: str):
     return MlogTransformer().transform(tree)
 
 
-class AssertCounterError(AssertionError):
+class DirectiveError(AssertionError):
     def __init__(self, message: str, token: Token, *args: object) -> None:
         super().__init__(message, *args)
         self.token = token
 
 
+def expect_int(
+    n: Token,
+    predicate: Callable[[int], bool] | None = None,
+    description: str = "value",
+):
+    try:
+        result = int(n)
+    except ValueError as e:
+        raise DirectiveError(str(e), n) from e
+    if predicate is None or predicate(result):
+        return result
+    raise DirectiveError(f"Invalid {description}: {result}", n)
+
+
 def iter_labels(ast: Iterable[ASTNode]) -> Iterator[tuple[str, int]]:
     counter = 0
+    length_assertion = None
     for node in ast:
         match node:
             case Label(name=name):
                 yield (name, counter)
+
             case Statement():
                 counter += 1
+
+            case Directive(name="start_assert_length", args=[n]):
+                if length_assertion is not None:
+                    raise DirectiveError(
+                        "Nested length assertions are not supported", node.name
+                    )
+                # length, start counter, token for errors
+                length_assertion = (
+                    expect_int(n, lambda v: v >= 0, "length assertion"),
+                    counter,
+                    n,
+                )
+
+            case Directive(name="end_assert_length"):
+                if length_assertion is None:
+                    raise DirectiveError(
+                        "Found end_assert_length without matching start_assert_length",
+                        node.name,
+                    )
+                want_length, start_counter, _ = length_assertion
+                length_assertion = None
+                got_length = counter - start_counter
+                if want_length != got_length:
+                    raise DirectiveError(
+                        f"Expected @counter to be {start_counter + want_length} (length {want_length}), but got {counter} (length {got_length})",
+                        node.name,
+                    )
+
             case Directive(name="assert_counter", args=[n]):
-                if counter != int(n):
-                    raise AssertCounterError(
+                if counter != expect_int(n):
+                    raise DirectiveError(
                         f"Expected @counter to be {n}, but got {counter}", node.name
                     )
+
             case Directive():
                 pass
+
+    if length_assertion is not None:
+        _, _, token = length_assertion
+        raise DirectiveError(
+            "Found start_assert_length without matching end_assert_length", token
+        )
 
 
 def check_unsaved_variables(ast: Iterable[ASTNode]):
@@ -119,7 +170,7 @@ def check_unsaved_variables(ast: Iterable[ASTNode]):
                 pass
             case Statement(name="set", args=[var, *_]):
                 pass
-            case Directive(name="begin_fetch"):
+            case Directive(name="start_fetch"):
                 state = "fetch"
                 continue
             case Directive(name="end_fetch"):

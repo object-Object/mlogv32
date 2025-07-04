@@ -25,7 +25,7 @@ from .extensions import (
 from .filters import FILTERS
 from .models import BuildConfig
 from .parser import (
-    AssertCounterError,
+    DirectiveError,
     Statement,
     check_unsaved_variables,
     iter_labels,
@@ -241,7 +241,7 @@ Code size:
 
     try:
         worker_labels = dict(iter_labels(worker_ast))
-    except AssertCounterError as e:
+    except DirectiveError as e:
         e.add_note(f"{worker_output}:{e.token.line}")
         raise
 

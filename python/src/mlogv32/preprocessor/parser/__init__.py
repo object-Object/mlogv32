@@ -1,5 +1,5 @@
 __all__ = [
-    "AssertCounterError",
+    "DirectiveError",
     "Directive",
     "Label",
     "Statement",
@@ -9,8 +9,8 @@ __all__ = [
 ]
 
 from .mlog import (
-    AssertCounterError,
     Directive,
+    DirectiveError,
     Label,
     Statement,
     check_unsaved_variables,

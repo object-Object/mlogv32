@@ -58,6 +58,8 @@
     read {{local_variable()}} prev_proc "{{ local_variable(10) }}"
 #% endmacro
 
+# {% macro start_assert_length(n) %}{{ n }}{{ '\n#directive start_assert_length ' }}{{ n }}{% endmacro %}
+
 #%# hack: use extends so we don't need to individually import all of the constants
 #% extends 'constants.jinja'
 #% block contents
@@ -127,7 +129,7 @@ reset:
     # fetch saved variables from the previous worker
     read prev_proc {{CONTROLLER}} "prev_proc"
 
-#directive begin_fetch
+#directive start_fetch
 
 #{ fetch_variables()
 
@@ -244,7 +246,7 @@ main__slow_instruction_fetch:
     set address null
     
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
-    op add ret3 @counter 10
+    op add ret3 @counter {{# start_assert_length(10) }}
     jump decode always
 
 main__access_icache:
@@ -266,6 +268,7 @@ main__read_icache:
     read icache_var {{INCR}} icache_var
     op and imm icache_payload 0xffffffff
     op shr op_id icache_payload 47
+#directive end_assert_length
     # ret3 jumps here for the slow path
     # we can't jump any later because decode doesn't fully isolate the register fields
 
@@ -389,7 +392,6 @@ trap:
 
     # we only support direct mode, so set next_pc to mtvec
     read next_pc {{CSRS}} "{{ 'mtvec'|csr }}"
-    set icache_var null
 
     # medeleg and mideleg are not implemented, so always trap into M-mode
     set privilege_mode 0b11
@@ -397,11 +399,13 @@ trap:
     # update effective_privilege_mode
     # tail call into end_instruction_trap so we don't update instret
     set ret {{# labels.end_instruction_trap }}
-    # continue into get_effective_privilege_mode
+    # continue into get_effective_privilege_mode_and_invalidate_icache
 
 # update effective_privilege_mode
 # we don't need to check the current privilege mode here because MRET/SRET clear MPRV if leaving M-mode
 # this must stay directly after trap
+get_effective_privilege_mode_and_invalidate_icache:
+    set icache_var null
 get_effective_privilege_mode:
     # NOTE: avoid using locals in this function
     # mstatus.MPRV
@@ -687,38 +691,6 @@ translate_virtual_address__page_fault:
     op max mcause mcause 12
     jump trap always
 
-# in-place variable length sign extension function for rd
-# if length is known statically, a sequence of xor-sub-and can be used instead
-# ends by jumping to end_instruction_with_rd
-# rd, length ->
-extend_sign_rd:
-#% do reset_locals()
-    # https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
-    op sub $mask length 1
-    op shl $mask 1 $mask
-
-    op xor rd rd $mask
-    op sub rd rd $mask
-    op and rd rd 0xffffffff # convert signed to unsigned
-
-    jump end_instruction_with_rd always
-
-# converts a pair of two's complement unsigned values to signed in-place
-# this converts two values at once because most usages of it need to convert two values
-# also, the values are assumed to be in rs1 and rs2
-# rs1, rs2 -> rs1, rs2
-unsigned_to_signed_rs1_rs2:
-    # value < 2^31 ? value : value - 2^32
-    jump unsigned_to_signed__done_1 lessThan rs1 0x80000000 # 2^31
-    op sub rs1 rs1 0x100000000 # 2^32
-unsigned_to_signed__done_1:
-
-    jump unsigned_to_signed__done_2 lessThan rs2 0x80000000
-    op sub rs2 rs2 0x100000000
-unsigned_to_signed__done_2:
-
-    set @counter ret
-
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 # ret: ret2
@@ -899,11 +871,13 @@ load_mmio_word:
     jump trap greaterThanEq $$offset 0x90
 
     # if we're in UART range, look it up
-    op add ret2 @counter 2 # skip privilege check if accessing uart
+    # skip privilege check if accessing uart
+    op add ret2 @counter {{# start_assert_length(2) }}
     jump access_uart greaterThanEq $$offset 0x10
     # otherwise, we're in machine timer range, so trap for PMA if not in M-mode
     # MMIO is not executable, so always use the effective privilege mode here
     jump trap lessThan effective_privilege_mode 0b11
+#directive end_assert_length
 
     # MCR, MSR, and SPR are all hardwired to zero
     set result 0
@@ -1376,8 +1350,7 @@ LUI:
 AUIPC:
     # U-type: imm, rd_id
     op add rd imm pc
-    op mod rd rd 0x100000000 # trunc 32
-    jump end_instruction_with_rd always
+    jump end_instruction_with_truncated_rd always
 
 JAL:
     # J-type: imm, rd_id
@@ -1401,8 +1374,26 @@ BNE:
 
 BLT:
     # B-type: rs1, rs2, imm
-    op add ret @counter 1
-    jump unsigned_to_signed_rs1_rs2 always
+    op add ret @counter {{# start_assert_length(5) }}
+    # implicit jump to unsigned_to_signed_rs1_rs2
+
+# converts a pair of two's complement unsigned values to signed in-place
+# this converts two values at once because most usages of it need to convert two values
+# also, the values are assumed to be in rs1 and rs2
+# rs1, rs2 -> rs1, rs2
+unsigned_to_signed_rs1_rs2:
+    # value < 2^31 ? value : value - 2^32
+    jump unsigned_to_signed__done_1 lessThan rs1 0x80000000 # 2^31
+    op sub rs1 rs1 0x100000000 # 2^32
+unsigned_to_signed__done_1:
+
+    jump unsigned_to_signed__done_2 lessThan rs2 0x80000000
+    op sub rs2 rs2 0x100000000
+unsigned_to_signed__done_2:
+
+    set @counter ret
+    
+#directive end_assert_length
     # continue into BLTU
 
 BLTU:
@@ -1685,21 +1676,10 @@ LR.W:
 
     # check address and alignment
     set mcause 4 # load address misaligned
-    op add ret4 @counter 1
-    jump atomic_validate_address always
-
-    # load value
-    op add ret @counter 1
-    jump load_ram_word_unchecked always
-    set rd result
-
-    # register reservation set for physical address
-    # TODO: implement Za64rs?
-    write address {{CONTROLLER}} "reservation_set"
-
-    jump end_instruction_with_rd always
-
-# ret: ret4
+    op add ret4 @counter {{# start_assert_length(10) }}
+    # implicit jump to atomic_validate_address
+    
+    # ret: ret4
 atomic_validate_address:
 #% do reset_locals()
     set address rs1
@@ -1717,6 +1697,18 @@ atomic_validate_address:
     jump trap greaterThanEq address RAM_END
 
     set @counter ret4
+#directive end_assert_length
+
+    # load value
+    op add ret @counter 1
+    jump load_ram_word_unchecked always
+    set rd result
+
+    # register reservation set for physical address
+    # TODO: implement Za64rs?
+    write address {{CONTROLLER}} "reservation_set"
+
+    jump end_instruction_with_rd always
 
 SC.W:
     # R-type: rs1, rs2, rd_id
@@ -1860,8 +1852,7 @@ ADD:
 ADDI:
     # I-type: rs1, imm, rd_id
     op add rd rs1 imm
-    op mod rd rd 0x100000000 # 2^32 (trunc 32)
-    jump end_instruction_with_rd always
+    jump end_instruction_with_truncated_rd always
 
 SLTI:
     # I-type: rs1, imm, rd_id
@@ -1951,10 +1942,33 @@ SRAI:
     op shr rd rs1 imm
 
     op sub length 32 imm
+    # continue into extend_sign_rd
 
-    jump extend_sign_rd always
+# in-place variable length sign extension function for rd
+# if length is known statically, a sequence of xor-sub-and can be used instead
+# ends by jumping to end_instruction_with_rd
+# rd, length ->
+extend_sign_rd:
+#% do reset_locals()
+    # https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
+    op sub $mask length 1
+    op shl $mask 1 $mask
+
+    op xor rd rd $mask
+    op sub rd rd $mask
+    # continue into end_instruction_with_truncated_rd to convert signed to unsigned
+
+end_instruction_with_truncated_rd:
+    op and rd rd 0xffffffff
+    jump end_instruction_with_rd always
 
 #% set mul_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low", "$$rs1_negative", "$$rs2_negative"]
+
+MUL:
+    # R-type: rs1, rs2, rd_id
+    # "return" to the rest of MUL, and implicitly jump to mul_decomp
+    # this is cursed. but it saves an instruction
+    op add ret @counter {{# start_assert_length(9) }}
 
 mul_decomp:
 #% do reset_locals()
@@ -1974,27 +1988,21 @@ mul_decomp:
 
     set @counter ret
 
-MUL:
-    # R-type: rs1, rs2, rd_id
-#% do reset_locals()
-#% do declare_locals(mul_locals)
-    op add ret @counter 1
-    jump mul_decomp always
-
+    # MUL ret jumps here
+#directive end_assert_length
     op add rd $$high_low $$low_high
     op shl rd rd 16
     op add rd rd $$low_low
 
-    op and rd rd 0xffffffff
-
-    jump end_instruction_with_rd always
+    jump end_instruction_with_truncated_rd always
 
 MULH:
     # R-type: rs1, rs2, rd_id
 #% do reset_locals()
 #% do declare_locals(mul_locals)
-    op greaterThanEq $$rs1_negative rs1 0x80000000 # check if the sign bit is set
-    op greaterThanEq $$rs2_negative rs2 0x80000000
+    op greaterThanEq $$rs2_negative rs2 0x80000000 # check if the sign bit is set
+MULH_mulhsu:
+    op greaterThanEq $$rs1_negative rs1 0x80000000
     # continue into mulh_s_u
 
 mulh_s_u:
@@ -2019,17 +2027,14 @@ mulh_s_u__rs1_positive:
     op sub rd rd rs1
 mulh_s_u__rs2_positive:
 
-    op and rd rd 0xffffffff
-
-    jump end_instruction_with_rd always
+    jump end_instruction_with_truncated_rd always
 
 MULHSU:
     # R-type: rs1, rs2, rd_id
 #% do reset_locals()
 #% do declare_locals(mul_locals)
-    op greaterThanEq $$rs1_negative rs1 0x80000000
     set $$rs2_negative false
-    jump mulh_s_u always
+    jump MULH_mulhsu always
 
 MULHU:
     # R-type: rs1, rs2, rd_id
@@ -2055,9 +2060,8 @@ DIVU:
     # use div instead of idiv and then cast to long so that it rounds towards zero
     # https://stackoverflow.com/a/8387377
     op div rd rs1 rs2
-    op and rd rd 0xffffffff
 
-    jump end_instruction_with_rd always
+    jump end_instruction_with_truncated_rd always
 
 REM:
     # R-type: rs1, rs2, rd_id
@@ -2074,9 +2078,9 @@ REMU:
     jump end_instruction_with_rd equal rs2 0
 
     op mod rd rs1 rs2
-    op and rd rd 0xffffffff # only necessary for signed
 
-    jump end_instruction_with_rd always
+    # truncation is only necessary for signed
+    jump end_instruction_with_truncated_rd always
 
 FENCE:
     # I-type: rs1, imm, rd_id
@@ -2109,14 +2113,20 @@ PRIV:
     # privilege mode changes should be relatively rare, so it should be fine for them to be a bit slower
 #% do reset_locals()
 
+    # unprivileged
     jump ECALL  equal imm 0b000000000000
     jump EBREAK equal imm 0b000000000001
-    jump SRET   equal imm 0b000100000010
-    jump MRET   equal imm 0b001100000010
     jump WFI    equal imm 0b000100000101
 
+    # S-mode
+    jump ILLEGAL_OP lessThan privilege_mode 0b01
+    jump SRET   equal imm 0b000100000010
     op shr $funct7 imm 5
     jump SFENCE.VMA equal $funct7 0b0001001
+
+    # M-mode
+    jump ILLEGAL_OP lessThan privilege_mode 0b11
+    jump MRET   equal imm 0b001100000010
 
     jump ILLEGAL_OP always
 
@@ -2137,13 +2147,11 @@ EBREAK:
 SRET:
 #% do reset_locals()
 #% do declare_locals(xret_locals)
-    jump ILLEGAL_OP lessThan privilege_mode 0b01
-
     # if executing in S-mode, raise an illegal instruction exception if TSR=1
-    jump SRET__tsr_m_mode notEqual privilege_mode 0b01
+    jump SRET__no_tsr notEqual privilege_mode 0b01
     op and $mstatus.tsr csr_mstatus 0b10000000000000000000000
     jump ILLEGAL_OP notEqual $mstatus.tsr 0
-SRET__tsr_m_mode:
+SRET__no_tsr:
 
     # set privilege_mode to mstatus.SPP
     op and privilege_mode csr_mstatus 0b100000000
@@ -2162,8 +2170,6 @@ SRET__tsr_m_mode:
 MRET:
 #% do reset_locals()
 #% do declare_locals(xret_locals)
-    jump ILLEGAL_OP lessThan privilege_mode 0b11
-
     # set privilege_mode to mstatus.MPP
     op and privilege_mode csr_mstatus 0b1100000000000
     op shr privilege_mode privilege_mode 11
@@ -2177,8 +2183,6 @@ MRET:
     set $$xpie_mask 0b10000000
 
 xRET:
-    set icache_var null
-
     # set mstatus.xIE to mstatus.xPIE
     op and $mstatus.xie csr_mstatus $$xpie_mask
     op shr $mstatus.xie $mstatus.xie 4
@@ -2192,11 +2196,11 @@ xRET:
     op and csr_mstatus csr_mstatus 0b11111111111111011111111111111111
 xRET__mprv_m_mode:
 
-    set rd_id 0
+    op or csr_mip csr_mip 0b01000000000000000000000000000000 # set interrupt_flags.fire
 
     # update effective_privilege_mode, and tail call
-    set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
-    jump get_effective_privilege_mode always
+    set ret {{# labels.end_instruction }}
+    jump get_effective_privilege_mode_and_invalidate_icache always
 
 SFENCE.VMA:
 #% do reset_locals()
@@ -2300,7 +2304,7 @@ modify_csr:
 
     # IMPORTANT: the values of modify_csr_op and modify_csr_write need to be updated if anything after this line is changed
     # -----------------
-    op add $$modify_csr_write @counter 12
+    op add $$modify_csr_write @counter {{# start_assert_length(12) }}
     op add $$modify_csr_op @counter $$modify_csr_op
     jump modify_csr__read always
 
@@ -2335,6 +2339,7 @@ modify_csr__always_write:
 
 modify_csr__write:
     # if modify_csr_write still points here, we should write the modified value back to {{CSRS}}
+#directive end_assert_length
     write $$new_value {{CSRS}} variable
 
     jump end_instruction_with_rd always
@@ -2359,15 +2364,6 @@ modify_csr__read__default:
     # none of the CSRs matched, so fallback to {{CSRS}}
     set @counter $$modify_csr_op
 
-modify_csr__read__supervisor:
-    # supervisor-level CSRs
-    jump modify_csr__sstatus equal imm 0x100 # sstatus
-    jump modify_csr__sie equal imm 0x104 # sie
-    jump modify_csr__sip equal imm 0x144 # sip
-    jump modify_csr__satp equal imm 0x180 # satp
-
-    jump modify_csr__read__privileged always
-
 modify_csr__read__machine:
     # machine-level CSRs
     jump modify_csr__mstatus equal imm 0x300 # mstatus
@@ -2385,6 +2381,18 @@ modify_csr__read__machine:
     # the spec seems to imply these can be read-only zero if not implemented, but sail throws illegal op
     jump modify_csr__read__privileged lessThan imm 0x3a0 # pmpcfg0
     jump ILLEGAL_OP lessThanEq imm 0x3ef # pmpaddr63
+
+    # there are only four supervisor-level CSRs being checked
+    # so if no machine-mode CSR matches, we just continue through to get to the common privileged CSRs
+    # this takes a bit longer at runtime for those cases, but saves one instruction of code size
+    # thanks to the PMP range check, it's also pretty unlikely that we'll fall into that bucket
+
+modify_csr__read__supervisor:
+    # supervisor-level CSRs
+    jump modify_csr__sstatus equal imm 0x100 # sstatus
+    jump modify_csr__sie equal imm 0x104 # sie
+    jump modify_csr__sip equal imm 0x144 # sip
+    jump modify_csr__satp equal imm 0x180 # satp
 
 modify_csr__read__privileged:
     # CSRs that use the same handler for supervisor- and machine-level
@@ -2638,9 +2646,9 @@ modify_csr__minstreth:
     op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
-    # if minstret is going to overflow on this increment, minstreth should be new_value - 1 so that it has the expected value for the next instruction
-    op equal $is_minstret_overflowing csr_minstret 0xffffffff
-    op sub csr_minstreth $$new_value $is_minstret_overflowing
+    # a value written to instret by one instruction should be the value read by the following instruction
+    op sub csr_minstret csr_minstret 1
+    set csr_minstreth $$new_value
     jump end_instruction_with_rd always
 
 MLOGSYS:
@@ -2672,7 +2680,6 @@ MLOGSYS__decode_loop:
     op add address address 4
     jump MLOGSYS__decode_loop lessThan address __etext
 
-    # this is also used by PAUSE/WFI
     jump end_instruction always
 
 #% endblock contents

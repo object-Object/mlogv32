@@ -6,7 +6,7 @@ start: (line? _NEWLINE)*
 
 statement: TOKEN (TOKEN | LABEL | STRING)*
 
-directive: _DIRECTIVE /assert_counter|(begin|end)_fetch|(push|pop)_saved/ TOKEN*
+directive: _DIRECTIVE /assert_counter|(start|end)_(fetch|assert_length)|(push|pop)_saved/ TOKEN*
 
 STRING.2: /"[^\n]*"/
 

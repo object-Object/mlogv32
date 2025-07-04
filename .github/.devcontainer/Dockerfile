@@ -35,13 +35,14 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
     && mkdir /commandhistory \
     && touch /commandhistory/.bash_history \
     && chown -R $USERNAME /commandhistory \
-    && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
+    && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc" \
     && sed -i '^/__bash_prompt$/d' "/home/$USERNAME/.bashrc"
 # ^ fix weird issues with shell not handling line wrapping
 
 # buildroot dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends cpio bc
+    && apt-get install -y --no-install-recommends cpio bc \
+    && rm -rf /var/lib/apt/lists/*
 
 # avoid permission issues with cargo if cargo install runs as root
 USER ${USERNAME}

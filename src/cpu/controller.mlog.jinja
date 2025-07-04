@@ -96,16 +96,18 @@ disable_ram:
 init_incr:
     set variable null
 
+    op add ret @counter 1
+    jump lookup_variable lessThan address {{RAM_PROC_BYTES}}
+
+    write variable {{INCR}} prev_variable
+
     # if the current variable is the start of a new page, write null to the previous variable
     # this ensures the processor doesn't cross into another page while executing cached instructions
     op mod page_offset address 4096
-    jump init_incr__null equal page_offset 0
+    jump init_incr__not_null notEqual page_offset 0
+    write null {{INCR}} prev_variable
+init_incr__not_null:
 
-    op add ret @counter 1
-    jump lookup_variable lessThan address {{RAM_PROC_BYTES}}
-init_incr__null:
-
-    write variable {{INCR}} prev_variable
     set prev_variable variable
 
     op add address address 4

@@ -979,12 +979,6 @@ decode:
     # opcode
     op and $opcode value 0b1111111
 
-    # also bail out if we're in the big group of illegal instructions between OP-32 and 48b, or at the end after OP-VE
-    jump decode__ok lessThan $opcode 0b0111011 # OP-32
-    jump decode_illegal_instruction lessThanEq $opcode 0b1011111 # 48b
-    jump decode_illegal_instruction greaterThanEq $opcode 0b1110111 # OP-VE
-decode__ok:
-
     # decode and pack registers into the payload
     # we do it in this order because instruction_24_15 is used for I-type and instruction_11_7 is used for S-type
     op and $$instruction_24_15 value 0b1111111111000000000000000
@@ -1438,9 +1432,38 @@ unconditional_jump:
     # write pc+4 to rd
     op add rd pc 4
 
-    # jump to target
-    set icache_var null
+    # if we're in an icache-covered page, and the target address is within the same page
+    # then just do a variable lookup instead of forcing a full cache miss
 
+    # we assume __etext, PROGRAM_ROM_SIZE, and ICACHE_END are all page-aligned
+    # so this should be adequate to ensure we're in the same page and both addresses are cached
+    jump end_instruction_with_rd equal icache_var null
+
+    op and $pc_page pc 0xfffff000
+    op and $next_pc_page next_pc 0xfffff000
+    jump end_instruction_with_rd_and_invalidate_icache notEqual $pc_page $next_pc_page
+
+    # now we know we're in the same page, but we need to figure out which of the four pages within the RAM proc it is
+
+    read _address icache_var 0
+    read _address "{{ VARIABLE_0_TO_PAGE_OFFSET }}" _address
+    op and _address _address 0b11
+    op mul _address _address 4096
+
+    # and finally we can add the page offset and look up the variable
+
+    op and $pgoff next_pc 0xfff
+    op add _address _address $pgoff
+    op idiv _address _address 4
+
+    op add ret2 @counter 1
+    jump lookup_variable always
+
+    set icache_var variable
+    jump end_instruction_with_rd always
+
+end_instruction_with_rd_and_invalidate_icache:
+    set icache_var null
     jump end_instruction_with_rd always
 
 LB:
@@ -1744,12 +1767,33 @@ SC.W:
     set value rs2
     jump store_ram_word_unchecked always
 
+AMOADD.W:
 AMOSWAP.W:
+AMOXOR.W:
+AMOOR.W:
+AMOAND.W:
+AMOMIN.W:
+AMOMINU.W:
+AMOMAX.W:
+AMOMAXU.W:
     # R-type: rs1, rs2, rd_id
-    set nonlocal1 0 # swap
 
-# nonlocal1 = amo_op
-amo:
+    # instruction | op_id | amo_op
+    # AMOADD.W    | -47   | 0
+    # AMOSWAP.W   | -46   | 2
+    # AMOXOR.W    | -43   | 4
+    # AMOOR.W     | -42   | 6
+    # AMOAND.W    | -41   | 8
+    # AMOMIN.W    | -40   | 10
+    # AMOMAX.W    | -39   | 14
+    # AMOMINU.W   | -38   | 12
+    # AMOMAXU.W   | -37   | 16
+
+    # nonlocal1 = amo_op
+    op add nonlocal1 op_id 47
+    read nonlocal1 "@B__DFHJNLP" nonlocal1
+    op sub nonlocal1 nonlocal1 64
+
     # check address and alignment
     set mcause 6 # store/AMO address misaligned
     op add ret4 @counter 1
@@ -1766,20 +1810,20 @@ amo:
     set rs1 result # hack
     op add @counter @counter nonlocal1
 
-    # swap
-    set result rs2
-    jump amo__done_modify always
     # add
     op add result result rs2
     jump amo__done_modify always
-    # and
-    op and result result rs2
+    # swap
+    set result rs2
+    jump amo__done_modify always
+    # xor
+    op xor result result rs2
     jump amo__done_modify always
     # or
     op or result result rs2
     jump amo__done_modify always
-    # xor
-    op xor result result rs2
+    # and
+    op and result result rs2
     jump amo__done_modify always
     # min
     op add ret @counter 1
@@ -1799,46 +1843,6 @@ amo__done_modify:
     # write
     op and value result 0xffffffff
     jump store_ram_word_unchecked always
-
-AMOADD.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 2 # add
-    jump amo always
-
-AMOAND.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 4 # and
-    jump amo always
-
-AMOOR.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 6 # or
-    jump amo always
-
-AMOXOR.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 8 # xor
-    jump amo always
-
-AMOMIN.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 10 # min
-    jump amo always
-
-AMOMINU.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 12 # minu
-    jump amo always
-
-AMOMAX.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 14 # max
-    jump amo always
-
-AMOMAXU.W:
-    # R-type: rs1, rs2, rd_id
-    set nonlocal1 16 # maxu
-    jump amo always
 
 # most of the register-register instructions are identical to their register-immediate counterparts
 # so just set imm to rs2 and reuse the existing logic, placing them directly before to save space
@@ -2604,9 +2608,7 @@ modify_csr__satp__ok:
 
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: this may not be strictly required by the spec
-    set icache_var null
-
-    jump end_instruction_with_rd always
+    jump end_instruction_with_rd_and_invalidate_icache always
 
 modify_csr__mcycle:
 #% do reset_locals(modify_csr_start)
@@ -2666,6 +2668,11 @@ MLOGSYS:
     # init icache
     # require M-mode so that we don't need to do address translation
     jump ILLEGAL_OP lessThan privilege_mode 0b11
+
+    # round up to the nearest page boundary
+    op div rs1 rs1 4096
+    op ceil rs1 rs1
+    op mul rs1 rs1 4096
 
     op min __etext rs1 PROGRAM_ROM_SIZE
     op min __etext __etext ICACHE_SIZE

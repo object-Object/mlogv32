@@ -16,6 +16,7 @@
 #% set RAM_SIZE = RAM_ROWS * rows_to_bytes
 #% set ICACHE_SIZE = ICACHE_ROWS * rows_to_bytes
 
+    # these values MUST be aligned to 4096 bytes (and ideally 16384)
     set PROGRAM_ROM_SIZE {{# '%#0x'|format(PROGRAM_ROM_SIZE) }}  # Program ROM size in bytes ({{ PROGRAM_ROM_SIZE|memory_size }})
     set DATA_ROM_SIZE    {{# '%#0x'|format(DATA_ROM_SIZE) }}  # Data ROM size in bytes ({{ DATA_ROM_SIZE|memory_size }})
     set RAM_SIZE         {{# '%#0x'|format(RAM_SIZE) }}  # RAM size in bytes ({{ RAM_SIZE|memory_size }})

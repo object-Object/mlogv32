@@ -39,7 +39,7 @@ def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable
 @make_jinja_exceptions_suck_a_bit_less
 @register_filter
 def ram_var(index: int):
-    return VariableFormat.min.get_variable(index)
+    return VariableFormat.mlogv32.get_variable(index)
 
 
 @make_jinja_exceptions_suck_a_bit_less

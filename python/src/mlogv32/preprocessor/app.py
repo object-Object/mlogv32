@@ -22,7 +22,7 @@ from .extensions import (
     LocalVariables,
     LocalVariablesEnv,
 )
-from .filters import FILTERS
+from .filters import FILTERS, ram_var
 from .models import BuildConfig
 from .parser import (
     DirectiveError,
@@ -223,11 +223,28 @@ def build(
 
     # preprocess and check worker
 
+    variable_0_to_page_offset = list[str]()
+    page_0 = ram_var(0)
+    page_1 = ram_var(0x1000 // 4)
+    page_2 = ram_var(0x2000 // 4)
+    page_3 = ram_var(0x3000 // 4)
+    for i in range(128):
+        var = chr(i) + page_0[1]
+        if i < 32 or var < page_1:
+            value = "0"
+        elif var < page_2:
+            value = "1"
+        elif var < page_3:
+            value = "2"
+        else:
+            value = "3"
+        variable_0_to_page_offset.append(value)
+
     worker_code, worker_env, worker_output = _render_template(
         config.templates.worker,
         [LocalVariables],
         force=True,
-        instructions=config.instructions,
+        VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
     )
 
     i = LocalVariablesEnv.of(worker_env).largest_local_variable
@@ -257,6 +274,7 @@ Code size:
         force=True,
         instructions=config.instructions,
         labels=worker_labels,
+        VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
     )
 
     # preprocess other code snippets

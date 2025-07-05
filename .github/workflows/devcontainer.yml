@@ -16,6 +16,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Remove unnecessary files
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+    
       - uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry

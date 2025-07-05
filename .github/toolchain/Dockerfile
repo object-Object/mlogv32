@@ -15,10 +15,8 @@ ARG MAKE_ARGS
 RUN test -n "${ARCH}"
 RUN test -n "${ABI}"
 
-# this commit is the last before gcc was bumped to 15
 RUN git clone https://github.com/riscv/riscv-gnu-toolchain \
     && cd riscv-gnu-toolchain \
-    && git checkout 23863c2ca74e6c050f0c97e7af61f5f1776aadd1 \
     && ./configure --prefix=/opt/riscv --with-arch=${ARCH} --with-abi=${ABI} \
     && make ${MAKE_ARGS}
 

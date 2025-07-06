@@ -4,6 +4,8 @@
 #% set RAM_PROC_VARS = 4096
 #% set ROM_START = '0x00000000'
 #% set RAM_START = '0x80000000'
+#% set MMIO_START = '0xf0000000'
+#% set PAGESIZE = 2**12
 
 #% set CPU = 'processor17'
 #% set CSRS = 'processor18'
@@ -28,7 +30,7 @@ reset:
     setrate 5000
     set MARKER_START_ID 0
 
-    op add i MARKER_START_ID 6
+    op add i MARKER_START_ID 8
 reset_markers:
     op sub i i 1
     setmarker remove i
@@ -72,7 +74,7 @@ reset__find_lookup_start:
     print "x14 (a4)    =\n"
     print "x15 (a5)    =\n"
 
-    #{ print(0, 0)
+    #{ print(21, 0)
 
     print "x16 (a6)  =\n"
     print "x17 (a7)  =\n"
@@ -91,7 +93,7 @@ reset__find_lookup_start:
     print "x30 (t5)  =\n"
     print "x31 (t6)  =\n"
 
-    #{ print(35, 0)
+    #{ print(48, 0)
 
 loop:
     sensor enabled {{SWITCH}} @enabled
@@ -113,39 +115,6 @@ loop:
 
     set ICACHE_START RAM_END
     op add ICACHE_END ICACHE_START ICACHE_SIZE
-
-    read x0 {{REGISTERS}} 0
-    read x1 {{REGISTERS}} 1
-    read x2 {{REGISTERS}} 2
-    read x3 {{REGISTERS}} 3
-    read x4 {{REGISTERS}} 4
-    read x5 {{REGISTERS}} 5
-    read x6 {{REGISTERS}} 6
-    read x7 {{REGISTERS}} 7
-    read x8 {{REGISTERS}} 8
-    read x9 {{REGISTERS}} 9
-    read x10 {{REGISTERS}} 10
-    read x11 {{REGISTERS}} 11
-    read x12 {{REGISTERS}} 12
-    read x13 {{REGISTERS}} 13
-    read x14 {{REGISTERS}} 14
-    read x15 {{REGISTERS}} 15
-    read x16 {{REGISTERS}} 16
-    read x17 {{REGISTERS}} 17
-    read x18 {{REGISTERS}} 18
-    read x19 {{REGISTERS}} 19
-    read x20 {{REGISTERS}} 20
-    read x21 {{REGISTERS}} 21
-    read x22 {{REGISTERS}} 22
-    read x23 {{REGISTERS}} 23
-    read x24 {{REGISTERS}} 24
-    read x25 {{REGISTERS}} 25
-    read x26 {{REGISTERS}} 26
-    read x27 {{REGISTERS}} 27
-    read x28 {{REGISTERS}} 28
-    read x29 {{REGISTERS}} 29
-    read x30 {{REGISTERS}} 30
-    read x31 {{REGISTERS}} 31
     
     read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
     read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
@@ -174,12 +143,6 @@ loop:
     read scause {{CSRS}} "{{ 'scause'|csr }}"
     read stval {{CSRS}} "{{ 'stval'|csr }}"
 
-    read mscratch {{CSRS}} "{{ 'mscratch'|csr }}"
-    read mtvec {{CSRS}} "{{ 'mtvec'|csr }}"
-    read mepc {{CSRS}} "{{ 'mepc'|csr }}"
-    read mcause {{CSRS}} "{{ 'mcause'|csr }}"
-    read mtval {{CSRS}} "{{ 'mtval'|csr }}"
-
     read mstatus {{CPU}} "csr_mstatus"
     read mip {{CPU}} "csr_mip"
     read mie {{CPU}} "csr_mie"
@@ -199,6 +162,27 @@ loop:
 
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
+
+    set address pc
+    set mcause 1
+    set mtval pc
+    set is_address_translation true
+    op add ret3 @counter 1
+    jump translate_virtual_address lessThan privilege_mode 0b11
+    set physical_address address
+
+    set result null
+    set is_address_translation false
+    op add ret @counter 1
+    jump load_word always
+    set instruction result
+
+    # read AFTER translate_virtual_address
+    read mscratch {{CSRS}} "{{ 'mscratch'|csr }}"
+    read mtvec {{CSRS}} "{{ 'mtvec'|csr }}"
+    read mepc {{CSRS}} "{{ 'mepc'|csr }}"
+    read mcause {{CSRS}} "{{ 'mcause'|csr }}"
+    read mtval {{CSRS}} "{{ 'mtval'|csr }}"
 
     # markers
 
@@ -258,109 +242,268 @@ loop__no_mark_icache:
     # clear
 
     draw color 0 0 0 255
-    #{ rect(14, 0, 10, 16)
-    #{ rect(47, 0, 10, 16)
+    #{ rect(35, 0, 10, 16)
+    #{ rect(60, 0, 10, 16)
     #{ rect(0, 17, 73, 22)
     draw color 255 255 255 255
 
-    # column 1
+    # ---- level 1 ----
+#% set level_1_row = 0
 
-    print "{0}\n"
-    set n x0
-    op add ret @counter 1
-    jump format_hex always
+    # -- column 1 --
 
-    print "{0}\n"
-    set n x1
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x2
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x3
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x4
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x5
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x6
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x7
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x8
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x9
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x10
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x11
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x12
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x13
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x14
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x15
-    op add ret @counter 1
-    jump format_hex always
-
-    #{ print(14, 0)
-
-    print "pc    = {0}\n"
+    print "pc  = {0}\n"
     set n pc
     op add ret @counter 1
     jump format_hex always
 
-    print "op_id = {0}\n"
-    print "imm   = {1}\n"
-    print "rs1   = {2}\n"
-    print "rs2   = {3}\n"
-    print "rd    = {4}\n\n"
+    print "op  = {0}\n"
+    print "imm = {1}\n"
+    print "rs1 = {2}\n"
+    print "rs2 = {3}\n"
+    print "rd  = {4}\n\n"
     op add ret2 @counter 1
     jump format_op_id always
 
-    #{ print(0, 17)
+    print "satp  = {0}\n"
+    set n satp
+    op add ret @counter 1
+    jump format_hex always
+
+    print "addr1 = {0}\n"
+    set n addr1
+    op add ret @counter 1
+    jump format_hex_or_empty always
+
+    print "pte1  = {0}\n"
+    set n pte1
+    op add ret @counter 1
+    jump format_hex_or_empty always
+
+    print "addr0 = {0}\n"
+    set n addr0
+    op add ret @counter 1
+    jump format_hex_or_empty always
+
+    print "pte0  = {0}\n"
+    set n pte0
+    op add ret @counter 1
+    jump format_hex_or_empty always
+
+    print "addr  = {0}\n"
+    set n physical_address
+    op add ret @counter 1
+    jump format_hex always
+
+    print "val   = {0}\n"
+    set n instruction
+    op add ret @counter 1
+    jump format_hex always
+
+    #{ print(0, level_1_row)
+
+    # -- column 2 --
+
+    print "{0}\n"
+    read n {{REGISTERS}} 0
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 1
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 2
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 3
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 4
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 5
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 6
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 7
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 8
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 9
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 10
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 11
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 12
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 13
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 14
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 15
+    op add ret @counter 1
+    jump format_hex always
+
+    #{ print(35, level_1_row)
+
+    # -- column 3 --
+
+    print "{0}\n"
+    read n {{REGISTERS}} 16
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 17
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 18
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 19
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 20
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 21
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 22
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 23
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 24
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 25
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 26
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 27
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 28
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 29
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 30
+    op add ret @counter 1
+    jump format_hex always
+
+    print "{0}\n"
+    read n {{REGISTERS}} 31
+    op add ret @counter 1
+    jump format_hex always
+
+    #{ print(60, level_1_row)
+
+    # ---- level 2 ----
+#% set level_2_row = 17
+
+    # -- column 1 --
+
+    print "state           = {0}\n"
+    format state
+
+    print "__etext         = {0}\n"
+    set n __etext
+    op add ret @counter 1
+    jump format_hex always
+
+    print "reservation_set = {0}\n"
+    set n reservation_set
+    op add ret @counter 1
+    jump format_hex always
+
+    print "privilege_mode  = {0}\n"
+    set n privilege_mode
+    op add ret @counter 1
+    jump format_privilege_mode always
+
+    print "effective_mode  = {0}\n"
+    set n effective_privilege_mode
+    op add ret @counter 1
+    jump format_privilege_mode always
+
+    #{ print(0, level_2_row)
+
+    # ---- level 3 ----
+#% set level_3_row = 23
+
+    # -- column 1 --
 
     print "mtvec    = {0}\n"
     set n mtvec
@@ -402,133 +545,9 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_bin always
 
-    #{ print(0, 24)
+    #{ print(0, level_3_row)
 
-    print "mtimecmp = {0}\n"
-    format mtimecmp
-
-    print "mtime    = {0}\n"
-    format mtime
-
-    print "mcycle   = {0}\n"
-    format mcycle
-
-    print "minstret = {0}\n"
-    format minstret
-
-    #{ print(0, 34)
-
-    # column 2
-
-    print "{0}\n"
-    set n x16
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x17
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x18
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x19
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x20
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x21
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x22
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x23
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x24
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x25
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x26
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x27
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x28
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x29
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x30
-    op add ret @counter 1
-    jump format_hex always
-
-    print "{0}\n"
-    set n x31
-    op add ret @counter 1
-    jump format_hex always
-
-    #{ print(47, 0)
-
-    print "state           = {0}\n"
-    format state
-
-    print "__etext         = {0}\n"
-    set n __etext
-    op add ret @counter 1
-    jump format_hex always
-
-    print "reservation_set = {0}\n"
-    set n reservation_set
-    op add ret @counter 1
-    jump format_hex always
-
-    print "privilege_mode  = {0}\n"
-    set n privilege_mode
-    op add ret @counter 1
-    jump format_privilege_mode always
-
-    print "effective_mode  = {0}\n\n"
-    set n effective_privilege_mode
-    op add ret @counter 1
-    jump format_privilege_mode always
-
-    print "satp     = {0}\n"
-    set n satp
-    op add ret @counter 1
-    jump format_hex always
+    # -- column 2 --
 
     print "stvec    = {0}\n"
     set n stvec
@@ -555,7 +574,28 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_hex always
 
-    #{ print(35, 17)
+    #{ print(35, level_3_row)
+
+    # ---- level 4 ----
+#% set level_4_row = 33
+
+    # -- column 1 --
+
+    print "mtimecmp = {0}\n"
+    format mtimecmp
+
+    print "mtime    = {0}\n"
+    format mtime
+
+    print "mcycle   = {0}\n"
+    format mcycle
+
+    print "minstret = {0}\n"
+    format minstret
+
+    #{ print(0, level_4_row)
+
+    # -- column 2 --
 
     set uart {{UART0}}
     set uart_index 0
@@ -577,11 +617,13 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_uart always
 
-    #{ print(30, 34)
+    #{ print(30, level_4_row)
 
     wait 0.02
     jump loop always
 
+format_hex_or_empty:
+    jump format_unknown strictEqual n ""
 format_hex:
     jump format_null strictEqual n null
     op floor n n
@@ -946,12 +988,458 @@ mark_memory__found:
     op add mark_memory_id mark_memory_id 1
     set @counter mark_memory__ret
 
+# apply Sv32 virtual address translation
+# jumps to this function must be conditional on privilege_mode or effective_privilege_mode
+# address is assumed to already be truncated to 32 bits
+# mcause must contain the access fault code for the original access type (ie. 1, 5, or 7)
+# mtval must contain the same value as address
+# address, mcause, mtval -> address
+# ret: ret3
+# clobbers: locals, nonlocal2
+translate_virtual_address:
+    set addr1 ""
+    set pte1 ""
+    set addr0 ""
+    set pte0 ""
+
+    # if this function is called, we know that the current effective privilege mode permits address translation
+    # so the only thing we need to check here is satp.MODE
+    jump translate_virtual_address__unchanged lessThan satp 0x80000000
+
+    # begin virtual address translation algorithm
+    # PAGESIZE=2^12, LEVELS=2, PTESIZE=4
+    
+    # step 1
+
+    # a = satp.ppn * PAGESIZE
+#%# do reset_locals()
+    op and $a satp 0x3fffff # satp.ppn
+    op mul $a $a {{PAGESIZE}}
+    # i = LEVELS - 1 = 1
+    # nonlocal2 = (i + 1) * 10
+    # i is stored in this form because it simplifies step 2 and doesn't really matter for other steps
+    # we use nonlocal2 because amo uses nonlocal1
+    set nonlocal2 20 # i=1
+
+    # step 2
+translate_virtual_address__step_2:
+
+    # pte = load(a + va.vpn[i] * PTESIZE)
+    #     = load(a + (va.vpn[i] << 2))
+    #     = load(a + (va[y:x] << 2))
+    #     = load(a + (va >> (x - 2))[11:2])
+    op shr address mtval nonlocal2
+    op and address address 0b111111111100
+    op add address address $a
+
+    jump translate_virtual_address__step_2__debug_addr0 equal nonlocal2 10
+    set addr1 address
+    jump translate_virtual_address__step_2__debug_addr_done always
+translate_virtual_address__step_2__debug_addr0:
+    set addr0 address
+translate_virtual_address__step_2__debug_addr_done:
+
+    op add ret @counter 1
+    jump load_word always
+    # result = pte
+
+    jump translate_virtual_address__step_2__debug_pte0 equal nonlocal2 10
+    set pte1 result
+    jump translate_virtual_address__step_2__debug_pte_done always
+translate_virtual_address__step_2__debug_pte0:
+    set pte0 result
+translate_virtual_address__step_2__debug_pte_done:
+
+    # step 3
+
+    # if pte is not a pointer, we check pte.a here instead of step 7
+    # so pte is invalid if v=0, or if r=0 and w=1, or if (r=1 or x=1) and a=0
+
+    # a00xwrv
+
+    # a | x | w | r | v | index | valid?
+    # - | - | - | - | - | ----- | --------
+    # 0 | 0 | 0 | 0 | 0 | 0     | no (v=0)
+    # 0 | 0 | 0 | 0 | 1 | 1     | yes
+    # 0 | 0 | 0 | 1 | 0 | 2     | no (v=0)
+    # 0 | 0 | 0 | 1 | 1 | 3     | no (a=0)
+    # 0 | 0 | 1 | 0 | 0 | 4     | no (v=0)
+    # 0 | 0 | 1 | 0 | 1 | 5     | no (a=0)
+    # 0 | 0 | 1 | 1 | 0 | 6     | no (v=0)
+    # 0 | 0 | 1 | 1 | 1 | 7     | no (a=0)
+    # 0 | 1 | 0 | 0 | 0 | 8     | no (v=0)
+    # 0 | 1 | 0 | 0 | 1 | 9     | no (a=0)
+    # 0 | 1 | 0 | 1 | 0 | 10    | no (v=0)
+    # 0 | 1 | 0 | 1 | 1 | 11    | no (a=0)
+    # 0 | 1 | 1 | 0 | 0 | 12    | no (v=0)
+    # 0 | 1 | 1 | 0 | 1 | 13    | no (a=0)
+    # 0 | 1 | 1 | 1 | 0 | 14    | no (v=0)
+    # 0 | 1 | 1 | 1 | 1 | 15    | no (a=0)
+    # 1 | 0 | 0 | 0 | 0 | 64    | no (v=0)
+    # 1 | 0 | 0 | 0 | 1 | 65    | yes
+    # 1 | 0 | 0 | 1 | 0 | 66    | no (v=0)
+    # 1 | 0 | 0 | 1 | 1 | 67    | yes
+    # 1 | 0 | 1 | 0 | 0 | 68    | no (v=0)
+    # 1 | 0 | 1 | 0 | 1 | 69    | no (r=0)
+    # 1 | 0 | 1 | 1 | 0 | 70    | no (v=0)
+    # 1 | 0 | 1 | 1 | 1 | 71    | yes
+    # 1 | 1 | 0 | 0 | 0 | 72    | no (v=0)
+    # 1 | 1 | 0 | 0 | 1 | 73    | yes
+    # 1 | 1 | 0 | 1 | 0 | 74    | no (v=0)
+    # 1 | 1 | 0 | 1 | 1 | 75    | yes
+    # 1 | 1 | 1 | 0 | 0 | 76    | no (v=0)
+    # 1 | 1 | 1 | 0 | 1 | 77    | no (r=0)
+    # 1 | 1 | 1 | 1 | 0 | 78    | no (v=0)
+    # 1 | 1 | 1 | 1 | 1 | 79    | yes
+
+#% set valid_indices = [1, 65, 67, 71, 73, 75, 79]
+
+#%# do reset_locals()
+    op and $a_x_w_r_v result 0b1001111
+    read $valid "{% for i in range(80) %}{{ (i in valid_indices)|int }}{% endfor %}" $a_x_w_r_v
+    jump translate_virtual_address__page_fault notEqual $valid 49 # ascii 1
+
+    # step 4
+
+    # if pte.r=1 or pte.x=1, this is a leaf PTE
+    op and $x_r result 0b1010
+    jump translate_virtual_address__step_5 notEqual $x_r 0
+
+    # otherwise, if nonlocal2 has been updated, then i-1 < 0, so raise a page fault exception
+    jump translate_virtual_address__page_fault notEqual nonlocal2 20
+
+    # otherwise, let a=pte.ppn * PAGESIZE, let i=i-1, and go to step 2
+#%# do reset_locals()
+    op and $a result 0xfffffc00
+    op shl $a $a 2
+    set nonlocal2 10 # i=0
+    jump translate_virtual_address__step_2 always
+
+    # step 5
+translate_virtual_address__step_5:
+
+    # effective_privilege_mode is either S (1) or U (0)
+
+    # SUCCEED IF
+    
+    # execute:
+    #   x == 1
+    #   && (effective_privilege_mode == U ? u == 1 : u == 0)
+
+    # load:
+    #   (r == 1 || MXR == 1 && x == 1)
+    #   && (effective_privilege_mode == U ? u == 1 : (u == 0 || SUM == 1))
+
+    # store:
+    #   w == 1
+    #   && (effective_privilege_mode == U ? u == 1 : (u == 0 || SUM == 1))
+
+    # FAIL IF
+
+    # execute:
+    #   x == 0
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1
+    # load:
+    #   r == 0 && (MXR == 0 || x == 0)
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1 && SUM == 0
+    # store:
+    #   w == 0
+    #   || u == 0 && effective_privilege_mode == 0
+    #   || u == 1 && effective_privilege_mode == 1 && SUM == 0
+
+    # prevent user mode from accessing non-user pages
+#%# do reset_locals()
+    op and $u_priv result 0b10000
+    op or $u_priv $u_priv effective_privilege_mode
+    jump translate_virtual_address__page_fault equal $u_priv 0
+
+    # prevent supervisor mode from executing user pages
+    jump translate_virtual_address__step_5__execute equal mcause 1 # execute
+
+    # prevent supervisor mode from reading/writing user pages if mstatus.SUM is not set
+    op and $mstatus.sum mstatus 0b1000000000000000000
+    jump translate_virtual_address__step_5__sum notEqual $mstatus.sum 0
+
+translate_virtual_address__step_5__execute:
+    jump translate_virtual_address__page_fault equal $u_priv 0b10001
+translate_virtual_address__step_5__sum:
+
+    # check if the required rwx bits are set
+
+    # PTE: ...daguxwrv
+    # if we mask off g and u, we can use ASCII characters 0b0011___0
+
+    # type    | mcause | MXR | PTE mask || index | char
+    # ------- | ------ | --- | -------- || ----- | ----
+    # execute | 1      | 0   | 0b1000   || 1     | '8' (0011 1000)
+    # execute | 1      | 1   | 0b1000   || 2     | '8' (0011 1000)
+    # load    | 5      | 0   | 0b0010   || 5     | '2' (0011 0010)
+    # load    | 5      | 1   | 0b1010   || 6     | ':' (0011 1010)
+    # store   | 7      | 0   | 0b0100   || 7     | '4' (0011 0100)
+    # store   | 7      | 1   | 0b0100   || 8     | '4' (0011 0100)
+
+    # extract fields from PTE
+    # this value is also used in step 7
+#%# do reset_locals()
+    # ------- DO NOT RESET LOCALS AFTER THIS LINE -------
+    op and $d_x_w_r result 0b10001110
+
+    # extract MXR bit
+    op shr $mstatus.mxr mstatus 19
+    op and $mstatus.mxr $mstatus.mxr 0b1
+
+    # fetch the bitmask from the string as per the above table
+    op add $mask mcause $mstatus.mxr
+    read $mask "_88__2:44" $mask
+
+    # fail if NONE of the required bits are set in pte
+    # this is fine because none of the things we're checking here require more than one bit to be set
+    # in particular, if MXR is 1, loads succeed if r is 1 OR x is 1
+    op and $mask $d_x_w_r $mask
+    jump translate_virtual_address__page_fault equal $mask 0
+
+    # step 6
+
+    # skip this step if i == 0
+    # nonlocal2 == (i + 1) * 10
+    jump translate_virtual_address__step_7 equal nonlocal2 10
+
+    # if i > 0 and pte.ppn[i-1:0] != 0, this is a misaligned superpage
+    # in Sv32, i is either 1 or 0
+    # so we need to check pte.ppn[0]
+
+    op and $pte.ppn[0] result 0xffc00
+    jump translate_virtual_address__page_fault notEqual $pte.ppn[0] 0
+
+    # step 7
+translate_virtual_address__step_7:
+
+    # we implement Svade for this step because it's simpler
+    # if pte.a=0, or if the original memory access is a store and pte.d=0, raise a page fault exception
+
+    # pte.a was checked in step 3
+
+    # fault if storing and pte.d=0
+    jump translate_virtual_address__step_8 notEqual mcause 7 # store/AMO
+    jump translate_virtual_address__page_fault lessThan $d_x_w_r 0b10000000
+    # ------- end critical locals section -------
+
+    # step 8
+translate_virtual_address__step_8:
+
+    # move the pte.ppn fields into position
+    op shl result result 2
+
+    # raise an access fault exception if the resulting physical address will be wider than 32 bits
+    # TODO: is there any case where we *don't* want to do this?
+    jump trap greaterThan result 0xffffffff
+
+    # if i>0, this is a superpage
+    jump translate_virtual_address__step_8__superpage greaterThan nonlocal2 10
+
+    # pa.pgoff = va.pgoff
+    op and address mtval 0xfff
+    
+    # pa.ppn = pte.ppn
+    op and result result 0xfffff000
+    op or address address result
+
+    set @counter ret3
+
+translate_virtual_address__step_8__superpage:
+    # pa.pgoff = va.pgoff
+    # pa.ppn[0] = va.ppn[0]
+    op and address mtval 0x3fffff
+
+    # pa.ppn[1] = pte.ppn[1]
+    op and result result 0xffc00000
+    op or address address result
+
+translate_virtual_address__unchanged:
+    set @counter ret3
+
+translate_virtual_address__page_fault:
+    # we need to convert mcause from access fault to page fault
+    # instruction: 1 -> 12
+    # load:        5 -> 13
+    # store/AMO:   7 -> 15
+    # for load/store/AMO, page fault = access fault + 8
+    # for instruction, 1 + 8 = 9 < 12 < 13 < 15
+    # instruction: max(1 + 8, 12) = max(9, 12)  = 12
+    # load:        max(5 + 8, 12) = max(13, 12) = 13
+    # store/AMO:   max(7 + 8, 12) = max(15, 12) = 15
+    op add mcause mcause 8
+    op max mcause mcause 12
+    jump trap always
+
+# helper function to find the ram proc and variable for a given address
+# address -> ram, variable
+# ret: ret2
+access_ram:
+#%# do reset_locals()
+    # _address is named because it's also an input for lookup_variable
+    op sub _address address {{RAM_START}}
+
+# _address -> ram, variable
+    # we store 4 bytes in each value
+    op idiv _address _address 4
+
+    # get the ram proc containing this address
+    op idiv $ram_index _address {{RAM_PROC_VARS}}
+    op add $ram_index $ram_index RAM_START_PROC
+
+    op mod $ram_x $ram_index MEMORY_WIDTH
+    op add $ram_x $ram_x MEMORY_X
+
+    op idiv $ram_y $ram_index MEMORY_WIDTH
+    op add $ram_y $ram_y MEMORY_Y
+
+    getblock building ram $ram_x $ram_y
+
+    # get the variable within the ram proc containing this address
+    op mod _address _address {{RAM_PROC_VARS}}
+
+# given a value 0 <= _address < RAM_PROC_VARS, resolve that variable in the lookup table
+# this must stay directly after access_ram
+# _address -> variable
+# ret: ret2
+# NOTE: modify_csr assumes this function uses one local
+#%# do reset_locals()
+    # the lookup is assumed to start at link 0, so we don't need to add an offset here
+    op idiv $lookup _address {{LOOKUP_PROC_SIZE}}
+    getlink $lookup $lookup
+
+    op mod variable _address {{LOOKUP_PROC_SIZE}}
+    lookup block variable variable
+    sensor variable variable @name
+    read variable $lookup variable
+
+    set @counter ret2
+
+# loads the word from memory that contains the specified address
+# mcause is required in order to raise the correct exception in case of access fault
+# address, mcause, mtval -> result
+# ret: ret
+# clobbers: locals, ret2, value
+load_word:
+    jump load_rom_word_unchecked lessThan address ROM_SIZE
+
+    jump trap greaterThanEq address {{MMIO_START}}
+
+    jump trap lessThan address {{RAM_START}}
+    jump trap greaterThanEq address RAM_END
+    # continue into load_ram_word_unchecked
+
+    # locate and read value from ram
+    op add ret2 @counter 1
+    jump access_ram always
+    read value ram variable
+    # null is coerced to 0 by swap_endianness
+
+    # tail call, swap_endianness will jump to the ret value of load_word's caller
+
+# converts a little endian 32-bit number to big endian, or vice versa
+# https://stackoverflow.com/a/2182184
+# this MUST stay directly after load_word
+# value -> result
+#%# do reset_locals()
+    # byte 3 -> byte 0
+    op shr result value 24
+    op and result result 0xff
+
+    # byte 1 -> byte 2
+    op shl $tmp value 8
+    op and $tmp $tmp 0xff0000
+    op or result result $tmp
+
+    # byte 2 -> byte 1
+    op shr $tmp value 8
+    op and $tmp $tmp 0xff00
+    op or result result $tmp
+
+    # byte 0 -> byte 3
+    op shl $tmp value 24
+    op and $tmp $tmp 0xff000000
+    op or result result $tmp
+
+    set @counter ret
+
+# loads a word from ROM
+# address -> result
+load_rom_word_unchecked:
+#%# do reset_locals()
+    # align to 4 bytes
+    op and $address address 0xfffffffc
+
+    # get rom proc data
+    op idiv $rom_index $address {{ROM_PROC_BYTES}}
+    op mod $str_index $address {{ROM_PROC_BYTES}}
+
+    op mod $rom_x $rom_index MEMORY_WIDTH
+    op add $rom_x $rom_x MEMORY_X
+
+    op idiv $rom_y $rom_index MEMORY_WIDTH
+    op add $rom_y $rom_y MEMORY_Y
+
+    getblock building _rom $rom_x $rom_y
+    read _rom _rom "v"
+
+    # read bytes of word
+    read $byte0 _rom $str_index
+
+    op add $str_index $str_index 1
+    read $byte1 _rom $str_index
+
+    op add $str_index $str_index 1
+    read $byte2 _rom $str_index
+
+    op add $str_index $str_index 1
+    read _rom _rom $str_index # clear _rom to avoid issues with the vars menu and block data size
+
+    # merge into big endian
+    op shl $byte1 $byte1 8
+    op shl $byte2 $byte2 16
+    op shl _rom _rom 24
+
+    op add result $byte0 $byte1
+    op add result result $byte2
+    op add result result _rom
+
+    op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
+    op max result result 0 # if we're reading out of bounds, default to 0
+    
+    set @counter ret
+
+trap:
+    set _cause "misalign"
+    jump trap__found_cause equal mcause 0
+    set _cause "access_flt"
+    jump trap__found_cause equal mcause 1
+    set _cause "page_flt"
+    jump trap__found_cause equal mcause 12
+    set _cause "error"
+trap__found_cause:
+
+    jump trap__translate equal is_address_translation true
+    set result _cause
+    set @counter ret
+
+trap__translate:
+    set address _cause
+    set @counter ret3
+
 #% if false
 # {% raw %}
+set {{ null
+set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{ROM_START}} null
 set {{RAM_START}} null
+set {{MMIO_START}} null
+set {{PAGESIZE}} null
 set {{CPU}} null
 set {{CSRS}} null
 set {{REGISTERS}} null

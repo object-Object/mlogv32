@@ -3,6 +3,7 @@
     read __etext prev_proc "__etext"
     read _address prev_proc "_address"
     read address prev_proc "address"
+    read breakpoint_address prev_proc "breakpoint_address"
     read csr_mie prev_proc "csr_mie"
     read csr_minstret prev_proc "csr_minstret"
     read csr_minstreth prev_proc "csr_minstreth"
@@ -33,6 +34,7 @@
     read rs1_id prev_proc "rs1_id"
     read rs2 prev_proc "rs2"
     read rs2_id prev_proc "rs2_id"
+    read single_step_enabled prev_proc "single_step_enabled"
     read state prev_proc "state"
     read value prev_proc "value"
     read variable prev_proc "variable"
@@ -78,8 +80,6 @@
 
 #% set ERROR_OUTPUT = 'message1'
 
-#% set SINGLE_STEP_SWITCH = 'switch1'
-
 #%# constants
 
 #%# Sv32
@@ -123,10 +123,6 @@ reset:
 
     # @counter is moved here when the next worker starts executing
 #directive assert_counter {{ labels.next_tick }}
-
-    # poll hardware
-    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
-    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
 
     # fetch saved variables from the previous worker
     read prev_proc {{CONTROLLER}} "prev_proc"
@@ -2723,7 +2719,6 @@ set {{INCR}} null
 set {{CONFIG}} null
 set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
-set {{SINGLE_STEP_SWITCH}} null
 set {{PAGESIZE}} null
 set {{labels.next_tick}} null
 # unused variables

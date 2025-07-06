@@ -136,6 +136,10 @@ end_slow_init:
     # icache
     set __etext 0
 
+    # debugging
+    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
+    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
+
     # reset hart state as per machine-level ISA
 
     # set privilege mode to M
@@ -240,6 +244,14 @@ end_breakpoint:
     sensor enabled {{POWER_SWITCH}} @enabled
     jump state->halt equal enabled false
 
+    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
+    write breakpoint_address prev_proc "breakpoint_address"
+
+    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
+    sensor pause_enabled {{PAUSE_SWITCH}} @enabled
+    op or single_step_enabled single_step_enabled pause_enabled
+    write single_step_enabled prev_proc "single_step_enabled"
+
     # check which CSR we're currently updating, if any
 
     # update mtime
@@ -320,12 +332,6 @@ breakpoint__end_loop:
 
     set state "running"
     write state prev_proc "state"
-
-    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
-    write breakpoint_address prev_proc "breakpoint_address"
-
-    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
-    write single_step_enabled prev_proc "single_step_enabled"
 
     jump end_breakpoint always
 

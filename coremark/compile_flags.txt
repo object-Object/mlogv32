@@ -1,2 +1,3 @@
 -I./coremark
 -I./mlogv32
+--target=riscv32-linux-gnu

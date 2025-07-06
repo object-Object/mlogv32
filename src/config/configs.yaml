@@ -29,3 +29,11 @@ configs:
     PROGRAM_ROM_ROWS: 1
     RAM_ROWS: 1
     ICACHE_ROWS: 1
+  
+  linux:
+    MEMORY_X_OFFSET: -9
+    MEMORY_Y_OFFSET: -80
+    MEMORY_WIDTH: 64
+    PROGRAM_ROM_ROWS: 16
+    RAM_ROWS: 16
+    ICACHE_ROWS: 32

@@ -1,0 +1,10 @@
+# CONFIG_SBI_ECALL_IPI is not set
+# CONFIG_SBI_ECALL_HSM is not set
+# CONFIG_SBI_ECALL_SUSP is not set
+# CONFIG_SBI_ECALL_CPPC is not set
+# CONFIG_SBI_ECALL_FWFT is not set
+# CONFIG_SBI_ECALL_VENDOR is not set
+# CONFIG_SBI_ECALL_DBTR is not set
+# CONFIG_SBI_ECALL_SSE is not set
+# CONFIG_SBI_ECALL_MPXY is not set
+CONFIG_FDT=y

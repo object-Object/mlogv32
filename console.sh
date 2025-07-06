@@ -8,7 +8,7 @@ else
 fi
 
 {
-    echo "{\"type\": \"serial\", \"device\": \"${DEVICE:=uart0}\", \"overrun\": false, \"direction\": \"${DIRECTION}\", \"disconnectOnHalt\": true}"
+    echo "{\"type\": \"serial\", \"device\": \"${DEVICE:=uart0}\", \"overrun\": false, \"direction\": \"${DIRECTION}\", \"disconnectOnHalt\": ${DISCONNECT_ON_HALT:=true}}"
     cat
 } | netcat -v "${HOST:=localhost}" "${PORT:=5000}"
 

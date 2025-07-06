@@ -7,7 +7,8 @@
 
     "mounts": [
         "type=volume,target=/workspaces/mlogv32/.venv",
-        "type=volume,target=/commandhistory"
+        "type=volume,target=/commandhistory",
+        "type=volume,target=/home/vscode/buildroot"
     ],
 
     "postAttachCommand": {

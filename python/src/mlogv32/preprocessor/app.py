@@ -492,7 +492,6 @@ Code size:
                                 config_link,
                                 controller_link,
                                 error_output_link,
-                                single_step_switch_link,
                                 x=x,
                                 y=y,
                             ),

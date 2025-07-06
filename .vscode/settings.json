@@ -2,7 +2,8 @@
     "files.associations": {
         "*.s": "riscv",
         "*.mlog.jinja": "mlog",
-        "*.svd": "xml"
+        "*.svd": "xml",
+        "*_defconfig": "kconfig"
     },
     "[markdown]": {
         "editor.formatOnSave": true,
@@ -22,5 +23,6 @@
     "ruff.lint.ignore": ["I"],
     "python.languageServer": "Pylance",
     "python.analysis.diagnosticMode": "workspace",
-    "python.analysis.packageIndexDepths": [{ "name": "jinja2", "depth": 2 }]
+    "python.analysis.packageIndexDepths": [{ "name": "jinja2", "depth": 2 }],
+    "files.eol": "\n"
 }

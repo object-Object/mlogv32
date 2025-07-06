@@ -1,0 +1,96 @@
+/dts-v1/;
+
+/ {
+    #address-cells = <1>;
+    #size-cells = <1>;
+    model = "mlogv32";
+    chassis-type = "embedded";
+
+    chosen {
+        bootargs = "earlycon=sbi console=ttyS0";
+        stdout-path = "/soc/serial@f0000010";
+    };
+
+    memory@80000000 {
+        device_type = "memory";
+        reg = <0x80000000 (0x1000000 - 0x40000)>;
+    };
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        timebase-frequency = <1000>;
+
+        cpu@0 {
+            device_type = "cpu";
+            compatible = "riscv";
+            mmu-type = "riscv,sv32";
+            reg = <0>;
+            riscv,isa = "rv32ima";
+            riscv,isa-base = "rv32i";
+            riscv,isa-extensions = "i", "m", "a", "zicntr", "zicsr", "zifencei";
+        };
+    };
+
+    soc {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        compatible = "simple-bus";
+        ranges;
+
+        uart0: serial@f0000010 {
+            compatible = "ns16550a";
+            reg = <0xf0000010 0x20>;
+            clock-frequency = <10000000>;
+            reg-shift = <2>;
+            no-loopback-test = <1>;
+            fifo-size = <253>;
+        };
+
+        uart1: serial@f0000030 {
+            compatible = "ns16550a";
+            reg = <0xf0000030 0x20>;
+            clock-frequency = <10000000>;
+            reg-shift = <2>;
+            no-loopback-test = <1>;
+            fifo-size = <253>;
+        };
+
+        uart2: serial@f0000050 {
+            compatible = "ns16550a";
+            reg = <0xf0000050 0x20>;
+            clock-frequency = <10000000>;
+            reg-shift = <2>;
+            no-loopback-test = <1>;
+            fifo-size = <253>;
+        };
+
+        uart3: serial@f0000070 {
+            compatible = "ns16550a";
+            reg = <0xf0000070 0x20>;
+            clock-frequency = <10000000>;
+            reg-shift = <2>;
+            no-loopback-test = <1>;
+            fifo-size = <253>;
+        };
+
+        syscon: syscon@fffffff0 {
+            compatible = "syscon";
+            reg = <0xfffffff0 0x4>;
+        };
+
+        poweroff {
+            compatible = "syscon-poweroff";
+            regmap = <&syscon>;
+            offset = <0x0>;
+            value = <0x0>;
+        };
+
+        reboot {
+            compatible = "syscon-reboot";
+            regmap = <&syscon>;
+            offset = <0x0>;
+            value = <0x1>;
+        };
+    };
+};

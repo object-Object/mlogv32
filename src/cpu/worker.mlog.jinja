@@ -229,7 +229,7 @@ main:
     # fall back to slow instruction fetch/decode if not in valid icache range
     # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= PROGRAM_ROM_SIZE
     jump main__access_rom_icache      lessThan address __etext
-    jump main__slow_instruction_fetch lessThan address PROGRAM_ROM_SIZE
+    jump main__slow_instruction_fetch lessThan address ROM_SIZE
     jump trap                         lessThan address {{RAM_START}}
     op add _address RAM_ICACHE_OFFSET address
     jump main__access_ram_icache      lessThan address ICACHE_END

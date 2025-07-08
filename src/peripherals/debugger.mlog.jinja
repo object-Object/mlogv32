@@ -225,6 +225,11 @@ loop__no_custom_va:
 
     # markers
 
+    setmarker remove mark_memory_id
+    op add tmp mark_memory_id 1
+    setmarker remove tmp
+    jump loop__no_mark_program_rom lessThanEq PROGRAM_ROM_SIZE 0
+
     print "PROGRAM_ROM_START\n{0}"
     set address {{ROM_START}}
     op add ret @counter 1
@@ -234,6 +239,7 @@ loop__no_custom_va:
     op sub address PROGRAM_ROM_SIZE 1
     op add ret @counter 1
     jump mark_memory always
+loop__no_mark_program_rom:
 
     setmarker remove mark_memory_id
     op add tmp mark_memory_id 1
@@ -249,7 +255,6 @@ loop__no_custom_va:
     op sub address ROM_SIZE 1
     op add ret @counter 1
     jump mark_memory always
-
 loop__no_mark_data_rom:
 
     print "RAM_START\n{0}"

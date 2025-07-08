@@ -439,6 +439,11 @@ data class SerialRequest(
             var overflowCount = 0
 
             val fromUart = runOnMainThread {
+                if (!processor.build.isValid) {
+                    Log.info("ProcessorAccess build invalid, closing serial connection.")
+                    return@runOnMainThread null
+                }
+
                 if (!processor.powerSwitch.enabled) {
                     when {
                         disconnectOnHalt -> return@runOnMainThread null

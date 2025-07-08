@@ -13,7 +13,7 @@ zsbl:
 	riscv32-unknown-elf-gcc \
 		-nostartfiles \
 		-DZSBL_PAYLOAD_PATH=\"$(BINARIES_DIR)/fw_jump.bin\" \
-		-DZSBL_KERNEL_PATH=\"$(BINARIES_DIR)/Image\" \
+		-DZSBL_KERNEL_PATH=\"$(BINARIES_DIR)/xipImage\" \
 		-T$(BR2_EXTERNAL_MLOGV32_PATH)/board/mlogv32/zsbl/zsbl.ld \
 		$(BR2_EXTERNAL_MLOGV32_PATH)/board/mlogv32/zsbl/zsbl.S \
 		-o $(BINARIES_DIR)/zsbl.elf

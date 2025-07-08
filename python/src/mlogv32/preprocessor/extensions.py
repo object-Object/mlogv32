@@ -45,7 +45,9 @@ class LineExpressionEnv(Protocol):
         environment.extend(
             line_expression_prefix=line_expression_prefix,
             line_expression_re=re.compile(
-                r"^([ \t\v]*)" + re.escape(line_expression_prefix) + r" ([^\r\n]+)$",
+                r"^([ \t\v]*)"
+                + re.escape(line_expression_prefix)
+                + r"(-?) ([^\r\n]+)$",
                 flags=re.M,
             ),
         )
@@ -93,13 +95,16 @@ class LineExpression(Extension):
                 new_pos = match.start()
                 if new_pos > pos:
                     preval = token.value[pos:new_pos]
+                    if match.group(2):
+                        preval = preval.rstrip()
                     yield Token(lineno, "data", preval)
                     lineno += count_newlines(preval)
 
-                yield Token(lineno, "data", match.group(1))
+                if not match.group(2):
+                    yield Token(lineno, "data", match.group(1))
 
                 for subtoken in self.environment.lexer.tokenize(
-                    "{{ " + match.group(2) + " }}",
+                    "{{ " + match.group(3) + " }}",
                     name=stream.name,
                     filename=stream.filename,
                 ):

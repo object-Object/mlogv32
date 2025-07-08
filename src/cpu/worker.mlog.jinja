@@ -285,10 +285,8 @@ main__read_icache:
     read rs1 {{REGISTERS}} rs1_id
     read rs2 {{REGISTERS}} rs2_id
 
-    # TODO: should breakpoints use virtual or physical addresses?
     jump main__breakpoint strictEqual pc breakpoint_address
     jump main__no_breakpoint notEqual single_step_enabled true
-
 main__breakpoint:
     # the controller will increment @counter and set state to "running" when it's time to unpause
     set state "breakpoint"
@@ -370,6 +368,13 @@ trap_without_mtval:
     # continue into trap
 
 trap:
+    jump trap__breakpoint strictEqual pc breakpoint_address
+    jump trap__no_breakpoint notEqual single_step_enabled true
+trap__breakpoint:
+    set state "trap_breakpoint"
+    stop
+trap__no_breakpoint:
+
     # set mstatus.MPIE to mstatus.MIE, set mstatus.MIE to 0, and set mstatus.MPP to privilege_mode
     op and $mstatus.mpie csr_mstatus 0b1000
     op shl $mstatus.mpie $mstatus.mpie 4

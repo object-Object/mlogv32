@@ -582,10 +582,14 @@ Code size:
             )
         )
 
-    if include_cpu or include_peripherals or include_memory or include_debugger:
+    if schem.tiles:
+        w, h = schem.get_dimensions()
+        print(f"Schematic size: {w}x{h}")
         if output:
+            print(f"Writing schematic to file: {output}")
             schem.write_file(str(output))
         else:
+            print("Copying schematic to clipboard.")
             schem.write_clipboard()
 
 

@@ -29,6 +29,7 @@
 reset:
     setrate 5000
     set MARKER_START_ID 0
+    set DBG_VIRT_ADDR {{# '0x' }}
 
     op add i MARKER_START_ID 8
 reset_markers:
@@ -57,41 +58,68 @@ reset__find_lookup_start:
     draw clear 0 0 0
     drawflush {{DISPLAY}}
 
-    print "x0  (zero)  =\n"
-    print "x1  (ra)    =\n"
-    print "x2  (sp)    =\n"
-    print "x3  (gp)    =\n"
-    print "x4  (tp)    =\n"
-    print "x5  (t0)    =\n"
-    print "x6  (t1)    =\n"
-    print "x7  (t2)    =\n"
-    print "x8  (s0/fp) =\n"
-    print "x9  (s1)    =\n"
-    print "x10 (a0)    =\n"
-    print "x11 (a1)    =\n"
-    print "x12 (a2)    =\n"
-    print "x13 (a3)    =\n"
-    print "x14 (a4)    =\n"
-    print "x15 (a5)    =\n"
+# {% macro print_str() %}print "{{- caller() -}}"{% endmacro %}
+
+#% call print_str()
+    #{- 'pc    =\\n'
+    #{- 'op    =\\n'
+    #{- 'imm   =\\n'
+    #{- 'rs1id =\\n'
+    #{- 'rs1   =\\n'
+    #{- 'rs2id =\\n'
+    #{- 'rs2   =\\n'
+    #{- 'rdid  =\\n\\n'
+
+    #{- 'satp  =\\n'
+    #{- 'addr1 =\\n'
+    #{- 'pte1  =\\n'
+    #{- 'addr0 =\\n'
+    #{- 'pte0  =\\n'
+    #{- 'addr  =\\n'
+    #{- 'val   =\\n'
+#%- endcall
+
+    #{ print(0, 0)
+
+#% call print_str()
+    #{- 'x0  (zero)  =\\n'
+    #{- 'x1  (ra)    =\\n'
+    #{- 'x2  (sp)    =\\n'
+    #{- 'x3  (gp)    =\\n'
+    #{- 'x4  (tp)    =\\n'
+    #{- 'x5  (t0)    =\\n'
+    #{- 'x6  (t1)    =\\n'
+    #{- 'x7  (t2)    =\\n'
+    #{- 'x8  (s0/fp) =\\n'
+    #{- 'x9  (s1)    =\\n'
+    #{- 'x10 (a0)    =\\n'
+    #{- 'x11 (a1)    =\\n'
+    #{- 'x12 (a2)    =\\n'
+    #{- 'x13 (a3)    =\\n'
+    #{- 'x14 (a4)    =\\n'
+    #{- 'x15 (a5)    =\\n'
+#%- endcall
 
     #{ print(21, 0)
 
-    print "x16 (a6)  =\n"
-    print "x17 (a7)  =\n"
-    print "x18 (s2)  =\n"
-    print "x19 (s3)  =\n"
-    print "x20 (s4)  =\n"
-    print "x21 (s5)  =\n"
-    print "x22 (s6)  =\n"
-    print "x23 (s7)  =\n"
-    print "x24 (s8)  =\n"
-    print "x25 (s9)  =\n"
-    print "x26 (s10) =\n"
-    print "x27 (s11) =\n"
-    print "x28 (t3)  =\n"
-    print "x29 (t4)  =\n"
-    print "x30 (t5)  =\n"
-    print "x31 (t6)  =\n"
+#% call print_str()
+    #{- 'x16 (a6)  =\\n'
+    #{- 'x17 (a7)  =\\n'
+    #{- 'x18 (s2)  =\\n'
+    #{- 'x19 (s3)  =\\n'
+    #{- 'x20 (s4)  =\\n'
+    #{- 'x21 (s5)  =\\n'
+    #{- 'x22 (s6)  =\\n'
+    #{- 'x23 (s7)  =\\n'
+    #{- 'x24 (s8)  =\\n'
+    #{- 'x25 (s9)  =\\n'
+    #{- 'x26 (s10) =\\n'
+    #{- 'x27 (s11) =\\n'
+    #{- 'x28 (t3)  =\\n'
+    #{- 'x29 (t4)  =\\n'
+    #{- 'x30 (t5)  =\\n'
+    #{- 'x31 (t6)  =\\n'
+#%- endcall
 
     #{ print(48, 0)
 
@@ -150,9 +178,9 @@ loop:
     read state {{CPU}} "state"
     read pc {{CPU}} "pc"
     read op_id {{CPU}} "op_id"
-    read rs1 {{CPU}} "rs1_id"
-    read rs2 {{CPU}} "rs2_id"
-    read rd {{CPU}} "rd_id"
+    read rs1_id {{CPU}} "rs1_id"
+    read rs2_id {{CPU}} "rs2_id"
+    read rd_id {{CPU}} "rd_id"
     read imm {{CPU}} "imm"
 
     read __etext {{CPU}} "__etext"
@@ -163,18 +191,29 @@ loop:
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
 
+    set addr1 ""
+    set pte1 ""
+    set addr0 ""
+    set pte0 ""
+    set trap_cause null
+
     set address pc
-    set mcause 1
-    set mtval pc
+    set mcause 1 # instr access
+    jump loop__no_custom_va strictEqual DBG_VIRT_ADDR null
+    set address DBG_VIRT_ADDR
+    set mcause 5 # load access
+loop__no_custom_va:
+    
+    set mtval address
     set is_address_translation true
     op add ret3 @counter 1
     jump translate_virtual_address lessThan privilege_mode 0b11
     set physical_address address
 
-    set result null
+    set result ""
     set is_address_translation false
     op add ret @counter 1
-    jump load_word always
+    jump load_word strictEqual trap_cause null
     set instruction result
 
     # read AFTER translate_virtual_address
@@ -242,7 +281,7 @@ loop__no_mark_icache:
     # clear
 
     draw color 0 0 0 255
-    #{ rect(0, 0, 20, 17)
+    #{ rect(8, 0, 10, 16)
     #{ rect(35, 0, 10, 16)
     #{ rect(60, 0, 10, 16)
     #{ rect(0, 17, 73, 22)
@@ -253,134 +292,111 @@ loop__no_mark_icache:
 
     # -- column 1 --
 
-    print "pc  = {0}\n"
+    print "{{ '{0}\\n' * 8 }}\n{{ '{0}\\n' * 7 }}"
+
     set n pc
     op add ret @counter 1
     jump format_hex always
 
-    print "op  = {0}\n"
-    print "imm = {1}\n"
-    print "rs1 = {2}\n"
-    print "rs2 = {3}\n"
-    print "rd  = {4}\n\n"
     op add ret2 @counter 1
     jump format_op_id always
 
-    print "satp  = {0}\n"
     set n satp
     op add ret @counter 1
     jump format_hex always
 
-    print "addr1 = {0}\n"
     set n addr1
     op add ret @counter 1
     jump format_hex_or_empty always
 
-    print "pte1  = {0}\n"
     set n pte1
     op add ret @counter 1
     jump format_hex_or_empty always
 
-    print "addr0 = {0}\n"
     set n addr0
     op add ret @counter 1
     jump format_hex_or_empty always
 
-    print "pte0  = {0}\n"
     set n pte0
     op add ret @counter 1
     jump format_hex_or_empty always
 
-    print "addr  = {0}\n"
     set n physical_address
-    op add ret @counter 1
-    jump format_hex always
+    op add ret @counter 2
+    jump format_hex_or_empty strictEqual trap_cause null
+    jump format_unknown always
 
-    print "val   = {0}\n"
     set n instruction
-    op add ret @counter 1
-    jump format_hex always
+    op add ret @counter 2
+    jump format_hex_or_empty strictEqual trap_cause null
+    jump format_unknown always
 
-    #{ print(0, level_1_row)
+    #{ print(8, level_1_row)
 
     # -- column 2 --
 
-    print "{0}\n"
+    print "{{ '{0}\\n' * 16 }}"
+
     read n {{REGISTERS}} 0
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 1
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 2
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 3
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 4
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 5
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 6
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 7
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 8
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 9
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 10
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 11
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 12
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 13
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 14
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 15
     op add ret @counter 1
     jump format_hex always
@@ -389,82 +405,68 @@ loop__no_mark_icache:
 
     # -- column 3 --
 
-    print "{0}\n"
+    print "{{ '{0}\\n' * 16 }}"
+
     read n {{REGISTERS}} 16
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 17
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 18
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 19
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 20
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 21
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 22
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 23
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 24
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 25
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 26
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 27
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 28
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 29
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 30
     op add ret @counter 1
     jump format_hex always
 
-    print "{0}\n"
     read n {{REGISTERS}} 31
     op add ret @counter 1
     jump format_hex always
@@ -777,55 +779,67 @@ format_op_id__priv__ok:
     format name
     jump format_op_id__I-type always
 
+#% macro format_conditional(cond, n)
+#% if cond
+#{ caller()
+#% else
+#% for _ in range(n)
+    format ""
+#% endfor
+#% endif
+#% endmacro
+
+#% macro format_op_args(imm, rs1, rs2, rd)
+#% call format_conditional(imm, 1)
+    set n imm
+    op add ret @counter 1
+    jump format_hex always
+#% endcall
+#% call format_conditional(rs1, 2)
+    format rs1_id
+    read n {{REGISTERS}} rs1_id
+    op add ret @counter 1
+    jump format_hex always
+#% endcall
+#% call format_conditional(rs2, 2)
+    format rs2_id
+    read n {{REGISTERS}} rs2_id
+    op add ret @counter 1
+    jump format_hex always
+#% endcall
+#% call format_conditional(rd, 1)
+    format rd_id
+#% endcall
+#% endmacro
+
 format_op_id__unknown:
     format op_id
-    set n imm; op add ret @counter 1; jump format_hex always
-    format rs1
-    format rs2
-    format rd
+#{ format_op_args(imm=true, rs1=true, rs2=true, rd=true)
     set @counter ret2
 
 format_op_id__empty:
-    format ""
-    format ""
-    format ""
-    format ""
+#{ format_op_args(imm=false, rs1=false, rs2=false, rd=false)
     set @counter ret2
 
 format_op_id__R-type:
-    format ""
-    format rs1
-    format rs2
-    format rd
+#{ format_op_args(imm=false, rs1=true, rs2=true, rd=true)
     set @counter ret2
 
 format_op_id__I-type:
-    set n imm; op add ret @counter 1; jump format_hex always
-    format rs1
-    format ""
-    format rd
+#{ format_op_args(imm=true, rs1=true, rs2=false, rd=true)
     set @counter ret2
 
 format_op_id__S-type:
-    set n imm; op add ret @counter 1; jump format_hex always
-    format rs1
-    format rs2
-    format ""
+#{ format_op_args(imm=true, rs1=true, rs2=true, rd=false)
     set @counter ret2
 
 format_op_id__B-type:
-    set n imm; op add ret @counter 1; jump format_hex always
-    format rs1
-    format rs2
-    format ""
+#{ format_op_args(imm=true, rs1=true, rs2=true, rd=false)
     set @counter ret2
 
 format_op_id__U-type:
 format_op_id__J-type:
-    set n imm; op add ret @counter 1; jump format_hex always
-    format ""
-    format ""
-    format rd
+#{ format_op_args(imm=true, rs1=false, rs2=false, rd=true)
     set @counter ret2
 
 format_unknown:
@@ -998,11 +1012,6 @@ mark_memory__found:
 # ret: ret3
 # clobbers: locals, nonlocal2
 translate_virtual_address:
-    set addr1 ""
-    set pte1 ""
-    set addr0 ""
-    set pte0 ""
-
     # if this function is called, we know that the current effective privilege mode permits address translation
     # so the only thing we need to check here is satp.MODE
     jump translate_virtual_address__unchanged lessThan satp 0x80000000
@@ -1414,21 +1423,21 @@ load_rom_word_unchecked:
     set @counter ret
 
 trap:
-    set _cause "misalign"
+    set trap_cause "misalign"
     jump trap__found_cause equal mcause 0
-    set _cause "access_flt"
+    set trap_cause "access_flt"
     jump trap__found_cause equal mcause 1
-    set _cause "page_flt"
+    set trap_cause "page_flt"
     jump trap__found_cause equal mcause 12
-    set _cause "error"
+    set trap_cause mcause
 trap__found_cause:
 
     jump trap__translate equal is_address_translation true
-    set result _cause
+    set result trap_cause
     set @counter ret
 
 trap__translate:
-    set address _cause
+    set address trap_cause
     set @counter ret3
 
 #% if false

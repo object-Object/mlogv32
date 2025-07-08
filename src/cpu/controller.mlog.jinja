@@ -238,6 +238,7 @@ next_tick:
     jump halt equal state "halt"
     jump reset equal state "reset"
     jump breakpoint equal state "breakpoint"
+    jump breakpoint equal state "trap_breakpoint"
 end_breakpoint:
 
     # poll hardware

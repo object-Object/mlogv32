@@ -1,0 +1,61 @@
+From ea61b978bcd329c4a2246e30e44eb2fcd5945e68 Mon Sep 17 00:00:00 2001
+From: object-Object <object@objectobject.ca>
+Date: Mon, 7 Jul 2025 18:00:52 -0400
+Subject: [PATCH 3/3] Map RV32 XIP flash in setup_vm_final
+
+---
+ arch/riscv/mm/init.c | 24 ++++++++++++++----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/arch/riscv/mm/init.c b/arch/riscv/mm/init.c
+index a2c6c27ddc30..62c6ad57e611 100644
+--- a/arch/riscv/mm/init.c
++++ b/arch/riscv/mm/init.c
+@@ -935,8 +935,7 @@ static __init void set_satp_mode(uintptr_t dtb_pa)
+ #endif
+ 
+ #ifdef CONFIG_XIP_KERNEL
+-static void __init create_kernel_page_table(pgd_t *pgdir,
+-					    __always_unused bool early)
++static void __init create_kernel_page_table(pgd_t *pgdir, bool early)
+ {
+ 	uintptr_t va, start_va, end_va;
+ 
+@@ -947,13 +946,18 @@ static void __init create_kernel_page_table(pgd_t *pgdir,
+ 				   kernel_map.xiprom + (va - kernel_map.virt_addr),
+ 				   PMD_SIZE, PAGE_KERNEL_EXEC);
+ 
+-	/* Map the data in RAM */
+-	start_va = kernel_map.virt_addr + (uintptr_t)&_sdata - (uintptr_t)&_start;
+-	end_va = kernel_map.virt_addr + kernel_map.size;
+-	for (va = start_va; va < end_va; va += PMD_SIZE)
+-		create_pgd_mapping(pgdir, va,
+-				   kernel_map.phys_addr + (va - start_va),
+-				   PMD_SIZE, PAGE_KERNEL);
++	/*
++	 * Map the data in RAM. For 32-bit kernel, we skip this in late init
++	 * since it was already done in create_linear_mapping_page_table.
++	 */
++	if (IS_ENABLED(CONFIG_64BIT) || early) {
++		start_va = kernel_map.virt_addr + (uintptr_t)&_sdata - (uintptr_t)&_start;
++		end_va = kernel_map.virt_addr + kernel_map.size;
++		for (va = start_va; va < end_va; va += PMD_SIZE)
++			create_pgd_mapping(pgdir, va,
++					   kernel_map.phys_addr + (va - start_va),
++					   PMD_SIZE, PAGE_KERNEL);
++	}
+ }
+ #else
+ static void __init create_kernel_page_table(pgd_t *pgdir, bool early)
+@@ -1357,7 +1361,7 @@ static void __init setup_vm_final(void)
+ 	create_linear_mapping_page_table();
+ 
+ 	/* Map the kernel */
+-	if (IS_ENABLED(CONFIG_64BIT))
++	if (IS_ENABLED(CONFIG_64BIT) || IS_ENABLED(CONFIG_XIP_KERNEL))
+ 		create_kernel_page_table(swapper_pg_dir, false);
+ 
+ #ifdef CONFIG_KASAN
+-- 
+2.25.1
+

@@ -20,9 +20,16 @@ setup-buildroot:
 
 .PHONY: get-images
 get-images:
-	rm -rf $(THIS_DIR)/output/images
+	rm -rf $(THIS_DIR)/output
+
 	mkdir -p $(THIS_DIR)/output/images
 	cp -r $(BUILDROOT)/output/images $(THIS_DIR)/output
+	-riscv32-unknown-linux-gnu-objdump -d $(THIS_DIR)/output/images/fw_jump.elf > $(THIS_DIR)/output/images/fw_jump.dump
+	-riscv32-unknown-linux-gnu-objdump -d $(THIS_DIR)/output/images/zsbl.elf > $(THIS_DIR)/output/images/zsbl.dump
+
+	mkdir -p $(THIS_DIR)/output/build
+	cp $(BUILDROOT)/output/build/linux-*/vmlinux $(THIS_DIR)/output/build
+	-riscv32-unknown-linux-gnu-objdump -d $(THIS_DIR)/output/build/vmlinux > $(THIS_DIR)/output/build/vmlinux.dump
 
 # copy this directory to/from BR2_EXTERNAL to make buildroot run faster when this directory is in a Windows Docker volume
 %:

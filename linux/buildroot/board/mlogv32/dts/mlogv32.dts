@@ -8,12 +8,12 @@
 
     chosen {
         bootargs = "earlycon=sbi console=ttyS0";
-        stdout-path = "/soc/serial@f0000010";
+        stdout-path = &uart0;
     };
 
     memory@80000000 {
         device_type = "memory";
-        reg = <0x80000000 (0x1000000 - 0x40000)>;
+        reg = <0x80000000 (16 * 1024*1024 - 256 * 1024)>;
     };
 
     cpus {

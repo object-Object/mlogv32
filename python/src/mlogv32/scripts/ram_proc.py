@@ -64,14 +64,16 @@ def lookup(
         VariableFormat,
         Option("-f", "--format"),
     ] = VariableFormat.mlogv32,
+    base_x: Annotated[int, Option("-x", "--base-x")] = 1,
+    base_y: Annotated[int, Option("-y", "--base-y")] = 1,
 ):
     address = int(address_str, base=0)
 
     word_address = address // 4
 
     ram_index = word_address // ram_size
-    ram_x = ram_index % ram_width + 1
-    ram_y = ram_index // ram_width + 1
+    ram_x = ram_index % ram_width + base_x
+    ram_y = ram_index // ram_width + base_y
 
     variable_index = word_address % ram_size
     variable = variable_format.get_variable(variable_index)

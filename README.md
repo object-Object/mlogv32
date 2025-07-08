@@ -43,6 +43,10 @@ ROM may optionally be partitioned into program ROM and data ROM. Data ROM begins
 
 Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as MMIO.
 
+### Machine Timers
+
+The `mtime` and `mtimecmp` registers are mapped to `0xf0000000` and `0xf0000008` respectively, and have a period of 1 ms. The timer registers are not accessible to privilege modes lower than M-mode.
+
 ### UART
 
 The processor includes four identical emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
@@ -95,7 +99,7 @@ Additionally, the machine trap vector CSR `mtvec` is initialized to `0xfffffff0`
 
 ## ISA
 
-`RV32IMAZicntr_Zicsr_Zifencei_Zihintpause_Svade`
+`RV32IMAZicsr_Zifencei_Zihintpause_Svade`
 
 Supported privilege levels: M, S, U
 
@@ -108,7 +112,6 @@ Supported address translation schemes: Bare, Sv32
 | I           | 2.1     |
 | M           | 2.0     |
 | A           | 2.1     |
-| Zicntr      | 2.0     |
 | Zicsr       | 2.0     |
 | Zifencei\*  | 2.0     |
 | Zihintpause | 2.0     |
@@ -141,14 +144,10 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 
 | CSR               | Location | Notes                                                                                   |
 | ----------------- | -------- | --------------------------------------------------------------------------------------- |
-| `cycle[h]`        | CSRS     | Frequency: ticks \* ipt. Traps in U-mode.                                               |
-| `time[h]`         | CPU      | Frequency: ms. Traps in U-mode.                                                         |
-| `instret[h]`      | CPU      | Traps in U-mode.                                                                        |
-| `hpmcounter*[h]`  | CSRS     | Not implemented.                                                                        |
 | `sstatus`         | CPU      | Subset of `mstatus`.                                                                    |
 | `sie`             | CPU      | Subset of `mie`.                                                                        |
 | `stvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `scounteren`      | CSRS     | Read-only zero.                                                                         |
+| `scounteren`      | CSRS     |                                                                                         |
 | `senvcfg`         | CSRS     | Bits 31:1 read-only zero.                                                               |
 | `sscratch`        | CSRS     |                                                                                         |
 | `sepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
@@ -168,7 +167,7 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `mideleg`         | CSRS     | Read-only zero.                                                                         |
 | `mie`             | CPU      |                                                                                         |
 | `mtvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `mcounteren`      | CSRS     | Read-only zero.                                                                         |
+| `mcounteren`      | CSRS     |                                                                                         |
 | `mscratch`        | CSRS     |                                                                                         |
 | `mepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
 | `mcause`          | CSRS     | Stored in CSRS because the CPU often speculatively sets the corresponding CPU variable. |
@@ -178,10 +177,9 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `menvcfgh`        | CSRS     | Read-only zero.                                                                         |
 | `pmpcfg*`         | CSRS     | Read-only zero.                                                                         |
 | `pmpaddr*`        | CSRS     | Read-only zero.                                                                         |
-| `mcycle[h]`       | CSRS     | See `cycle[h]`.                                                                         |
-| `minstret[h]`     | CPU      | See `instret[h]`.                                                                       |
+| `mcycle[h]`       | CSRS     | Frequency: ticks \* ipt.                                                                |
+| `minstret[h]`     | CPU      |                                                                                         |
 | `mhpmcounter*[h]` | CSRS     | See `hpmcounter*[h]`.                                                                   |
-| `mcountinhibit`   | CSRS     | Not implemented.                                                                        |
 
 ## riscv-arch-test
 

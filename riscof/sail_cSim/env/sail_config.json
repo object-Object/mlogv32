@@ -88,7 +88,7 @@
             "supported": false
         },
         "Zicntr": {
-            "supported": true
+            "supported": false
         },
         "Zicsr": {
             "supported": true

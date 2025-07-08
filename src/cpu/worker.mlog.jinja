@@ -2356,6 +2356,7 @@ modify_csr__write:
     jump end_instruction_with_rd always
 
 # determine if we should use a CSR-specific handler, or read from {{CSRS}}
+# TODO: raise illegal instruction exception for all unimplemented CSRs? (eg. for software extension detection)
 modify_csr__read:
 #% do reset_locals(modify_csr_start)
 #% do declare_locals(modify_csr_locals)
@@ -2408,7 +2409,6 @@ modify_csr__read__supervisor:
 modify_csr__read__privileged:
     # CSRs that use the same handler for supervisor- and machine-level
     jump modify_csr__align_4B equal $csr_7_0 0x05 # xtvec
-    jump modify_csr__readonly_zero equal $csr_7_0 0x06 # xcounteren
     jump modify_csr__xenvcfg equal $csr_7_0 0x0a # xenvcfg
     jump modify_csr__align_4B equal $csr_7_0 0x41 # xepc
 
@@ -2416,21 +2416,19 @@ modify_csr__read__privileged:
     set @counter $$modify_csr_op
 
 modify_csr__read__timers:
-    # all of the user/machine timer CSRs start with 0xb or 0xc
+    # all of the machine and user timer CSRs start with 0xb or 0xc respectively
     # and follow the pattern 0b10011111
     op and $tmp imm 0b1100000
     jump modify_csr__read__default notEqual $tmp 0
 
-    # mcounteren is hardwired zero, so now that we know it's a timer, trap if we're not in M-mode
+    # Zicntr is not implemented, so trap if not in M-mode
     jump ILLEGAL_OP lessThan privilege_mode 0b11
     
-    jump modify_csr__mcycle equal $csr_7_0 0x00 # cycle/mcycle
-    jump modify_csr__time equal imm 0xc01 # time (mtime doesn't exist)
-    jump modify_csr__minstret equal $csr_7_0 0x02 # instret/minstret
+    jump modify_csr__read__default equal $csr_7_0 0x00 # mcycle
+    jump modify_csr__minstret equal $csr_7_0 0x02 # minstret
 
-    jump modify_csr__mcycleh equal $csr_7_0 0x80 # cycleh/mcycleh
-    jump modify_csr__timeh equal imm 0xc81 # timeh
-    jump modify_csr__minstreth equal $csr_7_0 0x82 # instreth/minstreth
+    jump modify_csr__read__default equal $csr_7_0 0x80 # mcycleh
+    jump modify_csr__minstreth equal $csr_7_0 0x82 # minstreth
 
     # hardwire all of the hpmcounter registers to 0
     jump modify_csr__readonly_zero always
@@ -2610,30 +2608,6 @@ modify_csr__satp__ok:
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: this may not be strictly required by the spec
     jump end_instruction_with_rd_and_invalidate_icache always
-
-modify_csr__mcycle:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    read rd {{CSRS}} "{{ 'mcycle'|csr }}"
-    set @counter $$modify_csr_op
-
-modify_csr__mcycleh:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    read rd {{CSRS}} "{{ 'mcycleh'|csr }}"
-    set @counter $$modify_csr_op
-
-modify_csr__time:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mtime
-    set @counter $$modify_csr_op
-
-modify_csr__timeh:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mtimeh
-    set @counter $$modify_csr_op
 
 modify_csr__minstret:
 #% do reset_locals(modify_csr_start)

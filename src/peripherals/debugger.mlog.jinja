@@ -63,11 +63,11 @@ reset__find_lookup_start:
 #% call print_str()
     #{- 'pc    =\\n'
     #{- 'op    =\\n'
+    #{- 'rs1   =\\n'
+    #{- 'rs2   =\\n'
     #{- 'imm   =\\n'
     #{- 'rs1id =\\n'
-    #{- 'rs1   =\\n'
     #{- 'rs2id =\\n'
-    #{- 'rs2   =\\n'
     #{- 'rdid  =\\n\\n'
 
     #{- 'satp  =\\n'
@@ -784,35 +784,37 @@ format_op_id__priv__ok:
     format name
     jump format_op_id__I-type always
 
-#% macro format_conditional(cond, n)
+#% macro format_conditional(cond)
 #% if cond
 #{ caller()
 #% else
-#% for _ in range(n)
     format ""
-#% endfor
 #% endif
 #% endmacro
 
 #% macro format_op_args(imm, rs1, rs2, rd)
-#% call format_conditional(imm, 1)
-    set n imm
-    op add ret @counter 1
-    jump format_hex always
-#% endcall
-#% call format_conditional(rs1, 2)
-    format rs1_id
+#% call format_conditional(rs1)
     read n {{REGISTERS}} rs1_id
     op add ret @counter 1
     jump format_hex always
 #% endcall
-#% call format_conditional(rs2, 2)
-    format rs2_id
+#% call format_conditional(rs2)
     read n {{REGISTERS}} rs2_id
     op add ret @counter 1
     jump format_hex always
 #% endcall
-#% call format_conditional(rd, 1)
+#% call format_conditional(imm)
+    set n imm
+    op add ret @counter 1
+    jump format_hex always
+#% endcall
+#% call format_conditional(rs1)
+    format rs1_id
+#% endcall
+#% call format_conditional(rs2)
+    format rs2_id
+#% endcall
+#% call format_conditional(rd)
     format rd_id
 #% endcall
 #% endmacro

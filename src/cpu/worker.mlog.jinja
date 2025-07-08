@@ -76,7 +76,8 @@
 #% set CSRS = 'processor17'
 #% set INCR = 'processor18'
 #% set CONFIG = 'processor19'
-#% set CONTROLLER = 'processor20'
+#% set CSR_LABELS = 'processor20'
+#% set CONTROLLER = 'processor21'
 
 #% set ERROR_OUTPUT = 'message1'
 
@@ -781,7 +782,6 @@ lookup_variable:
 # ret: ret2
 access_uart:
 #% set access_uart_locals = ["$$offset", "$$uart", "$$rx_read", "$$rx_write_raw", "$$rx_write", "$$tx_read", "$$tx_write"]
-#% do reset_locals()
 #% do declare_locals(access_uart_locals)
     op sub $$offset $$offset 0x10
 
@@ -902,7 +902,6 @@ load_rom_word_unchecked:
 
 # address, mcause, mtval -> result
 load_mmio_word:
-#% do reset_locals()
 #% do declare_locals(access_uart_locals)
     # the extra 3 at the start is in case we jump here from address translation
     # in that case, address may be up to 34 bits
@@ -1006,7 +1005,6 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 # ret: ret3
 decode:
 #% set decode_locals = ["$$instruction_24_15", "$$instruction_11_7", "$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # the lowest 2 bits are always "11" for non-compressed instructions
     # check this first to increase the odds of an early exit for non-code addresses
@@ -1063,7 +1061,6 @@ decode_U-type:
 
 # J-type: imm, rd_id
 decode_JAL:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # imm
     op shr $imm_20 value 11 # instruction[31] -> imm[20]
@@ -1093,7 +1090,6 @@ decode_JALR:
 
 # B-type: rs1, rs2, imm
 decode_BRANCH:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction equal $$funct3 2
     jump decode_illegal_instruction equal $$funct3 3
@@ -1129,7 +1125,6 @@ decode_BRANCH:
     jump end_decode always
 
 decode_LOAD:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction equal $$funct3 3
     jump decode_illegal_instruction greaterThanEq $$funct3 6
@@ -1145,7 +1140,6 @@ decode_LOAD:
 
 # S-type: rs1, rs2, imm
 decode_STORE:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction greaterThanEq $$funct3 3
 
@@ -1167,7 +1161,6 @@ decode_STORE:
 
 # R-type: rs1, rs2, rd_id
 decode_AMO:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction notEqual $$funct3 0b010
 
@@ -1204,7 +1197,6 @@ decode_AMO__high:
     jump end_decode always
 
 decode_OP-IMM:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_SRLI_SRAI equal $$funct3 5
     jump decode_SLLI equal $$funct3 1
@@ -1224,7 +1216,6 @@ decode_OP-IMM:
 # this should be called AFTER setting op_id
 # I-type: rs1, imm, rd_id
 decode_I-type:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # imm is just funct12 but sign-extended
     op xor $$funct12 $$funct12 0b100000000000
@@ -1234,7 +1225,6 @@ decode_I-type:
 # common decoder for I-type instructions without a sign-extended immediate
 # I-type: rs1, imm, rd_id
 decode_I-type_no_extend_sign:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # imm
     # NOTE: SRAI and decode_I-type both mutate funct12
@@ -1242,7 +1232,6 @@ decode_I-type_no_extend_sign:
     jump end_decode always
 
 decode_SLLI:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # shamt is encoded in the low 5 bits of imm, so sign extension is redundant
     jump decode_illegal_instruction notEqual $$funct7 0b0000000
@@ -1250,7 +1239,6 @@ decode_SLLI:
     jump decode_I-type_no_extend_sign always
 
 decode_SRLI_SRAI:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # SRLI
     set op_id -2 # SRLI
@@ -1265,7 +1253,6 @@ decode_SRLI_SRAI:
 
 # R-type: rs1, rs2, rd_id
 decode_OP:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # -28: ADD
     # -27: SLL
@@ -1300,7 +1287,6 @@ decode_OP:
     jump decode_illegal_instruction always
 
 decode_MISC-MEM:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction greaterThan $$funct3 1 # FENCE=0, FENCE.I=1
 
@@ -1310,7 +1296,6 @@ decode_MISC-MEM:
     jump decode_I-type_no_extend_sign always
 
 decode_SYSTEM:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction equal $$funct3 4
 
@@ -1327,7 +1312,6 @@ decode_SYSTEM:
 
 # Xmlogsys
 decode_custom-0:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # 1: MLOGSYS
     op add op_id 1 $$funct3
@@ -1344,7 +1328,6 @@ decode_illegal_instruction:
 
 # all decoders jump here after completing successfully
 end_decode:
-#% do reset_locals()
 #% do declare_locals(decode_locals)
     # do this here because several decoders need to do it for sign extension
     # and to make sure the immediate doesn't corrupt the registers
@@ -1673,7 +1656,6 @@ store_ram_word_unchecked:
     # atomics are not supported for MMIO, so we don't need to write to rd here
     # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
 store_mmio_word_unchecked:
-#% do reset_locals()
 #% do declare_locals(access_uart_locals)
     op sub $$offset address {{MMIO_START}}
 
@@ -2018,7 +2000,6 @@ MUL:
     op add ret @counter {{# start_assert_length(9) }}
 
 mul_decomp:
-#% do reset_locals()
 #% do declare_locals(mul_locals)
 
     # https://github.com/es-shims/Math.imul/blob/dab2a3bfc9ce5f4af97057c64ae1880fdbac57a5/implementation.js
@@ -2045,7 +2026,6 @@ mul_decomp:
 
 MULH:
     # R-type: rs1, rs2, rd_id
-#% do reset_locals()
 #% do declare_locals(mul_locals)
     op greaterThanEq $$rs2_negative rs2 0x80000000 # check if the sign bit is set
 MULH_mulhsu:
@@ -2053,7 +2033,6 @@ MULH_mulhsu:
     # continue into mulh_s_u
 
 mulh_s_u:
-#% do reset_locals()
 #% do declare_locals(mul_locals)
     op add ret @counter 1
     jump mul_decomp always
@@ -2078,14 +2057,12 @@ mulh_s_u__rs2_positive:
 
 MULHSU:
     # R-type: rs1, rs2, rd_id
-#% do reset_locals()
 #% do declare_locals(mul_locals)
     set $$rs2_negative false
     jump MULH_mulhsu always
 
 MULHU:
     # R-type: rs1, rs2, rd_id
-#% do reset_locals()
 #% do declare_locals(mul_locals)
     set $$rs1_negative false
     set $$rs2_negative false
@@ -2192,7 +2169,6 @@ EBREAK:
 #% set xret_locals = ["$$xpie_mask"]
 
 SRET:
-#% do reset_locals()
 #% do declare_locals(xret_locals)
     # if executing in S-mode, raise an illegal instruction exception if TSR=1
     jump SRET__no_tsr notEqual privilege_mode 0b01
@@ -2215,7 +2191,6 @@ SRET__no_tsr:
     jump xRET always
 
 MRET:
-#% do reset_locals()
 #% do declare_locals(xret_locals)
     # set privilege_mode to mstatus.MPP
     op and privilege_mode csr_mstatus 0b1100000000000
@@ -2262,8 +2237,10 @@ SFENCE.VMA__no_tvm:
 
     jump end_instruction always
 
-#% set modify_csr_start = 2
-#% set modify_csr_locals = ["$$modify_csr_op", "$$readonly", "$$modify_csr_write", "$$new_value", "$$csr_11_8"]
+#% set modify_csr_locals = ['$__clobbered', '$$modify_csr_op', '$$csr_labels']
+#% set modify_csr_op_offset = 1
+
+#% do declare_locals(modify_csr_locals)
 
 CSRRWI:
     # CSRI-type: rs1_id=uimm, imm=csr, rd_id
@@ -2272,9 +2249,7 @@ CSRRWI:
 
 CSRRW:
     # CSR-type: rs1, imm=csr, rd_id
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set $$modify_csr_op 1 # read/write
+    set $$modify_csr_op {{# 0 + modify_csr_op_offset }} # read/write
     jump modify_csr always
 
 CSRRSI:
@@ -2284,9 +2259,7 @@ CSRRSI:
 
 CSRRS:
     # CSR-type: rs1, imm=csr, rd_id
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set $$modify_csr_op 3 # read and set bits
+    set $$modify_csr_op {{# 2 + modify_csr_op_offset }} # read and set bits
     jump modify_csr always
 
 CSRRCI:
@@ -2296,77 +2269,49 @@ CSRRCI:
 
 CSRRC:
     # CSR-type: rs1, imm=csr, rd_id
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set $$modify_csr_op 5 # read and clear bits
+    set $$modify_csr_op {{# 4 + modify_csr_op_offset }} # read and clear bits
     # continue into modify_csr
 
 modify_csr:
-    # control flow:
-    # - trap if the CSR requires a higher privilege level than the current one
-    # - set modify_csr_op and modify_csr_write
-    # - jump to modify_csr__read
-    # - ignore access permissions at this point
-    # - read rd (tentative) from the CSR in {{CSRS}}
-    # - if there's a special handler for the CSR:
-    #   - jump to that handler
-    #   - if the CSR is not stored in {{CSRS}}, set rd to the current value
-    #   - if special write handling is required, set modify_csr_write to return to this handler
-    #   - set @counter to modify_csr_op
-    # - elif the CSR is marked as writable in the spec but we want it to be read-only:
-    #   - jump to end_instruction_with_rd
-    # - else:
-    #   - set @counter to modify_csr_op
-    # - set new_value based on rd (original value), rs1 (op input), and which argument was used
-    # - jump to end_instruction_with_rd if using RC/RS with input 0
-    # - trap if the CSR is read-only
-    # - set @counter to modify_csr_write
-    # - if a special handler previously set modify_csr_write:
-    #   - assume it's legal to write to the CSR
-    #   - apply any necessary modifications to WARL fields in new_value
-    #   - write new_value to the CSR
-    #   - jump to end_instruction_with_rd
-    # - else:
-    #   - assume it's legal to write to the CSR
-    #   - write new_value to the CSR in {{CSRS}}
-    #   - jump to end_instruction_with_rd
-
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-
     # csr is stored in imm
     # csr[9:8] encodes the lowest privilege level that can access the CSR
-    op shr $$csr_11_8 imm 8
-    op and $required_privilege $$csr_11_8 0b11
+    op shr $required_privilege imm 8
+    op and $required_privilege $required_privilege 0b11
     jump ILLEGAL_OP lessThan privilege_mode $required_privilege
 
     # disable all hypervisor CSRs
     jump ILLEGAL_OP equal $required_privilege 0b10
 
-    # 0x7b0-0x7bf are only visible to debug mode
-    op shr $csr_11_4 imm 4
-    jump ILLEGAL_OP equal $csr_11_4 0x7b
+    # look up the CSR labels
+    # csr_labels = csr_read * 1000 + csr_write
+    set _address imm
+    op add ret2 @counter 1
+    jump lookup_variable always
+    read $$csr_labels {{CSR_LABELS}} variable
 
     # read
 
-    # IMPORTANT: the values of modify_csr_op and modify_csr_write need to be updated if anything after this line is changed
-    # -----------------
-    op add $$modify_csr_write @counter {{# start_assert_length(12) }}
+    # convert modify_csr_op from relative to absolute
+    # we could just use an absolute address in modify_csr_op, but it'd be annoying this far into the code
     op add $$modify_csr_op @counter $$modify_csr_op
-    jump modify_csr__read always
+#directive start_assert_length {{ modify_csr_op_offset }}
+
+    # jump to read handler
+    op idiv @counter $$csr_labels 1000
 
     # modify
     # the old value is stored in the variable rd by this point
 
     # read/write (always write)
-    set $$new_value rs1
+#directive end_assert_length
+    set result rs1
     jump modify_csr__always_write always
     # read and set bits (conditional write)
-    op or $$new_value rs1 rd
+    op or result rs1 rd
     jump modify_csr__conditional_write always
     # read and clear bits (conditional write)
-    op not $$new_value rs1
-    op and $$new_value $$new_value rd
+    op not result rs1
+    op and result result rd
 
     # write
 
@@ -2376,138 +2321,42 @@ modify_csr__conditional_write:
     jump end_instruction_with_rd equal rs1_id 0
 
 modify_csr__always_write:
-    # csr[11:10] indicates whether the register is read/write (00, 01, 10) or read-only (11)
-    op and $$readonly imm 0b110000000000
-    jump ILLEGAL_OP equal $$readonly 0b110000000000
+    # jump to write handler
+    # if the CSR is read-only, this jumps to ILLEGAL_OP
+    op mod @counter $$csr_labels 1000
 
-    set @counter $$modify_csr_write
-    # -----------------
-    # end of jump section
+csr_read_csrs:
+#% do declare_locals(modify_csr_locals)
+    read rd {{CSRS}} variable
+    set @counter $$modify_csr_op
 
-modify_csr__write:
-    # if modify_csr_write still points here, we should write the modified value back to {{CSRS}}
-#directive end_assert_length
-    write $$new_value {{CSRS}} variable
+csr_write_csrs_align_4B:
+    op and result result 0xfffffffc
+    # continue into csr_write_csrs
 
+csr_write_csrs:
+    # write the modified value back to {{CSRS}}
+    write result {{CSRS}} variable
+    # continue into csr_write_readonly
+
+csr_write_readonly:
     jump end_instruction_with_rd always
 
-# determine if we should use a CSR-specific handler, or read from {{CSRS}}
-# TODO: raise illegal instruction exception for all unimplemented CSRs? (eg. for software extension detection)
-modify_csr__read:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    set _address imm
-    op add ret2 @counter 1
-    jump lookup_variable always
-    read rd {{CSRS}} variable
-
-    op and $csr_7_0 imm 0xff
-
-    jump modify_csr__read__supervisor equal $$csr_11_8 0x1
-    jump modify_csr__read__machine equal $$csr_11_8 0x3
-    jump modify_csr__read__timers equal $$csr_11_8 0xb
-    jump modify_csr__read__timers equal $$csr_11_8 0xc
-
-    jump ILLEGAL_OP equal imm 0x7a0 # tselect
-    jump ILLEGAL_OP equal imm 0xda0 # scountovf
-    jump ILLEGAL_OP equal imm 0xfb0 # mtopi
-
-modify_csr__read__default:
-    # none of the CSRs matched, so fallback to {{CSRS}}
-    set @counter $$modify_csr_op
-
-modify_csr__read__machine:
-    # machine-level CSRs
-    jump modify_csr__mstatus equal imm 0x300 # mstatus
-    jump modify_csr__readonly equal imm 0x301 # misa
-    jump modify_csr__readonly_zero equal imm 0x302 # medeleg
-    jump modify_csr__mideleg equal imm 0x303 # mideleg
-    jump modify_csr__mie equal imm 0x304 # mie
-    jump modify_csr__readonly_zero equal imm 0x310 # mstatush
-    jump modify_csr__readonly_zero equal imm 0x312 # medelegh
-    jump modify_csr__readonly_zero equal imm 0x31a # menvcfgh
-    jump modify_csr__readonly_zero equal imm 0x320 # mcountinhibit
-    jump ILLEGAL_OP equal imm 0x321 # mcyclecfg
-    jump modify_csr__mip equal imm 0x344 # mip
-
-    # PMP registers (unimplemented)
-    # the spec seems to imply these can be read-only zero if not implemented, but sail throws illegal op
-    jump modify_csr__read__privileged lessThan imm 0x3a0 # pmpcfg0
-    jump ILLEGAL_OP lessThanEq imm 0x3ef # pmpaddr63
-
-    # there are only four supervisor-level CSRs being checked
-    # so if no machine-mode CSR matches, we just continue through to get to the common privileged CSRs
-    # this takes a bit longer at runtime for those cases, but saves one instruction of code size
-    # thanks to the PMP range check, it's also pretty unlikely that we'll fall into that bucket
-
-modify_csr__read__supervisor:
-    # supervisor-level CSRs
-    jump modify_csr__sstatus equal imm 0x100 # sstatus
-    jump modify_csr__sie equal imm 0x104 # sie
-    jump modify_csr__sip equal imm 0x144 # sip
-    jump ILLEGAL_OP equal imm 0x14d # stimecmp
-    jump modify_csr__satp equal imm 0x180 # satp
-
-modify_csr__read__privileged:
-    # CSRs that use the same handler for supervisor- and machine-level
-    jump modify_csr__align_4B equal $csr_7_0 0x05 # xtvec
-    jump modify_csr__readonly_zero equal $csr_7_0 0x0a # xenvcfg
-    jump ILLEGAL_OP equal $csr_7_0 0x0c # xstateen0
-    jump modify_csr__align_4B equal $csr_7_0 0x41 # xepc
-
-    # fallback
-    set @counter $$modify_csr_op
-
-modify_csr__read__timers:
-    # all of the machine and user timer CSRs start with 0xb or 0xc respectively
-    # and follow the pattern 0b10011111
-    op and $tmp imm 0b1100000
-    jump modify_csr__read__default notEqual $tmp 0
-
-    # U-mode timers (unimplemented)
-    jump ILLEGAL_OP equal $$csr_11_8 0xc
-
-    # Zicntr is not implemented, so trap if not in M-mode
-    jump ILLEGAL_OP lessThan privilege_mode 0b11
-
-    jump modify_csr__read__default equal $csr_7_0 0x00 # mcycle
-    jump modify_csr__minstret equal $csr_7_0 0x02 # minstret
-
-    jump modify_csr__read__default equal $csr_7_0 0x80 # mcycleh
-    jump modify_csr__minstreth equal $csr_7_0 0x82 # minstreth
-
-    # hardwire all of the hpmcounter registers to 0
-    # continue into modify_csr__readonly_zero
-
-modify_csr__readonly_zero:
-#% do reset_locals(modify_csr_start)
+csr_read_zero:
 #% do declare_locals(modify_csr_locals)
     set rd 0
-modify_csr__readonly:
-    set $$modify_csr_write {{# labels.end_instruction_with_rd }}
     set @counter $$modify_csr_op
 
-modify_csr__align_4B:
-#% do reset_locals(modify_csr_start)
-#% do declare_locals(modify_csr_locals)
-    op add $$modify_csr_write @counter 1
-    set @counter $$modify_csr_op
-
-    op and $$new_value $$new_value 0xfffffffc
-    jump modify_csr__write always
-
-modify_csr__mideleg:
-#% do reset_locals(modify_csr_start)
+csr_read_mideleg:
 #% do declare_locals(modify_csr_locals)
     # we always delegate supervisor interrupts to S-mode, so reflect that in mideleg
     # SEIE                         -
     # STIE                             -
     # SSIE                                 -
     set rd 0b00000000000000000000001000100010
-    jump modify_csr__readonly always
+    set @counter $$modify_csr_op
 
-modify_csr__sstatus:
-#% do reset_locals(modify_csr_start)
+csr_read_sstatus:
 #% do declare_locals(modify_csr_locals)
     # subset of mstatus
     # MXR                               -
@@ -2516,43 +2365,39 @@ modify_csr__sstatus:
     # SPIE                                            -
     # SIE                                                 -
     op and rd csr_mstatus 0b00000000000011000000000100100010
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_sstatus:
     # insert new writable fields
     op and csr_mstatus csr_mstatus 0b11111111111100111111111011011101
-    op and $$new_value $$new_value 0b00000000000011000000000100100010
-    op or csr_mstatus csr_mstatus $$new_value
+    op and result result 0b00000000000011000000000100100010
+    op or csr_mstatus csr_mstatus result
 
-    jump modify_csr__xstatus always
+    jump csr_xstatus always
 
-modify_csr__mstatus:
-#% do reset_locals(modify_csr_start)
+csr_read_mstatus:
 #% do declare_locals(modify_csr_locals)
     set rd csr_mstatus
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_mstatus:
     # clear WPRI and read-only zero fields
     # SD/XS/FS/VS                    -              ----  --
     # WPRI                            --------                  - - -
     # UBE                                                     -
-    op and csr_mstatus $$new_value 0b00000000011111100001100110101010
+    op and csr_mstatus result 0b00000000011111100001100110101010
 
     # if MPP was set to 10 (reserved), set it to 0
     op and $mstatus.mpp csr_mstatus 0b1100000000000
-    jump modify_csr__xstatus notEqual $mstatus.mpp 0b1000000000000
+    jump csr_xstatus notEqual $mstatus.mpp 0b1000000000000
     op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
 
-modify_csr__xstatus:
+csr_xstatus:
     # update effective_privilege_mode
     set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
     jump get_effective_privilege_mode always
 
-modify_csr__sip:
-#% do reset_locals(modify_csr_start)
+csr_read_sip:
 #% do declare_locals(modify_csr_locals)
     # subset of mip
     # platform            --------------
@@ -2560,39 +2405,35 @@ modify_csr__sip:
     # STIP                                        -
     # SSIP                                            -
     op and rd csr_mip 0b00111111111111110000001000100010
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_sip:
     # insert new writable fields
     # SSIP                                                         -
     op and csr_mip csr_mip         0b11111111111111111111111111111101
-    op and $$new_value $$new_value 0b00000000000000000000000000000010
-    op or csr_mip csr_mip $$new_value
+    op and result result 0b00000000000000000000000000000010
+    op or csr_mip csr_mip result
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
-modify_csr__mip:
-#% do reset_locals(modify_csr_start)
+csr_read_mip:
 #% do declare_locals(modify_csr_locals)
     # hide internal interrupt flags
     op and rd csr_mip 0b00111111111111111111111111111111
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_mip:
     # insert new writable fields
     # SEIP                                                 -
     # STIP                                                     -
     # SSIP                                                         -
     op and csr_mip csr_mip         0b11111111111111111111110111011101
-    op and $$new_value $$new_value 0b00000000000000000000001000100010
-    op or csr_mip csr_mip $$new_value
+    op and result result 0b00000000000000000000001000100010
+    op or csr_mip csr_mip result
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
-modify_csr__sie:
-#% do reset_locals(modify_csr_start)
+csr_read_sie:
 #% do declare_locals(modify_csr_locals)
     # subset of mie
     # platform          ----------------
@@ -2600,84 +2441,95 @@ modify_csr__sie:
     # STIE                                        -
     # SSIE                                            -
     op and rd csr_mie 0b11111111111111110000001000100010
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_sie:
     # insert new writable fields
     # SEIE                                                 -
     # STIE                                                     -
     # SSIE                                                         -
     op and csr_mie csr_mie         0b11111111111111111111110111011101
-    op and $$new_value $$new_value 0b00000000000000000000001000100010
-    op or csr_mie csr_mie $$new_value
+    op and result result 0b00000000000000000000001000100010
+    op or csr_mie csr_mie result
 
     jump end_instruction_with_rd_and_fire_interrupts always
 
-modify_csr__mie:
-#% do reset_locals(modify_csr_start)
+csr_read_mie:
 #% do declare_locals(modify_csr_locals)
     set rd csr_mie
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_mie:
     # get new writable fields
     # MEIE                                           -
     # SEIE                                             -
     # MTIE                                               -
     # STIE                                                 -
     # SSIE                                                     -
-    op and csr_mie $$new_value 0b00000000000000000000101010100010
-
+    op and csr_mie result 0b00000000000000000000101010100010
     jump end_instruction_with_rd_and_fire_interrupts always
 
-modify_csr__satp:
-#% do reset_locals(modify_csr_start)
+csr_read_satp:
 #% do declare_locals(modify_csr_locals)
-
     # if executing in S-mode, raise an illegal instruction exception if TVM=1
-    jump modify_csr__satp__ok notEqual privilege_mode 0b01
+    jump csr_read_satp__ok notEqual privilege_mode 0b01
     op and $mstatus.tvm csr_mstatus 0b100000000000000000000
     jump ILLEGAL_OP notEqual $mstatus.tvm 0
-modify_csr__satp__ok:
+csr_read_satp__ok:
 
     set rd csr_satp
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_satp:
     # we don't use ASID for anything, but riscv-sail doesn't allow us to configure ASIDLEN, so the tests will fail if we zero ASID
     # https://github.com/riscv/sail-riscv/blob/d8c3006f0ff4dbd33be876d9d62abb085c7f5298/model/riscv_xlen.sail#L25
-    set csr_satp $$new_value
+    set csr_satp result
 
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: this may not be strictly required by the spec
     jump end_instruction_with_rd_and_invalidate_icache always
 
-modify_csr__minstret:
-#% do reset_locals(modify_csr_start)
+# FIXME: add support for mcounteren/scounteren
+
+csr_read_cycle:
+#% do declare_locals(modify_csr_locals)
+    read rd {{CSRS}} "{{ 'mcycle'|csr }}"
+    set @counter $$modify_csr_op
+
+csr_read_cycleh:
+#% do declare_locals(modify_csr_locals)
+    read rd {{CSRS}} "{{ 'mcycleh'|csr }}"
+    set @counter $$modify_csr_op
+
+csr_read_time:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_mtime
+    set @counter $$modify_csr_op
+
+csr_read_timeh:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_mtimeh
+    set @counter $$modify_csr_op
+
+csr_read_minstret:
 #% do declare_locals(modify_csr_locals)
     set rd csr_minstret
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_minstret:
     # a value written to instret by one instruction should be the value read by the following instruction
-    op sub csr_minstret $$new_value 1
+    op sub csr_minstret result 1
     jump end_instruction_with_rd always
 
-modify_csr__minstreth:
-#% do reset_locals(modify_csr_start)
+csr_read_minstreth:
 #% do declare_locals(modify_csr_locals)
     set rd csr_minstreth
-
-    op add $$modify_csr_write @counter 1
     set @counter $$modify_csr_op
 
+csr_write_minstreth:
     # a value written to instret by one instruction should be the value read by the following instruction
     op sub csr_minstret csr_minstret 1
-    set csr_minstreth $$new_value
+    set csr_minstreth result
     jump end_instruction_with_rd always
 
 MLOGSYS:
@@ -2742,6 +2594,7 @@ set {{REGISTERS}} null
 set {{CSRS}} null
 set {{INCR}} null
 set {{CONFIG}} null
+set {{CSR_LABELS}} null
 set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
 set {{PAGESIZE}} null
@@ -2828,4 +2681,32 @@ jump decode_BRANCH always
 jump decode_JALR always
 jump decode_JAL always
 jump decode_SYSTEM always
+jump csr_read_cycle always
+jump csr_read_time always
+jump csr_read_minstret always
+jump csr_read_zero always
+jump csr_read_cycleh always
+jump csr_read_timeh always
+jump csr_read_minstreth always
+jump csr_read_sstatus always
+jump csr_read_sie always
+jump csr_read_csrs always
+jump csr_read_sip always
+jump csr_read_satp always
+jump csr_read_mstatus always
+jump csr_read_mideleg always
+jump csr_read_mie always
+jump csr_read_mip always
+jump csr_write_sstatus always
+jump csr_write_sie always
+jump csr_write_csrs_align_4B always
+jump csr_write_csrs always
+jump csr_write_readonly always
+jump csr_write_sip always
+jump csr_write_satp always
+jump csr_write_mstatus always
+jump csr_write_mie always
+jump csr_write_mip always
+jump csr_write_minstret always
+jump csr_write_minstreth always
 # {% endraw %}

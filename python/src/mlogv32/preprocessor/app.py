@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any, Iterable, Literal, TypedDict, Unpack, cast, overload
+from typing import Annotated, Any, Iterable, Literal, Unpack, cast, overload
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -31,6 +31,7 @@ from .parser import (
     iter_labels,
     parse_mlog,
 )
+from .types import ConfigArgs, ConfigsYaml, Labels
 
 app = Typer(
     pretty_exceptions_show_locals=False,
@@ -273,6 +274,7 @@ Code size:
         [LocalVariables],
         force=True,
         instructions=config.instructions,
+        csrs=config.csrs,
         labels=worker_labels,
         VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
     )
@@ -344,7 +346,7 @@ Code size:
         for y in lenrange(0, 16):
             add_peripheral(simple_block(BEContent.TILE_LOGIC_DISPLAY, x, y))
 
-    display_link = ProcessorLink(0, 0, "cell2")
+    display_link = ProcessorLink(0, 0, "")
 
     add_peripheral(lookups_schem, 0, 16)
     lookup_links = [
@@ -354,9 +356,11 @@ Code size:
 
     add_label(4, 19, right="UART0, UART2", down="LABELS")
     add_peripheral(simple_block(Content.WORLD_CELL, 4, 18))
-    add_label(4, 16, right="UART1, UART3")
+    add_peripheral(ram_schem, 4, 17)
+    add_label(4, 16, up="CSR_LABELS", right="UART1, UART3")
 
     labels_link = ProcessorLink(4, 18, "")
+    csr_labels_link = ProcessorLink(4, 17, "processor20")
 
     uart_links = list[ProcessorLink]()
     for x in lenrange(5, 4, 2):
@@ -457,6 +461,7 @@ Code size:
                         csrs_link,
                         incr_link,
                         config_link,
+                        csr_labels_link,
                         error_output_link,
                         power_switch_link,
                         pause_switch_link,
@@ -490,6 +495,7 @@ Code size:
                                 csrs_link,
                                 incr_link,
                                 config_link,
+                                csr_labels_link,
                                 controller_link,
                                 error_output_link,
                                 x=x,
@@ -656,13 +662,6 @@ def relative_links(*links: ProcessorLink, x: int, y: int):
     return [ProcessorLink(link.x - x, link.y - y, link.name) for link in links]
 
 
-class Labels(TypedDict, total=False):
-    up: str
-    left: str
-    right: str
-    down: str
-
-
 def create_jinja_env(
     template_dir: Path,
     extensions: Iterable[type[Extension] | str] = (),
@@ -714,24 +713,6 @@ def get_template_output_path(path: Path):
     if path.suffix != ".jinja":
         raise ValueError(f"Expected .jinja suffix, but got {path.suffix}: {path}")
     return path.with_suffix("")
-
-
-class ConfigsYaml(TypedDict):
-    template: str
-    defaults: dict[str, Any]
-    configs: dict[str, dict[str, Any]]
-
-
-class ConfigArgs(TypedDict):
-    UART_FIFO_CAPACITY: int
-    DATA_ROM_ROWS: int
-
-    MEMORY_X_OFFSET: int
-    MEMORY_Y_OFFSET: int
-    MEMORY_WIDTH: int
-    PROGRAM_ROM_ROWS: int
-    RAM_ROWS: int
-    ICACHE_ROWS: int
 
 
 if __name__ == "__main__":

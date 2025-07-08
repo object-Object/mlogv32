@@ -1,3 +1,7 @@
+%TAG !py! tag:yaml.org,2002:python/object/apply:builtins.
+
+---
+
 templates:
   controller: controller.mlog.jinja
   worker: worker.mlog.jinja
@@ -98,15 +102,16 @@ instructions:
   - label: decode_OP
   - label: decode_LUI
   - label: decode_illegal_instruction # OP-32
-  - label: decode_illegal_instruction # 64b
-  - label: decode_illegal_instruction # MADD
-  - label: decode_illegal_instruction # MSUB
-  - label: decode_illegal_instruction # NMSUB
-  - label: decode_illegal_instruction # NMADD
-  - label: decode_illegal_instruction # OP-FP
-  - label: decode_illegal_instruction # OP-V
-  - label: decode_illegal_instruction # custom-2/rv128
-  - label: decode_illegal_instruction # 48b
+    count: 10
+    # 64b
+    # MADD
+    # MSUB
+    # NMSUB
+    # NMADD
+    # OP-FP
+    # OP-V
+    # custom-2/rv128
+    # 48b
   - label: decode_BRANCH
   - label: decode_JALR
   - label: decode_illegal_instruction # reserved
@@ -115,3 +120,174 @@ instructions:
   - label: decode_illegal_instruction # OP-VE
   - label: decode_illegal_instruction # custom-3/rv128
   - label: decode_illegal_instruction # >=80b
+
+csrs:
+  # -- unprivileged --
+
+  # counter/timers
+  cycle:
+    read: LABEL
+  time:
+    read: LABEL
+  instret:
+    read: minstret
+  hpmcounter{}:
+    args: !py!range [3, 32]
+    read: zero
+  cycleh:
+    read: LABEL
+  timeh:
+    read: LABEL
+  instreth:
+    read: minstreth
+  hpmcounter{}h:
+    args: !py!range [3, 32]
+    read: zero
+
+  # -- supervisor --
+
+  # trap setup
+  sstatus:
+    read: LABEL
+    write: LABEL
+  sie:
+    read: LABEL
+    write: LABEL
+  stvec:
+    read: csrs
+    write: csrs_align_4B
+  scounteren:
+    read: csrs
+    write: csrs
+
+  # configuration
+  senvcfg:
+    read: zero
+    write: readonly
+
+  # counter setup
+  scountinhibit:
+    read: zero
+    write: readonly
+
+  # trap handling
+  sscratch:
+    read: csrs
+    write: csrs
+  sepc:
+    read: csrs
+    write: csrs_align_4B
+  scause:
+    read: csrs
+    write: csrs
+  stval:
+    read: csrs
+    write: csrs
+  sip:
+    read: LABEL
+    write: LABEL
+
+  # protection and translation
+  satp:
+    read: LABEL
+    write: LABEL
+
+  # -- machine --
+
+  # information
+  mvendorid:
+    read: zero
+  marchid:
+    read: zero
+  mimpid:
+    read: zero
+  mhartid:
+    read: zero
+  mconfigptr:
+    read: zero
+
+  # trap setup
+  mstatus:
+    read: LABEL
+    write: LABEL
+  misa:
+    read: csrs
+    write: readonly
+  medeleg:
+    read: zero
+    write: readonly
+  mideleg:
+    read: LABEL
+    write: readonly
+  mie:
+    read: LABEL
+    write: LABEL
+  mtvec:
+    read: csrs
+    write: csrs_align_4B
+  mcounteren:
+    read: csrs
+    write: csrs
+  mstatush:
+    read: zero
+    write: readonly
+  medelegh:
+    read: zero
+    write: readonly
+
+  # trap handling
+  mscratch:
+    read: csrs
+    write: csrs
+  mepc:
+    read: csrs
+    write: csrs_align_4B
+  mcause:
+    read: csrs
+    write: csrs
+  mtval:
+    read: csrs
+    write: csrs
+  mip:
+    read: LABEL
+    write: LABEL
+
+  # configuration
+  menvcfg:
+    read: zero
+    write: readonly
+  menvcfgh:
+    read: zero
+    write: readonly
+
+  # counter/timers
+  mcycle:
+    read: csrs
+    write: csrs
+  minstret:
+    read: LABEL
+    write: LABEL
+  mhpmcounter{}:
+    args: !py!range [3, 32]
+    read: zero
+    write: readonly
+  mcycleh:
+    read: csrs
+    write: csrs
+  minstreth:
+    read: LABEL
+    write: LABEL
+  mhpmcounter{}h:
+    args: !py!range [3, 32]
+    read: zero
+    write: readonly
+
+  # counter setup
+  # mhpmevent{}h is defined only if the Sscofpmf extension is implemented
+  mcountinhibit:
+    read: zero
+    write: readonly
+  mhpmevent{}:
+    args: !py!range [3, 32]
+    read: zero
+    write: readonly

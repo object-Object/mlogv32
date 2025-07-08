@@ -192,7 +192,8 @@ class LocalVariables(Extension):
         self._env.local_variable_index = i
         self._env.local_variable_cache.clear()
 
-    def declare_locals(self, *names: str | list[str]):
+    def declare_locals(self, *names: str | list[str], i: int = 1):
+        self.reset_locals(i)
         for name in names:
             if isinstance(name, list):
                 self.declare_locals(*name)

@@ -24,5 +24,6 @@
     "python.languageServer": "Pylance",
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.packageIndexDepths": [{ "name": "jinja2", "depth": 2 }],
-    "files.eol": "\n"
+    "files.eol": "\n",
+    "yaml.customTags": ["tag:yaml.org,2002:python/object/apply:builtins.range sequence"]
 }

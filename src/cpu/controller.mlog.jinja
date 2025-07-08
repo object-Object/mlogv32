@@ -9,6 +9,7 @@
 #% set CSRS = 'processor17'
 #% set INCR = 'processor18'
 #% set CONFIG = 'processor19'
+#% set CSR_LABELS = 'processor20'
 
 #% set ERROR_OUTPUT = 'message1'
 
@@ -85,17 +86,17 @@ disable_ram:
     op add i i 1
     jump disable_ram lessThan i END_PROC
 
-    # initialize INCR
+    # initialize INCR and CSR_LABELS
 
-    set address 0
-    op add ret @counter 1
-    jump lookup_variable always
-    set prev_variable variable
+    set prev_variable "{{ 0|ram_var }}"
 
     set address 4
 init_incr:
-    set variable null
+    # jump to ILLEGAL_OP for all unimplemented CSRs
+#% set value = labels['ILLEGAL_OP'] * 1000 + labels['ILLEGAL_OP']
+    write {{value}} {{CSR_LABELS}} prev_variable
 
+    set variable null
     op add ret @counter 1
     jump lookup_variable lessThan address {{RAM_PROC_BYTES}}
 
@@ -115,13 +116,36 @@ init_incr__not_null:
 
     # initialize label lookup table
 
-#% set ns = namespace(i=0)
+#% set ns = namespace(i=0, loop=0)
 #% for instruction in instructions
     # {{ instruction.label }}
-    #% for _ in range(instruction.count)
+#%#- unroll the loop if it's equal or better in terms of code size, else generate a loop
+#% if instruction.count <= 4
+#% for _ in range(instruction.count)
     write {{labels[instruction.label]}} {{LABELS}} {{ns.i}}
-    #% set ns.i = ns.i + 1
-    #% endfor
+#% set ns.i = ns.i + 1
+#% endfor
+#% else
+    set i {{ns.i}}
+#% set ns.i = ns.i + instruction.count
+init_labels__loop{{ns.loop}}:
+    write {{labels[instruction.label]}} {{LABELS}} i
+    op add i i 1
+    jump init_labels__loop{{ns.loop}} lessThan i {{ns.i}}
+#% set ns.loop = ns.loop + 1
+#% endif
+#% endfor
+
+    # initialize CSR lookup table
+
+#% for name, csr in csrs.items()
+#% set read_label = 'csr_read_' ~ csr.read
+#% set write_label = 'csr_write_' ~ csr.write if csr.write is not none else 'ILLEGAL_OP'
+#% set value = labels[read_label] * 1000 + labels[write_label]
+    # {{ name }}
+    # read: {{ read_label }} ({{ labels[read_label] }})
+    # write: {{ write_label }} ({{ labels[write_label] }})
+    write {{value}} {{CSR_LABELS}} "{{ name|csr }}"
 #% endfor
 
     # ^ all of this only needs to run once, so skip it on subsequent runs to make startup faster
@@ -371,6 +395,7 @@ set {{LABELS}} null
 set {{CSRS}} null
 set {{INCR}} null
 set {{CONFIG}} null
+set {{CSR_LABELS}} null
 set {{ERROR_OUTPUT}} null
 set {{SINGLE_STEP_SWITCH}} null
 set {{POWER_SWITCH}} null
@@ -378,6 +403,7 @@ set {{PAUSE_SWITCH}} null
 set {{labels[instruction.label]}} null
 set {{loop.index0}} null
 set {{ns.i}} null
+set {{value}} null
 # unused variables
 set _ PROGRAM_ROM_SIZE
 set _ DATA_ROM_SIZE

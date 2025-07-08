@@ -16,7 +16,7 @@ Instructions are cached in the following format, utilizing the full 54 bits of `
 | ----------------- | ----- | ----- | ----- | ---- |
 | op_id (-64 to 63) | rs2   | rs1   | rd    | imm  |
 
-The CPU is implemented using a variable-size build-order-independent subframe architecture. There is one controller processor (`src/cpu/controller.mlog.jinja`) and an arbitrary number of worker processors (`src/cpu/worker.mlog.jinja`). Schematics are generated using a custom preprocessor (`python/src/mlogv32/preprocessor`) based on Jinja and pymsch.
+The CPU is implemented using a variable-size build-order-independent subframe architecture. There is one [controller processor](src/cpu/controller.mlog.jinja) and an arbitrary number of [worker processors](src/cpu/worker.mlog.jinja). Schematics are generated using a [custom preprocessor](python/src/mlogv32/preprocessor) based on Jinja and pymsch.
 
 ## Memory
 
@@ -112,6 +112,7 @@ Supported address translation schemes: Bare, Sv32
 | I           | 2.1     |
 | M           | 2.0     |
 | A           | 2.1     |
+| Zicntr      | 2.0     |
 | Zicsr       | 2.0     |
 | Zifencei\*  | 2.0     |
 | Zihintpause | 2.0     |
@@ -140,46 +141,7 @@ The `mlogsys.icache` M-mode instruction uses register _rs1_ as the number of byt
 
 ## CSRs
 
-CSR values are stored either in a RAM processor (CSRS) or in a variable in the CPU, depending on the CSR. Following is a table of CSRs, their storage location, and any relevant notes (eg. supported fields).
-
-| CSR               | Location | Notes                                                                                   |
-| ----------------- | -------- | --------------------------------------------------------------------------------------- |
-| `sstatus`         | CPU      | Subset of `mstatus`.                                                                    |
-| `sie`             | CPU      | Subset of `mie`.                                                                        |
-| `stvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `scounteren`      | CSRS     |                                                                                         |
-| `senvcfg`         | CSRS     | Bits 31:1 read-only zero.                                                               |
-| `sscratch`        | CSRS     |                                                                                         |
-| `sepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `scause`          | CSRS     |                                                                                         |
-| `stval`           | CSRS     |                                                                                         |
-| `sip`             | CPU      | Subset of `mip`.                                                                        |
-| `satp`            | CPU      |                                                                                         |
-| `mvendorid`       | CSRS     | Read-only zero.                                                                         |
-| `marchid`         | CSRS     | Read-only zero.                                                                         |
-| `mimpid`          | CSRS     | Read-only zero.                                                                         |
-| `mhartid`         | CSRS     | Read-only zero.                                                                         |
-| `mstatus`         | CPU      |                                                                                         |
-| `mstatush`        | CSRS     | Read-only zero.                                                                         |
-| `misa`            | CSRS     | Read-only.                                                                              |
-| `medeleg`         | CSRS     | Read-only zero.                                                                         |
-| `medelegh`        | CSRS     | Read-only zero.                                                                         |
-| `mideleg`         | CSRS     | Read-only. Supervisor-level interrupts are always delegated to S-mode.                  |
-| `mie`             | CPU      |                                                                                         |
-| `mtvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `mcounteren`      | CSRS     |                                                                                         |
-| `mscratch`        | CSRS     |                                                                                         |
-| `mepc`            | CSRS     | Bits 1:0 read-only zero.                                                                |
-| `mcause`          | CSRS     | Stored in CSRS because the CPU often speculatively sets the corresponding CPU variable. |
-| `mtval`           | CSRS     | Same reasoning as `mcause`.                                                             |
-| `mip`             | CPU      |                                                                                         |
-| `menvcfg`         | CSRS     | Bits 31:1 read-only zero.                                                               |
-| `menvcfgh`        | CSRS     | Read-only zero.                                                                         |
-| `pmpcfg*`         | CSRS     | Read-only zero.                                                                         |
-| `pmpaddr*`        | CSRS     | Read-only zero.                                                                         |
-| `mcycle[h]`       | CSRS     | Frequency: ticks \* ipt.                                                                |
-| `minstret[h]`     | CPU      |                                                                                         |
-| `mhpmcounter*[h]` | CSRS     | See `hpmcounter*[h]`.                                                                   |
+CSR values are stored either in a RAM processor (CSRS), in a variable in the CPU, or as an implicit read-only zero value, depending on the CSR. See [cpu.yaml](src/cpu/cpu.yaml) for the full list of implemented CSRs. Attempts to access a CSR that is not in this list will raise an illegal instruction exception.
 
 ## riscv-arch-test
 

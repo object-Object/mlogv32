@@ -133,7 +133,7 @@ csrs:
     read: minstret
   hpmcounter{}:
     args: !py!range [3, 32]
-    read: zero
+    read: hpmcounter
   cycleh:
     read: LABEL
   timeh:
@@ -142,7 +142,7 @@ csrs:
     read: minstreth
   hpmcounter{}h:
     args: !py!range [3, 32]
-    read: zero
+    read: hpmcounter
 
   # -- supervisor --
 

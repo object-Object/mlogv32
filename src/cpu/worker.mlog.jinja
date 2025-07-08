@@ -2489,32 +2489,30 @@ csr_write_satp:
     # TODO: this may not be strictly required by the spec
     jump end_instruction_with_rd_and_invalidate_icache always
 
-# FIXME: add support for mcounteren/scounteren
-
 csr_read_cycle:
 #% do declare_locals(modify_csr_locals)
     read rd {{CSRS}} "{{ 'mcycle'|csr }}"
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_read_cycleh:
 #% do declare_locals(modify_csr_locals)
     read rd {{CSRS}} "{{ 'mcycleh'|csr }}"
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_read_time:
 #% do declare_locals(modify_csr_locals)
     set rd csr_mtime
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_read_timeh:
 #% do declare_locals(modify_csr_locals)
     set rd csr_mtimeh
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_read_minstret:
 #% do declare_locals(modify_csr_locals)
     set rd csr_minstret
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_write_minstret:
     # a value written to instret by one instruction should be the value read by the following instruction
@@ -2524,13 +2522,40 @@ csr_write_minstret:
 csr_read_minstreth:
 #% do declare_locals(modify_csr_locals)
     set rd csr_minstreth
-    set @counter $$modify_csr_op
+    jump check_xcounteren always
 
 csr_write_minstreth:
     # a value written to instret by one instruction should be the value read by the following instruction
     op sub csr_minstret csr_minstret 1
     set csr_minstreth result
     jump end_instruction_with_rd always
+
+csr_read_hpmcounter:
+#% do declare_locals(modify_csr_locals)
+    set rd 0
+    # continue into check_xcounteren
+
+check_xcounteren:
+    # if in M-mode, always allow counter accesses
+    jump check_xcounteren__m_mode equal privilege_mode 0b11
+
+    # if in S-mode, only require the bit to be set in mcounteren
+    read $xcounteren {{CSRS}} "{{ 'mcounteren'|csr }}"
+    jump check_xcounteren__s_mode equal privilege_mode 0b01
+
+    # if in U-mode, also require the bit to be set in scounteren
+    read $scounteren {{CSRS}} "{{ 'scounteren'|csr }}"
+    op and $xcounteren $xcounteren $scounteren
+check_xcounteren__s_mode:
+
+    # trap if the bit in xcounteren corresponding to the CSR being read is clear
+    op and $bit imm 31
+    op shr $bit $xcounteren $bit
+    op and $bit $bit 0b1
+    jump ILLEGAL_OP equal $bit 0
+
+check_xcounteren__m_mode:
+    set @counter $$modify_csr_op
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id
@@ -2684,6 +2709,7 @@ jump decode_SYSTEM always
 jump csr_read_cycle always
 jump csr_read_time always
 jump csr_read_minstret always
+jump csr_read_hpmcounter always
 jump csr_read_zero always
 jump csr_read_cycleh always
 jump csr_read_timeh always

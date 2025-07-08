@@ -164,7 +164,7 @@ CSR values are stored either in a RAM processor (CSRS) or in a variable in the C
 | `misa`            | CSRS     | Read-only.                                                                              |
 | `medeleg`         | CSRS     | Read-only zero.                                                                         |
 | `medelegh`        | CSRS     | Read-only zero.                                                                         |
-| `mideleg`         | CSRS     | Read-only zero.                                                                         |
+| `mideleg`         | CSRS     | Read-only. Supervisor-level interrupts are always delegated to S-mode.                  |
 | `mie`             | CPU      |                                                                                         |
 | `mtvec`           | CSRS     | Bits 1:0 read-only zero.                                                                |
 | `mcounteren`      | CSRS     |                                                                                         |

@@ -92,7 +92,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 147
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 148
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -173,13 +173,16 @@ fire_interrupts:
 #% do reset_locals()
     op and csr_mip csr_mip 0b10111111111111111111111111111111 # clear interrupt_flags.fire
 
-    # if privilege_mode < M, machine interrupts are globally enabled
-    jump fire_interrupts__machine lessThan privilege_mode 0b11
-    # if privilege_mode = M, machine interrupts are enabled if mstatus.MIE is 1
-    op and $mstatus.mie csr_mstatus 0b1000
-    jump main equal $mstatus.mie 0
+    # in U-mode, interrupts are always enabled
+    jump fire_interrupts__ok lessThan privilege_mode 0b01
 
-fire_interrupts__machine:
+    # in S-mode or M-mode, interrupts are enabled if mstatus.xIE is 1
+    # conveniently, SIE is bit 1 and MIE is bit 3
+    op shl $mstatus.xie 1 privilege_mode
+    op and $mstatus.xie $mstatus.xie csr_mstatus
+    jump main equal $mstatus.xie 0
+
+fire_interrupts__ok:
 #% do reset_locals()
     # interrupt priority order: MEI, MSI*, MTI, SEI, SSI, STI, LCOFI*
     # * not implemented
@@ -199,17 +202,17 @@ fire_interrupts__machine:
     # supervisor external interrupt
     set mcause 0x80000009
     op and $enabled $interrupts 0b1000000000 # SEIP
-    jump trap_without_mtval notEqual $enabled 0
+    jump supervisor_trap_without_mtval notEqual $enabled 0
 
     # supervisor software interrupt
     set mcause 0x80000001
     op and $enabled $interrupts 0b10 # SSIP
-    jump trap_without_mtval notEqual $enabled 0
+    jump supervisor_trap_without_mtval notEqual $enabled 0
 
     # supervisor timer interrupt
     set mcause 0x80000005
     op and $enabled $interrupts 0b100000 # STIP
-    jump trap_without_mtval notEqual $enabled 0
+    jump supervisor_trap_without_mtval notEqual $enabled 0
 
 main:
     # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
@@ -357,8 +360,38 @@ state->reset:
     set state "reset"
     jump reset always
 
-ILLEGAL_OP:
+supervisor_trap_without_mtval:
 #% do reset_locals()
+    set mtval 0
+
+    # don't trap from M-mode to S-mode
+    jump trap greaterThan privilege_mode 0b01
+
+    # set sstatus.SPIE to sstatus.SIE, set sstatus.SIE to 0, and set sstatus.SPP to privilege_mode
+    op and $mstatus.xpie csr_mstatus 0b10
+
+    op shl $mstatus.xpp privilege_mode 8
+
+    op and csr_mstatus csr_mstatus 0b11111111111111111111111011011101
+    
+    # set scause
+    write mcause {{CSRS}} "{{ 'scause'|csr }}"
+
+    # set stval
+    write mtval {{CSRS}} "{{ 'stval'|csr }}"
+
+    # set sepc to current pc
+    write pc {{CSRS}} "{{ 'sepc'|csr }}"
+
+    # we only support direct mode, so set next_pc to mtvec
+    read next_pc {{CSRS}} "{{ 'stvec'|csr }}"
+
+    # trap into S-mode
+    set privilege_mode 0b01
+
+    jump common_trap always
+
+ILLEGAL_OP:
     set mcause 2
     # TODO: return faulting instruction bits?
     # continue into trap_without_mtval
@@ -368,22 +401,12 @@ trap_without_mtval:
     # continue into trap
 
 trap:
-    jump trap__breakpoint strictEqual pc breakpoint_address
-    jump trap__no_breakpoint notEqual single_step_enabled true
-trap__breakpoint:
-    set state "trap_breakpoint"
-    stop
-trap__no_breakpoint:
-
     # set mstatus.MPIE to mstatus.MIE, set mstatus.MIE to 0, and set mstatus.MPP to privilege_mode
-    op and $mstatus.mpie csr_mstatus 0b1000
-    op shl $mstatus.mpie $mstatus.mpie 4
+    op and $mstatus.xpie csr_mstatus 0b1000
 
-    op shl $mstatus.mpp privilege_mode 11
+    op shl $mstatus.xpp privilege_mode 11
 
     op and csr_mstatus csr_mstatus 0b11111111111111111110011101110111
-    op or csr_mstatus csr_mstatus $mstatus.mpie
-    op or csr_mstatus csr_mstatus $mstatus.mpp
 
     # set mcause
     write mcause {{CSRS}} "{{ 'mcause'|csr }}"
@@ -397,8 +420,21 @@ trap__no_breakpoint:
     # we only support direct mode, so set next_pc to mtvec
     read next_pc {{CSRS}} "{{ 'mtvec'|csr }}"
 
-    # medeleg and mideleg are not implemented, so always trap into M-mode
+    # trap into M-mode
     set privilege_mode 0b11
+
+common_trap:
+    op shl $mstatus.xpie $mstatus.xpie 4
+    op or csr_mstatus csr_mstatus $mstatus.xpie
+    op or csr_mstatus csr_mstatus $mstatus.xpp
+
+    # check for breakpoints
+    jump trap__breakpoint strictEqual pc breakpoint_address
+    jump trap__no_breakpoint notEqual single_step_enabled true
+trap__breakpoint:
+    set state "trap_breakpoint"
+    stop
+trap__no_breakpoint:
 
     # update effective_privilege_mode
     # tail call into end_instruction_trap so we don't update instret
@@ -2385,11 +2421,11 @@ modify_csr__read__machine:
     jump modify_csr__mstatus equal imm 0x300 # mstatus
     jump modify_csr__readonly equal imm 0x301 # misa
     jump modify_csr__readonly_zero equal imm 0x302 # medeleg
-    jump modify_csr__readonly_zero equal imm 0x303 # mideleg
+    jump modify_csr__mideleg equal imm 0x303 # mideleg
     jump modify_csr__mie equal imm 0x304 # mie
     jump modify_csr__readonly_zero equal imm 0x310 # mstatush
     jump modify_csr__readonly_zero equal imm 0x312 # medelegh
-    jump modify_csr__xenvcfg equal imm 0x31a # menvcfgh
+    jump modify_csr__readonly_zero equal imm 0x31a # menvcfgh
     jump modify_csr__readonly_zero equal imm 0x320 # mcountinhibit
     jump ILLEGAL_OP equal imm 0x321 # mcyclecfg
     jump modify_csr__mip equal imm 0x344 # mip
@@ -2415,7 +2451,7 @@ modify_csr__read__supervisor:
 modify_csr__read__privileged:
     # CSRs that use the same handler for supervisor- and machine-level
     jump modify_csr__align_4B equal $csr_7_0 0x05 # xtvec
-    jump modify_csr__xenvcfg equal $csr_7_0 0x0a # xenvcfg
+    jump modify_csr__readonly_zero equal $csr_7_0 0x0a # xenvcfg
     jump ILLEGAL_OP equal $csr_7_0 0x0c # xstateen0
     jump modify_csr__align_4B equal $csr_7_0 0x41 # xepc
 
@@ -2441,7 +2477,7 @@ modify_csr__read__timers:
     jump modify_csr__minstreth equal $csr_7_0 0x82 # minstreth
 
     # hardwire all of the hpmcounter registers to 0
-    jump modify_csr__readonly_zero always
+    # continue into modify_csr__readonly_zero
 
 modify_csr__readonly_zero:
 #% do reset_locals(modify_csr_start)
@@ -2460,15 +2496,15 @@ modify_csr__align_4B:
     op and $$new_value $$new_value 0xfffffffc
     jump modify_csr__write always
 
-modify_csr__xenvcfg:
+modify_csr__mideleg:
 #% do reset_locals(modify_csr_start)
 #% do declare_locals(modify_csr_locals)
-    op add $$modify_csr_write @counter 1
-    set @counter $$modify_csr_op
-
-    # clear all bits except FIOM
-    op and $$new_value $$new_value 0b1
-    jump modify_csr__write always
+    # we always delegate supervisor interrupts to S-mode, so reflect that in mideleg
+    # SEIE                         -
+    # STIE                             -
+    # SSIE                                 -
+    set rd 0b00000000000000000000001000100010
+    jump modify_csr__readonly always
 
 modify_csr__sstatus:
 #% do reset_locals(modify_csr_start)

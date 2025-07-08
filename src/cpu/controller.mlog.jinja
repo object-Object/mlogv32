@@ -334,6 +334,10 @@ breakpoint__end_loop:
     set state "running"
     write state prev_proc "state"
 
+    # pause timers while at a breakpoint
+    set last_mtime_update @time
+    set last_mcycle_update @tick
+
     jump end_breakpoint always
 
 # given a value 0 <= address < RAM_PROC_BYTES, resolve that variable in the lookup table

@@ -2372,6 +2372,10 @@ modify_csr__read:
     jump modify_csr__read__timers equal $$csr_11_8 0xb
     jump modify_csr__read__timers equal $$csr_11_8 0xc
 
+    jump ILLEGAL_OP equal imm 0x7a0 # tselect
+    jump ILLEGAL_OP equal imm 0xda0 # scountovf
+    jump ILLEGAL_OP equal imm 0xfb0 # mtopi
+
 modify_csr__read__default:
     # none of the CSRs matched, so fallback to {{CSRS}}
     set @counter $$modify_csr_op
@@ -2387,6 +2391,7 @@ modify_csr__read__machine:
     jump modify_csr__readonly_zero equal imm 0x312 # medelegh
     jump modify_csr__xenvcfg equal imm 0x31a # menvcfgh
     jump modify_csr__readonly_zero equal imm 0x320 # mcountinhibit
+    jump ILLEGAL_OP equal imm 0x321 # mcyclecfg
     jump modify_csr__mip equal imm 0x344 # mip
 
     # PMP registers (unimplemented)
@@ -2404,12 +2409,14 @@ modify_csr__read__supervisor:
     jump modify_csr__sstatus equal imm 0x100 # sstatus
     jump modify_csr__sie equal imm 0x104 # sie
     jump modify_csr__sip equal imm 0x144 # sip
+    jump ILLEGAL_OP equal imm 0x14d # stimecmp
     jump modify_csr__satp equal imm 0x180 # satp
 
 modify_csr__read__privileged:
     # CSRs that use the same handler for supervisor- and machine-level
     jump modify_csr__align_4B equal $csr_7_0 0x05 # xtvec
     jump modify_csr__xenvcfg equal $csr_7_0 0x0a # xenvcfg
+    jump ILLEGAL_OP equal $csr_7_0 0x0c # xstateen0
     jump modify_csr__align_4B equal $csr_7_0 0x41 # xepc
 
     # fallback
@@ -2420,6 +2427,9 @@ modify_csr__read__timers:
     # and follow the pattern 0b10011111
     op and $tmp imm 0b1100000
     jump modify_csr__read__default notEqual $tmp 0
+
+    # U-mode timers (unimplemented)
+    jump ILLEGAL_OP equal $$csr_11_8 0xc
 
     # Zicntr is not implemented, so trap if not in M-mode
     jump ILLEGAL_OP lessThan privilege_mode 0b11

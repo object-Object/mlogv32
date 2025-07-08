@@ -9,7 +9,7 @@ _start:
 
     li t0, 0b111
     sb t0, 8(a0) # FCR
-    
+
 loop:
     lbu t0, 0(s0)
     sb t0, 0(a0) # THR

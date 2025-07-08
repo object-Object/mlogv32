@@ -140,7 +140,7 @@ uart_loop__pad_lf:
     op add buffer_write_col buffer_write_col 1
     jump uart_loop__pad_lf lessThan buffer_write_col {{TERM_WIDTH_CHARS}}
 uart_loop__not_lf:
-    
+
     jump uart_loop__same_line lessThan buffer_write_col {{TERM_WIDTH_CHARS}}
     op add buffer_y buffer_y {{CHAR_HEIGHT}}
     op min buffer_y buffer_y {{MAX_Y}}

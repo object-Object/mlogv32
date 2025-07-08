@@ -10,7 +10,7 @@ reset:
 
     read tx_rptr bank1 510
     read tx_wptr bank1 511
-    
+
     jump skip1 equal tx_rptr tx_wptr
 
     read rx_rptr bank2 254
@@ -37,7 +37,7 @@ skip1:
 
     read tx_rptr bank2 510
     read tx_wptr bank2 511
-    
+
     jump skip2 equal tx_rptr tx_wptr
 
     read rx_rptr bank1 254

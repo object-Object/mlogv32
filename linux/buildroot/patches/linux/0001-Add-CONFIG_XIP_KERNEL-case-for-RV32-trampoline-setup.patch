@@ -23,10 +23,9 @@ index 8d0374d7ce8e..a2c6c27ddc30 100644
  			   kernel_map.phys_addr, PGDIR_SIZE, PAGE_KERNEL_EXEC);
 +#endif
  #endif
- 
+
  	/*
 
 base-commit: 19272b37aa4f83ca52bdf9c16d5d81bdd1354494
--- 
+--
 2.25.1
-

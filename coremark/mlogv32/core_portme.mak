@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 # Original Author: Shay Gal-on
 
 #File : core_portme.mak
@@ -34,9 +34,9 @@ AS		= riscv32-unknown-elf-gcc
 #	Use this flag to define compiler options. Note, you can add compiler options from the command line using XCFLAGS="other flags"
 PORT_CFLAGS = -march=$(RISCV_ARCH) -O0 -g -ffreestanding
 FLAGS_STR = "$(strip $(PORT_CFLAGS) $(XCFLAGS) $(XLFLAGS) $(LFLAGS_END)) "
-CFLAGS = $(PORT_CFLAGS) --compile -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\" 
+CFLAGS = $(PORT_CFLAGS) --compile -I$(PORT_DIR) -I. -DFLAGS_STR=\"$(FLAGS_STR)\"
 #Flag : LFLAGS_END
-#	Define any libraries needed for linking or other flags that should come at the end of the link line (e.g. linker scripts). 
+#	Define any libraries needed for linking or other flags that should come at the end of the link line (e.g. linker scripts).
 #	Note : On certain platforms, the default clock_gettime implementation is supported but requires linking of librt.
 SEPARATE_COMPILE=1
 # Flag : SEPARATE_COMPILE
@@ -92,25 +92,25 @@ port_postbuild:
 	riscv32-unknown-elf-objdump --disassemble $(OUTFILE) > $(OPATH)coremark.dump
 
 # Target: port_prerun
-# 	Do platform specific before run stuff. 
+# 	Do platform specific before run stuff.
 #	E.g. reset the board, backup the logfiles etc.
 .PHONY: port_prerun
 port_prerun:
 
 # Target: port_postrun
-# 	Do platform specific after run stuff. 
+# 	Do platform specific after run stuff.
 #	E.g. reset the board, backup the logfiles etc.
 .PHONY: port_postrun
 port_postrun:
 
 # Target: port_preload
-# 	Do platform specific before load stuff. 
+# 	Do platform specific before load stuff.
 #	E.g. reset the reset power to the flash eraser
 .PHONY: port_preload
 port_preload:
 
 # Target: port_postload
-# 	Do platform specific after load stuff. 
+# 	Do platform specific after load stuff.
 #	E.g. reset the reset power to the flash eraser
 .PHONY: port_postload
 port_postload:
@@ -119,4 +119,3 @@ port_postload:
 # Path to the output folder. Default - current folder.
 OPATH = ./
 MKDIR = mkdir -p
-

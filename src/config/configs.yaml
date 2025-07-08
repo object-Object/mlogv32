@@ -21,7 +21,7 @@ configs:
     PROGRAM_ROM_ROWS: 2
     RAM_ROWS: 12
     ICACHE_ROWS: 2
-  
+
   micropython:
     MEMORY_X_OFFSET: -9
     MEMORY_Y_OFFSET: -19
@@ -29,7 +29,7 @@ configs:
     PROGRAM_ROM_ROWS: 1
     RAM_ROWS: 1
     ICACHE_ROWS: 1
-  
+
   linux:
     MEMORY_X_OFFSET: -9
     MEMORY_Y_OFFSET: -80

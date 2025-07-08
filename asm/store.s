@@ -5,7 +5,7 @@ _start:
     li x2, 0x01020304
     sw x2, 0(x1) # 0x04030201 (67305985)
     ebreak
-    
+
     li x2, 0xab
     sb x2, 0(x1) # 0xab030201 (2869101057)
     ebreak

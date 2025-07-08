@@ -26,14 +26,14 @@ li x1, 1                ;\
 #define RVMODEL_BOOT \
   .option norelax;
 
-//RV_COMPLIANCE_DATA_BEGIN                                                                          
+//RV_COMPLIANCE_DATA_BEGIN
 #define RVMODEL_DATA_BEGIN		;\
 RVMODEL_DATA_SECTION			;\
 .align ALIGNMENT;\
 .global begin_signature   ;\
 begin_signature:
-  
-//RV_COMPLIANCE_DATA_END                                                                            
+
+//RV_COMPLIANCE_DATA_END
 #define RVMODEL_DATA_END                                                      \
 .align ALIGNMENT;\
 .global end_signature; end_signature:

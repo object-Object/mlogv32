@@ -143,22 +143,22 @@ loop:
 
     set ICACHE_START RAM_END
     op add ICACHE_END ICACHE_START ICACHE_SIZE
-    
+
     read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
     read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     op shl mcycleh mcycleh 32
     op add mcycle mcycle mcycleh
-    
+
     read mtime {{CPU}} "csr_mtime"
     read mtimeh {{CPU}} "csr_mtimeh"
     op shl mtimeh mtimeh 32
     op add mtime mtime mtimeh
-    
+
     read mtimecmp {{CPU}} "csr_mtimecmp"
     read mtimecmph {{CPU}} "csr_mtimecmph"
     op shl mtimecmph mtimecmph 32
     op add mtimecmp mtimecmp mtimecmph
-    
+
     read minstret {{CPU}} "csr_minstret"
     read minstreth {{CPU}} "csr_minstreth"
     op shl minstreth minstreth 32
@@ -203,7 +203,7 @@ loop:
     set address DBG_VIRT_ADDR
     set mcause 5 # load access
 loop__no_custom_va:
-    
+
     set mtval address
     set is_address_translation true
     op add ret3 @counter 1
@@ -1023,7 +1023,7 @@ translate_virtual_address:
 
     # begin virtual address translation algorithm
     # PAGESIZE=2^12, LEVELS=2, PTESIZE=4
-    
+
     # step 1
 
     # a = satp.ppn * PAGESIZE
@@ -1136,7 +1136,7 @@ translate_virtual_address__step_5:
     # effective_privilege_mode is either S (1) or U (0)
 
     # SUCCEED IF
-    
+
     # execute:
     #   x == 1
     #   && (effective_privilege_mode == U ? u == 1 : u == 0)
@@ -1256,7 +1256,7 @@ translate_virtual_address__step_8:
 
     # pa.pgoff = va.pgoff
     op and address mtval 0xfff
-    
+
     # pa.ppn = pte.ppn
     op and result result 0xfffff000
     op or address address result
@@ -1424,7 +1424,7 @@ load_rom_word_unchecked:
 
     op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
     op max result result 0 # if we're reading out of bounds, default to 0
-    
+
     set @counter ret
 
 trap:

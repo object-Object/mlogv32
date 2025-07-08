@@ -27,7 +27,7 @@ _start:
 
     // if the payload returns, halt the processor
     li t0, 0xfffffff0
-    sw zero, 0(t0)    
+    sw zero, 0(t0)
 
 .section .data.payload
 .align 4

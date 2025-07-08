@@ -28,7 +28,7 @@ load_data:
     addi t1, t1, 1
     j load_data
 data_done:
-    
+
     # clear .bss
     la t0, __sbss
     la t1, __ebss
@@ -44,4 +44,4 @@ bss_done:
 
     # if main returns, halt the processor
     li t0, 0xfffffff0
-    sw zero, 0(t0)    
+    sw zero, 0(t0)

@@ -78,7 +78,7 @@ mlogv32_bss_done: \
 //RV_COMPLIANCE_DATA_END
 #define RVMODEL_DATA_END                                                      \
   .align ALIGNMENT;\
-  .global end_signature; end_signature:  
+  .global end_signature; end_signature:
 
 //RVTEST_IO_INIT
 #define RVMODEL_IO_INIT

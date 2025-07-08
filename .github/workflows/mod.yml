@@ -23,7 +23,7 @@ jobs:
       - name: Build mod
         working-directory: mod
         run: ./gradlew build
-      
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

@@ -13,18 +13,18 @@ index a2c6c27ddc30..62c6ad57e611 100644
 +++ b/arch/riscv/mm/init.c
 @@ -935,8 +935,7 @@ static __init void set_satp_mode(uintptr_t dtb_pa)
  #endif
- 
+
  #ifdef CONFIG_XIP_KERNEL
 -static void __init create_kernel_page_table(pgd_t *pgdir,
 -					    __always_unused bool early)
 +static void __init create_kernel_page_table(pgd_t *pgdir, bool early)
  {
  	uintptr_t va, start_va, end_va;
- 
+
 @@ -947,13 +946,18 @@ static void __init create_kernel_page_table(pgd_t *pgdir,
  				   kernel_map.xiprom + (va - kernel_map.virt_addr),
  				   PMD_SIZE, PAGE_KERNEL_EXEC);
- 
+
 -	/* Map the data in RAM */
 -	start_va = kernel_map.virt_addr + (uintptr_t)&_sdata - (uintptr_t)&_start;
 -	end_va = kernel_map.virt_addr + kernel_map.size;
@@ -49,13 +49,12 @@ index a2c6c27ddc30..62c6ad57e611 100644
  static void __init create_kernel_page_table(pgd_t *pgdir, bool early)
 @@ -1357,7 +1361,7 @@ static void __init setup_vm_final(void)
  	create_linear_mapping_page_table();
- 
+
  	/* Map the kernel */
 -	if (IS_ENABLED(CONFIG_64BIT))
 +	if (IS_ENABLED(CONFIG_64BIT) || IS_ENABLED(CONFIG_XIP_KERNEL))
  		create_kernel_page_table(swapper_pg_dir, false);
- 
- #ifdef CONFIG_KASAN
--- 
-2.25.1
 
+ #ifdef CONFIG_KASAN
+--
+2.25.1

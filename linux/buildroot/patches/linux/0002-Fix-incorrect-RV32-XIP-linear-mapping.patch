@@ -17,13 +17,13 @@ index 572a141ddecd..a1bdfec1db4f 100644
  	uintptr_t phys_addr;
  	uintptr_t size;
 -	/* Offset between linear mapping virtual address and kernel load address */
-+	/* 
++	/*
 +	 * Offset between linear mapping virtual address and kernel load address.
 +	 * In 32-bit, if XIP is enabled, this is only used for kexec.
 +	 */
  	unsigned long va_pa_offset;
 -	/* Offset between kernel mapping virtual address and kernel load address */
-+	/* 
++	/*
 +	 * Offset between kernel mapping virtual address and kernel load address.
 +	 * In 32-bit, if XIP is enabled, this is also used for the linear mapping.
 +	 */
@@ -33,7 +33,7 @@ index 572a141ddecd..a1bdfec1db4f 100644
 @@ -127,12 +133,6 @@ extern unsigned long vmemmap_start_pfn;
  #define is_linear_mapping(x)	\
  	((x) >= PAGE_OFFSET && (!IS_ENABLED(CONFIG_64BIT) || (x) < PAGE_OFFSET + KERN_VIRT_SIZE))
- 
+
 -#ifndef CONFIG_DEBUG_VIRTUAL
 -#define linear_mapping_pa_to_va(x)	((void *)((unsigned long)(x) + kernel_map.va_pa_offset))
 -#else
@@ -46,7 +46,7 @@ index 572a141ddecd..a1bdfec1db4f 100644
 @@ -144,14 +144,18 @@ void *linear_mapping_pa_to_va(unsigned long x);
  #define kernel_mapping_pa_to_va(y) ((void *)((unsigned long)(y) + kernel_map.va_kernel_pa_offset))
  #endif
- 
+
 -#define __pa_to_va_nodebug(x)		linear_mapping_pa_to_va(x)
 -
  #ifndef CONFIG_DEBUG_VIRTUAL
@@ -60,7 +60,7 @@ index 572a141ddecd..a1bdfec1db4f 100644
 +#else
 +void *linear_mapping_pa_to_va(unsigned long x);
  #endif
- 
+
 +#define __pa_to_va_nodebug(x)		linear_mapping_pa_to_va(x)
 +
  #ifdef CONFIG_XIP_KERNEL
@@ -69,7 +69,7 @@ index 572a141ddecd..a1bdfec1db4f 100644
 @@ -163,6 +167,16 @@ phys_addr_t linear_mapping_va_to_pa(unsigned long x);
  #define kernel_mapping_va_to_pa(y) ((unsigned long)(y) - kernel_map.va_kernel_pa_offset)
  #endif
- 
+
 +#ifndef CONFIG_DEBUG_VIRTUAL
 +#if !defined(CONFIG_64BIT) && defined(CONFIG_XIP_KERNEL)
 +#define linear_mapping_va_to_pa(x)	kernel_mapping_va_to_pa(x)
@@ -88,13 +88,13 @@ index 559d291fac5c..3260bf7fb4db 100644
 --- a/arch/riscv/mm/physaddr.c
 +++ b/arch/riscv/mm/physaddr.c
 @@ -36,16 +36,28 @@ EXPORT_SYMBOL(__phys_addr_symbol);
- 
+
  phys_addr_t linear_mapping_va_to_pa(unsigned long x)
  {
 -	BUG_ON(!kernel_map.va_pa_offset);
 +	if (!IS_ENABLED(CONFIG_64BIT) && IS_ENABLED(CONFIG_XIP_KERNEL)) {
 +		BUG_ON(!kernel_map.va_kernel_xip_text_pa_offset || !kernel_map.va_kernel_xip_data_pa_offset);
- 
+
 -	return ((unsigned long)(x) - kernel_map.va_pa_offset);
 +		return kernel_mapping_va_to_pa(x);
 +	} else {
@@ -104,7 +104,7 @@ index 559d291fac5c..3260bf7fb4db 100644
 +	}
  }
  EXPORT_SYMBOL(linear_mapping_va_to_pa);
- 
+
  void *linear_mapping_pa_to_va(unsigned long x)
  {
 -	BUG_ON(!kernel_map.va_pa_offset);
@@ -114,12 +114,11 @@ index 559d291fac5c..3260bf7fb4db 100644
 +		return kernel_mapping_pa_to_va(x);
 +	} else {
 +		BUG_ON(!kernel_map.va_pa_offset);
- 
+
 -	return ((void *)((unsigned long)(x) + kernel_map.va_pa_offset));
 +		return ((void *)((unsigned long)(x) + kernel_map.va_pa_offset));
 +	}
  }
  EXPORT_SYMBOL(linear_mapping_pa_to_va);
--- 
+--
 2.25.1
-

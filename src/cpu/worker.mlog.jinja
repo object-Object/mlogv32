@@ -247,7 +247,7 @@ main__slow_instruction_fetch:
 
     set value result
     set address null
-    
+
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
     op add ret3 @counter {{# start_assert_length(10) }}
     jump decode always
@@ -276,10 +276,10 @@ main__read_icache:
 
     op shr rd_id icache_payload 32
     op and rd_id rd_id 0b11111
-    
+
     op shr rs1_id icache_payload 37
     op and rs1_id rs1_id 0b11111
-    
+
     op shr rs2_id icache_payload 42
     op and rs2_id rs2_id 0b11111
 
@@ -373,7 +373,7 @@ supervisor_trap_without_mtval:
     op shl $mstatus.xpp privilege_mode 8
 
     op and csr_mstatus csr_mstatus 0b11111111111111111111111011011101
-    
+
     # set scause
     write mcause {{CSRS}} "{{ 'scause'|csr }}"
 
@@ -451,7 +451,7 @@ get_effective_privilege_mode:
     # mstatus.MPRV
     op and effective_privilege_mode csr_mstatus 0b100000000000000000
     jump get_effective_privilege_mode__normal equal effective_privilege_mode 0
-    
+
     # MPRV=1, return mstatus.MPP
     op shr effective_privilege_mode csr_mstatus 11
     op and effective_privilege_mode effective_privilege_mode 0b11
@@ -479,7 +479,7 @@ translate_virtual_address:
 
     # begin virtual address translation algorithm
     # PAGESIZE=2^12, LEVELS=2, PTESIZE=4
-    
+
     # step 1
 
     # a = satp.ppn * PAGESIZE
@@ -578,7 +578,7 @@ translate_virtual_address__step_5:
     # effective_privilege_mode is either S (1) or U (0)
 
     # SUCCEED IF
-    
+
     # execute:
     #   x == 1
     #   && (effective_privilege_mode == U ? u == 1 : u == 0)
@@ -698,7 +698,7 @@ translate_virtual_address__step_8:
 
     # pa.pgoff = va.pgoff
     op and address mtval 0xfff
-    
+
     # pa.ppn = pte.ppn
     op and result result 0xfffff000
     op or address address result
@@ -897,7 +897,7 @@ load_rom_word_unchecked:
 
     op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
     op max result result 0 # if we're reading out of bounds, default to 0
-    
+
     set @counter ret
 
 # address, mcause, mtval -> result
@@ -1054,7 +1054,7 @@ decode_LUI:
 
 decode_AUIPC:
     set op_id -8 # AUIPC
-    
+
 # U-type: imm, rd_id
 decode_U-type:
     # imm
@@ -1429,7 +1429,7 @@ unsigned_to_signed__done_1:
 unsigned_to_signed__done_2:
 
     set @counter ret
-    
+
 #directive end_assert_length
     # continue into BLTU
 
@@ -1744,7 +1744,7 @@ LR.W:
     set mcause 4 # load address misaligned
     op add ret4 @counter {{# start_assert_length(10) }}
     # implicit jump to atomic_validate_address
-    
+
     # ret: ret4
 atomic_validate_address:
 #% do reset_locals()
@@ -1839,7 +1839,7 @@ AMOMAXU.W:
     # read
     op add ret @counter 1
     jump load_ram_word_unchecked always
-    
+
     # put original value in rd
     set rd result
 
@@ -2119,7 +2119,7 @@ REM:
 # reimu?
 REMU:
     # R-type: rs1, rs2, rd_id
-    
+
     # modulo by zero returns dividend
     set rd rs1
     jump end_instruction_with_rd equal rs2 0
@@ -2469,7 +2469,7 @@ modify_csr__read__timers:
 
     # Zicntr is not implemented, so trap if not in M-mode
     jump ILLEGAL_OP lessThan privilege_mode 0b11
-    
+
     jump modify_csr__read__default equal $csr_7_0 0x00 # mcycle
     jump modify_csr__minstret equal $csr_7_0 0x02 # minstret
 

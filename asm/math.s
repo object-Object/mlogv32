@@ -3,7 +3,7 @@ _start:
     li x1, 0b1
     li x2, 1
     sll x3, x1, x2
-    
+
     li x4, 0xffffffff
     li x5, 31
     sll x6, x4, x5

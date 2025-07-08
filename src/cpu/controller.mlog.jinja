@@ -149,7 +149,7 @@ end_slow_init:
     # clear mstatus
     # technically we're only supposed to clear MPRV and MIE, but the other bits are explicitly unspecified, so this is allowed
     set csr_mstatus 0
-    
+
     # set pc to reset vector
     set pc 0
     set icache_var null
@@ -159,7 +159,7 @@ end_slow_init:
     # also set scause (unspecified)
     write null {{CSRS}} "{{ 'mcause'|csr }}"
     write null {{CSRS}} "{{ 'scause'|csr }}"
-    
+
     # clear LR/SC reservation set
     set reservation_set null
 

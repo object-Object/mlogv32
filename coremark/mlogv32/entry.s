@@ -36,7 +36,7 @@ load_data:
     addi t1, t1, 1
     j load_data
 data_done:
-    
+
     # Clear BSS section
     la t0, __sbss
     la t1, __ebss
@@ -49,6 +49,6 @@ bss_done:
 
     # Jump to C code
     call main
-    
+
     # In case main returns
 1:  j 1b

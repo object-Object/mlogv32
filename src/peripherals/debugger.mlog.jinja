@@ -58,70 +58,95 @@ reset__find_lookup_start:
     draw clear 0 0 0
     drawflush {{DISPLAY}}
 
-# {% macro print_str() %}print "{{- caller() -}}"{% endmacro %}
+# {% macro print_str() %}print "{{- caller()|replace('\n', '\\n') -}}"{% endmacro %}
+
+#% set level_1_row = 0
+#% set level_2_row = 17
+#% set level_3_row = 23
+#% set level_4_row = 33
 
 #% call print_str()
-    #{- 'pc    =\\n'
-    #{- 'op    =\\n'
-    #{- 'rs1   =\\n'
-    #{- 'rs2   =\\n'
-    #{- 'imm   =\\n'
-    #{- 'rs1id =\\n'
-    #{- 'rs2id =\\n'
-    #{- 'rdid  =\\n\\n'
+    #{- 'pc    =\n'
+    #{- 'op    =\n'
+    #{- 'rs1   =\n'
+    #{- 'rs2   =\n'
+    #{- 'imm   =\n'
+    #{- 'rs1id =\n'
+    #{- 'rs2id =\n'
+    #{- 'rdid  =\n\n'
 
-    #{- 'satp  =\\n'
-    #{- 'addr1 =\\n'
-    #{- 'pte1  =\\n'
-    #{- 'addr0 =\\n'
-    #{- 'pte0  =\\n'
-    #{- 'addr  =\\n'
-    #{- 'val   =\\n'
+    #{- 'satp  =\n'
+    #{- 'addr1 =\n'
+    #{- 'pte1  =\n'
+    #{- 'addr0 =\n'
+    #{- 'pte0  =\n'
+    #{- 'addr  =\n'
+    #{- 'val   =\n'
 #%- endcall
 
-    #{ print(0, 0)
+    #{ print(0, level_1_row)
 
 #% call print_str()
-    #{- 'x0  (zero)  =\\n'
-    #{- 'x1  (ra)    =\\n'
-    #{- 'x2  (sp)    =\\n'
-    #{- 'x3  (gp)    =\\n'
-    #{- 'x4  (tp)    =\\n'
-    #{- 'x5  (t0)    =\\n'
-    #{- 'x6  (t1)    =\\n'
-    #{- 'x7  (t2)    =\\n'
-    #{- 'x8  (s0/fp) =\\n'
-    #{- 'x9  (s1)    =\\n'
-    #{- 'x10 (a0)    =\\n'
-    #{- 'x11 (a1)    =\\n'
-    #{- 'x12 (a2)    =\\n'
-    #{- 'x13 (a3)    =\\n'
-    #{- 'x14 (a4)    =\\n'
-    #{- 'x15 (a5)    =\\n'
+    #{- 'x0  (zero)  =\n'
+    #{- 'x1  (ra)    =\n'
+    #{- 'x2  (sp)    =\n'
+    #{- 'x3  (gp)    =\n'
+    #{- 'x4  (tp)    =\n'
+    #{- 'x5  (t0)    =\n'
+    #{- 'x6  (t1)    =\n'
+    #{- 'x7  (t2)    =\n'
+    #{- 'x8  (s0/fp) =\n'
+    #{- 'x9  (s1)    =\n'
+    #{- 'x10 (a0)    =\n'
+    #{- 'x11 (a1)    =\n'
+    #{- 'x12 (a2)    =\n'
+    #{- 'x13 (a3)    =\n'
+    #{- 'x14 (a4)    =\n'
+    #{- 'x15 (a5)    =\n'
 #%- endcall
 
-    #{ print(21, 0)
+    #{ print(21, level_1_row)
 
 #% call print_str()
-    #{- 'x16 (a6)  =\\n'
-    #{- 'x17 (a7)  =\\n'
-    #{- 'x18 (s2)  =\\n'
-    #{- 'x19 (s3)  =\\n'
-    #{- 'x20 (s4)  =\\n'
-    #{- 'x21 (s5)  =\\n'
-    #{- 'x22 (s6)  =\\n'
-    #{- 'x23 (s7)  =\\n'
-    #{- 'x24 (s8)  =\\n'
-    #{- 'x25 (s9)  =\\n'
-    #{- 'x26 (s10) =\\n'
-    #{- 'x27 (s11) =\\n'
-    #{- 'x28 (t3)  =\\n'
-    #{- 'x29 (t4)  =\\n'
-    #{- 'x30 (t5)  =\\n'
-    #{- 'x31 (t6)  =\\n'
+    #{- 'x16 (a6)  =\n'
+    #{- 'x17 (a7)  =\n'
+    #{- 'x18 (s2)  =\n'
+    #{- 'x19 (s3)  =\n'
+    #{- 'x20 (s4)  =\n'
+    #{- 'x21 (s5)  =\n'
+    #{- 'x22 (s6)  =\n'
+    #{- 'x23 (s7)  =\n'
+    #{- 'x24 (s8)  =\n'
+    #{- 'x25 (s9)  =\n'
+    #{- 'x26 (s10) =\n'
+    #{- 'x27 (s11) =\n'
+    #{- 'x28 (t3)  =\n'
+    #{- 'x29 (t4)  =\n'
+    #{- 'x30 (t5)  =\n'
+    #{- 'x31 (t6)  =\n'
 #%- endcall
 
-    #{ print(48, 0)
+    #{ print(48, level_1_row)
+
+#% call print_str()
+    #{- 'mtvec    =\n'
+    #{- 'mepc     =\n'
+    #{- 'mcause   =\n'
+    #{- 'mtval    =\n'
+    #{- 'mscratch =\n\n'
+
+    #{- 'mstatus  =\n'
+    #{- 'mip      =\n'
+    #{- 'mie      =\n\n'
+
+    #{- 'mtimecmp =\n'
+    #{- 'stimecmp =\n'
+    #{- 'mtime    =\n'
+    #{- 'mcycle   =\n'
+    #{- 'minstret =\n'
+#%- endcall
+
+    #{ print(0, level_3_row)
 
 loop:
     sensor enabled {{SWITCH}} @enabled
@@ -291,14 +316,14 @@ loop__no_mark_icache:
     # clear
 
     draw color 0 0 0 255
-    #{ rect(8, 0, 10, 16)
-    #{ rect(35, 0, 10, 16)
-    #{ rect(60, 0, 10, 16)
-    #{ rect(0, 17, 73, 22)
+    #{ rect(8, level_1_row, 10, 16)
+    #{ rect(35, level_1_row, 10, 16)
+    #{ rect(60, level_1_row, 10, 16)
+    #{ rect(18, level_2_row, 55, 5)
+    #{ rect(11, level_3_row, 62, 15)
     draw color 255 255 255 255
 
     # ---- level 1 ----
-#% set level_1_row = 0
 
     # -- column 1 --
 
@@ -484,7 +509,6 @@ loop__no_mark_icache:
     #{ print(60, level_1_row)
 
     # ---- level 2 ----
-#% set level_2_row = 17
 
     # -- column 1 --
 
@@ -514,51 +538,44 @@ loop__no_mark_icache:
     #{ print(0, level_2_row)
 
     # ---- level 3 ----
-#% set level_3_row = 23
 
     # -- column 1 --
 
-    print "mtvec    = {0}\n"
+    print "{{ '{0}\\n' * 5 }}\n{{ '{0}\\n' * 3 }}"
+
     set n mtvec
     op add ret @counter 1
     jump format_hex always
 
-    print "mepc     = {0}\n"
     set n mepc
     op add ret @counter 1
     jump format_hex always
 
-    print "mcause   = {0}\n"
     set n mcause
     op add ret @counter 1
     jump format_mcause always
 
-    print "mtval    = {0}\n"
     set n mtval
     op add ret @counter 1
     jump format_hex always
 
-    print "mscratch = {0}\n\n"
     set n mscratch
     op add ret @counter 1
     jump format_hex always
 
-    print "mstatus  = {0}\n"
     set n mstatus
     op add ret @counter 1
     jump format_bin always
 
-    print "mip      = {0}\n"
     set n mip
     op add ret @counter 1
     jump format_bin always
 
-    print "mie      = {0}\n"
     set n mie
     op add ret @counter 1
     jump format_bin always
 
-    #{ print(0, level_3_row)
+    #{ print(11, level_3_row)
 
     # -- column 2 --
 
@@ -590,26 +607,22 @@ loop__no_mark_icache:
     #{ print(35, level_3_row)
 
     # ---- level 4 ----
-#% set level_4_row = 33
 
     # -- column 1 --
 
-    print "mtimecmp = {0}\n"
+    print "{{ '{0}\\n' * 5 }}"
+
     format mtimecmp
 
-    print "stimecmp = {0}\n"
     format stimecmp
 
-    print "mtime    = {0}\n"
     format mtime
 
-    print "mcycle   = {0}\n"
     format mcycle
 
-    print "minstret = {0}\n"
     format minstret
 
-    #{ print(0, level_4_row)
+    #{ print(11, level_4_row)
 
     # -- column 2 --
 

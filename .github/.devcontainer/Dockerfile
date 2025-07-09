@@ -41,7 +41,7 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
 
 # buildroot dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends cpio bc \
+    && apt-get install -y --no-install-recommends cpio bc device-tree-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 # avoid permission issues with cargo if cargo install runs as root

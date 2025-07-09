@@ -25,5 +25,9 @@
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.packageIndexDepths": [{ "name": "jinja2", "depth": 2 }],
     "files.eol": "\n",
-    "yaml.customTags": ["tag:yaml.org,2002:python/object/apply:builtins.range sequence"]
+    "yaml.customTags": [
+        "tag:yaml.org,2002:python/object/apply:builtins.range sequence",
+        "tag:yaml.org,2002:python/object/apply:builtins.sum sequence"
+    ],
+    "git.detectSubmodules": false
 }

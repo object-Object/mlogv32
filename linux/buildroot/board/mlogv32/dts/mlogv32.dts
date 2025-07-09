@@ -11,9 +11,27 @@
         stdout-path = &uart0;
     };
 
+    rom@0 {
+        compatible = "mtd-rom";
+        reg = <0x0 (16*1024*1024)>;
+        #address-cells = <1>;
+        #size-cells = <1>;
+        bank-width = <1>; // 8-bit "bus"
+
+        // align rootfs to pgdir boundary
+        rootfs@1000 {
+            label = "rootfs";
+            reg = <0x1000 (16*1024*1024 - 0x1000)>;
+            bank-width = <1>;
+            read-only;
+            linux,rootfs;
+        };
+    };
+
     memory@80000000 {
         device_type = "memory";
-        reg = <0x80000000 (16 * 1024*1024 - 256 * 1024)>;
+        // the last 256K are reserved for OpenSBI
+        reg = <0x80000000 (16*1024*1024 - 256*1024)>;
     };
 
     cpus {
@@ -25,11 +43,30 @@
             device_type = "cpu";
             compatible = "riscv";
             mmu-type = "riscv,sv32";
-            reg = <0>;
-            riscv,isa = "rv32ima";
+            reg = <0>; // hart id
             riscv,isa-base = "rv32i";
-            riscv,isa-extensions = "i", "m", "a", "zicntr", "zicsr", "zifencei";
+            riscv,isa-extensions =
+                "i",
+                "m",
+                "a",
+                "zicntr",
+                "zicsr",
+                "zifencei",
+                "zihintpause",
+                "sstc",
+                "svade";
+
+            intc: interrupt-controller {
+                compatible = "riscv,cpu-intc";
+                #interrupt-cells = <1>;
+                interrupt-controller;
+            };
         };
+    };
+
+    timer {
+        compatible = "riscv,timer";
+        interrupts-extended = <&intc 5>;
     };
 
     soc {

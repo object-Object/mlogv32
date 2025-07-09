@@ -1,33 +1,71 @@
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 
+/* memory size definitions */
+__ROM = 16M;
+__RAM = 16M;
+
 MEMORY {
-    ROM     (rx)  : ORIGIN = 0x00000000,              LENGTH = 0x400000
-    KERNEL  (rx)  : ORIGIN = 0x400000,                LENGTH = 16M - 0x400000
-    RAM     (rwx) : ORIGIN = 0x80000000,              LENGTH = 16M - 256K
-    PAYLOAD (rwx) : ORIGIN = 0x80000000 + 16M - 256K, LENGTH = 256K
+    /* ROM */
+    ROM (rx) : ORIGIN = 0x00000000, LENGTH = __ROM
+
+    /* RAM */
+    RAM     (rwx) : ORIGIN = 0x80000000,                LENGTH = __RAM - 256K
+    OPENSBI (rwx) : ORIGIN = 0x80000000 + __RAM - 256K, LENGTH = 256K
 }
 
 SECTIONS {
     .text : {
-        KEEP(*(.text.start));
-        *(.text .text.*);
+        . = ALIGN(4);
+        *(.text);
+        . = ALIGN(4);
     } > ROM
 
     .rodata : {
-        . = ORIGIN(KERNEL);
-        *(.rodata.kernel);
         . = ALIGN(4);
-        _etext = .;
-    } > KERNEL
+        *(.rodata);
+        . = ALIGN(4);
+    } > ROM
 
-    .data : {
-        . = ALIGN(4);
-        _spayload = .;
-        *(.data.payload);
-        . = ALIGN(4);
-        _epayload = .;
-    } > PAYLOAD AT > ROM
+    /* rootfs must be page-aligned, and we need to know the exact address for the dts */
+    .rootfs : {
+        . = ALIGN(4K);
+        _srootfs = .;
+        *(.rootfs);
+        . = ALIGN(4K);
+        _erootfs = .;
+    } > ROM
 
-    _sipayload = LOADADDR(.data);
+    .kernel : {
+        . = ALIGN(4);
+        _skernel = .;
+        *(.kernel);
+        . = ALIGN(4);
+        _ekernel = .;
+    } > RAM AT > ROM
+
+    _sikernel = LOADADDR(.kernel);
+
+    OVERLAY : {
+        .loader {
+            . = ALIGN(4);
+            _sloader = .;
+            *(.loader);
+            . = ALIGN(4);
+            _eloader = .;
+        }
+
+        .opensbi {
+            . = ALIGN(4);
+            _sopensbi = .;
+            *(.opensbi);
+            . = ALIGN(4);
+            _eopensbi = .;
+        }
+    } > OPENSBI AT > ROM
+
+    _siloader = LOADADDR(.loader);
+    _siopensbi = LOADADDR(.opensbi);
 }
+
+ASSERT(_srootfs == 0x1000, "Incorrect rootfs start address, update dts");

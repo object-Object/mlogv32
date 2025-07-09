@@ -1,3 +1,7 @@
+%TAG !py! tag:yaml.org,2002:python/object/apply:builtins.
+
+---
+
 template: base.mlog.jinja
 
 defaults:
@@ -32,8 +36,9 @@ configs:
 
   linux:
     MEMORY_X_OFFSET: -9
-    MEMORY_Y_OFFSET: -80
+    MEMORY_Y_OFFSET: !py!sum [[-16, -0, -16, -16, -16]]
     MEMORY_WIDTH: 64
-    PROGRAM_ROM_ROWS: 16
+    PROGRAM_ROM_ROWS: 0
+    DATA_ROM_ROWS: 16
     RAM_ROWS: 16
-    ICACHE_ROWS: 32
+    ICACHE_ROWS: 16

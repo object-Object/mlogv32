@@ -29,12 +29,10 @@ platform-ldflags-y =
 PLATFORM_RISCV_XLEN = 32
 PLATFORM_RISCV_ABI = ilp32
 PLATFORM_RISCV_ISA = rv32ima_zicsr_zifencei_zihintpause
-# PLATFORM_RISCV_CODE_MODEL = medany
+PLATFORM_RISCV_CODE_MODEL = medany
 
 # Space separated list of object file names to be compiled for the platform
 platform-objs-y += platform.o uart16550.o
-
-FW_TEXT_START=0x80fc0000
 
 #
 # If the platform support requires a builtin device tree file, the name of
@@ -59,7 +57,7 @@ FW_DYNAMIC=n
 # as needed.
 #
 FW_JUMP=y
-FW_JUMP_ADDR=0x400000
+FW_JUMP_ADDR=0x80000000
 # This needs to be 4MB aligned for 32-bit support
 # This needs to be 2MB aligned for 64-bit support
 # ifeq ($(PLATFORM_RISCV_XLEN), 32)

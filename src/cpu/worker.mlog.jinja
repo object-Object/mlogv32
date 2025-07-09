@@ -14,6 +14,8 @@
     read csr_mtimecmph prev_proc "csr_mtimecmph"
     read csr_mtimeh prev_proc "csr_mtimeh"
     read csr_satp prev_proc "csr_satp"
+    read csr_stimecmp prev_proc "csr_stimecmp"
+    read csr_stimecmph prev_proc "csr_stimecmph"
     read effective_privilege_mode prev_proc "effective_privilege_mode"
     read icache_payload prev_proc "icache_payload"
     read icache_ram prev_proc "icache_ram"
@@ -93,7 +95,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 148
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 157
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -163,10 +165,21 @@ poll_interrupts:
     op or $mip.mtip $mip.mtip $high_gt
     op shl $mip.mtip $mip.mtip 7
 
+    # supervisor timer interrupt
+    op greaterThan $high_gt csr_mtimeh csr_stimecmph
+    op equal $high_eq csr_mtimeh csr_stimecmph
+    op greaterThanEq $low_ge csr_mtime csr_stimecmp
+
+    op and $mip.stip $high_eq $low_ge
+    op or $mip.stip $mip.stip $high_gt
+    op shl $mip.stip $mip.stip 5
+
     # poll                   -
     # mtip                                           -
-    op and csr_mip csr_mip 0b01111111111111111111111101111111
+    # stip                                             -
+    op and csr_mip csr_mip 0b01111111111111111111111101011111
     op or csr_mip csr_mip $mip.mtip
+    op or csr_mip csr_mip $mip.stip
 
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, if certain CSRs are modified, and after an xRET instruction
@@ -2283,6 +2296,7 @@ modify_csr:
     jump ILLEGAL_OP equal $required_privilege 0b10
 
     # look up the CSR labels
+    # NOTE: this value in _address is later used by check_xtimecmp
     # csr_labels = csr_read * 1000 + csr_write
     set _address imm
     op add ret2 @counter 1
@@ -2370,7 +2384,7 @@ csr_read_sstatus:
 csr_write_sstatus:
     # insert new writable fields
     op and csr_mstatus csr_mstatus 0b11111111111100111111111011011101
-    op and result result 0b00000000000011000000000100100010
+    op and result result           0b00000000000011000000000100100010
     op or csr_mstatus csr_mstatus result
 
     jump csr_xstatus always
@@ -2382,9 +2396,9 @@ csr_read_mstatus:
 
 csr_write_mstatus:
     # clear WPRI and read-only zero fields
-    # SD/XS/FS/VS                    -              ----  --
-    # WPRI                            --------                  - - -
-    # UBE                                                     -
+    # SD/XS/FS/VS               -              ----  --
+    # WPRI                       --------                  - - -
+    # UBE                                                -
     op and csr_mstatus result 0b00000000011111100001100110101010
 
     # if MPP was set to 10 (reserved), set it to 0
@@ -2409,9 +2423,9 @@ csr_read_sip:
 
 csr_write_sip:
     # insert new writable fields
-    # SSIP                                                         -
-    op and csr_mip csr_mip         0b11111111111111111111111111111101
-    op and result result 0b00000000000000000000000000000010
+    # SSIP                                                 -
+    op and csr_mip csr_mip 0b11111111111111111111111111111101
+    op and result result   0b00000000000000000000000000000010
     op or csr_mip csr_mip result
 
     jump end_instruction_with_rd_and_fire_interrupts always
@@ -2424,11 +2438,10 @@ csr_read_mip:
 
 csr_write_mip:
     # insert new writable fields
-    # SEIP                                                 -
-    # STIP                                                     -
-    # SSIP                                                         -
-    op and csr_mip csr_mip         0b11111111111111111111110111011101
-    op and result result 0b00000000000000000000001000100010
+    # SEIP                                         -
+    # SSIP                                                 -
+    op and csr_mip csr_mip 0b11111111111111111111110111011101
+    op and result result   0b00000000000000000000001000000010
     op or csr_mip csr_mip result
 
     jump end_instruction_with_rd_and_fire_interrupts always
@@ -2445,11 +2458,11 @@ csr_read_sie:
 
 csr_write_sie:
     # insert new writable fields
-    # SEIE                                                 -
-    # STIE                                                     -
-    # SSIE                                                         -
-    op and csr_mie csr_mie         0b11111111111111111111110111011101
-    op and result result 0b00000000000000000000001000100010
+    # SEIE                                         -
+    # STIE                                             -
+    # SSIE                                                 -
+    op and csr_mie csr_mie 0b11111111111111111111110111011101
+    op and result result   0b00000000000000000000001000100010
     op or csr_mie csr_mie result
 
     jump end_instruction_with_rd_and_fire_interrupts always
@@ -2461,11 +2474,11 @@ csr_read_mie:
 
 csr_write_mie:
     # get new writable fields
-    # MEIE                                           -
-    # SEIE                                             -
-    # MTIE                                               -
-    # STIE                                                 -
-    # SSIE                                                     -
+    # MEIE                                      -
+    # SEIE                                        -
+    # MTIE                                          -
+    # STIE                                            -
+    # SSIE                                                -
     op and csr_mie result 0b00000000000000000000101010100010
     jump end_instruction_with_rd_and_fire_interrupts always
 
@@ -2488,6 +2501,30 @@ csr_write_satp:
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: this may not be strictly required by the spec
     jump end_instruction_with_rd_and_invalidate_icache always
+
+csr_read_stimecmp:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_stimecmp
+    jump check_stimecmp always
+
+csr_write_stimecmp:
+    set csr_stimecmp result
+    jump end_instruction_with_rd_and_poll_interrupts always
+
+csr_read_stimecmph:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_stimecmph
+    # continue into check_stimecmp
+
+check_stimecmp:
+    # stimecmp is controlled by the TM bit in mcounteren
+    # so we set _address to 1 and use check_xcounteren to check the TM bit
+    set _address 1
+    jump check_xcounteren always
+
+csr_write_stimecmph:
+    set csr_stimecmph result
+    jump end_instruction_with_rd_and_poll_interrupts always
 
 csr_read_cycle:
 #% do declare_locals(modify_csr_locals)
@@ -2549,7 +2586,8 @@ check_xcounteren:
 check_xcounteren__s_mode:
 
     # trap if the bit in xcounteren corresponding to the CSR being read is clear
-    op and $bit imm 31
+    # we use _address instead of imm here to allow check_stimecmp to change it without messing up debug info
+    op and $bit _address 31
     op shr $bit $xcounteren $bit
     op and $bit $bit 0b1
     jump ILLEGAL_OP equal $bit 0
@@ -2706,33 +2744,37 @@ jump decode_BRANCH always
 jump decode_JALR always
 jump decode_JAL always
 jump decode_SYSTEM always
-jump csr_read_cycle always
-jump csr_read_time always
-jump csr_read_minstret always
-jump csr_read_hpmcounter always
-jump csr_read_zero always
-jump csr_read_cycleh always
-jump csr_read_timeh always
-jump csr_read_minstreth always
-jump csr_read_sstatus always
-jump csr_read_sie always
 jump csr_read_csrs always
-jump csr_read_sip always
-jump csr_read_satp always
-jump csr_read_mstatus always
+jump csr_read_cycle always
+jump csr_read_cycleh always
+jump csr_read_hpmcounter always
 jump csr_read_mideleg always
 jump csr_read_mie always
+jump csr_read_minstret always
+jump csr_read_minstreth always
 jump csr_read_mip always
-jump csr_write_sstatus always
-jump csr_write_sie always
-jump csr_write_csrs_align_4B always
+jump csr_read_mstatus always
+jump csr_read_satp always
+jump csr_read_sie always
+jump csr_read_sip always
+jump csr_read_sstatus always
+jump csr_read_stimecmp always
+jump csr_read_stimecmph always
+jump csr_read_time always
+jump csr_read_timeh always
+jump csr_read_zero always
 jump csr_write_csrs always
-jump csr_write_readonly always
-jump csr_write_sip always
-jump csr_write_satp always
-jump csr_write_mstatus always
+jump csr_write_csrs_align_4B always
 jump csr_write_mie always
-jump csr_write_mip always
 jump csr_write_minstret always
 jump csr_write_minstreth always
+jump csr_write_mip always
+jump csr_write_mstatus always
+jump csr_write_readonly always
+jump csr_write_satp always
+jump csr_write_sie always
+jump csr_write_sip always
+jump csr_write_sstatus always
+jump csr_write_stimecmp always
+jump csr_write_stimecmph always
 # {% endraw %}

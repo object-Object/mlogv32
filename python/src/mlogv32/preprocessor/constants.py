@@ -17,6 +17,8 @@ CSRS: dict[str, int] = {
     "sie": 0x104,
     "stvec": 0x105,
     "scounteren": 0x106,
+    "stimecmp": 0x14D,
+    "stimecmph": 0x15D,
     "senvcfg": 0x10A,
     "scountinhibit": 0x120,
     "sscratch": 0x140,

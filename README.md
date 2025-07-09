@@ -99,7 +99,7 @@ Additionally, the machine trap vector CSR `mtvec` is initialized to `0xfffffff0`
 
 ## ISA
 
-`RV32IMAZicsr_Zifencei_Zihintpause_Svade`
+`RV32IMAZicntr_Zicsr_Zifencei_Zihintpause_Sstc_Svade`
 
 Supported privilege levels: M, S, U
 
@@ -116,6 +116,7 @@ Supported address translation schemes: Bare, Sv32
 | Zicsr       | 2.0     |
 | Zifencei\*  | 2.0     |
 | Zihintpause | 2.0     |
+| Sstc        | 1.0.0   |
 | Svade       | 1.0     |
 | Xmlogsys    | N/A     |
 

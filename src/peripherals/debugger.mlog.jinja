@@ -159,6 +159,11 @@ loop:
     op shl mtimecmph mtimecmph 32
     op add mtimecmp mtimecmp mtimecmph
 
+    read stimecmp {{CPU}} "csr_stimecmp"
+    read stimecmph {{CPU}} "csr_stimecmph"
+    op shl stimecmph stimecmph 32
+    op add stimecmp stimecmp stimecmph
+
     read minstret {{CPU}} "csr_minstret"
     read minstreth {{CPU}} "csr_minstreth"
     op shl minstreth minstreth 32
@@ -591,6 +596,9 @@ loop__no_mark_icache:
 
     print "mtimecmp = {0}\n"
     format mtimecmp
+
+    print "stimecmp = {0}\n"
+    format stimecmp
 
     print "mtime    = {0}\n"
     format mtime

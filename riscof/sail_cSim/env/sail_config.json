@@ -88,7 +88,7 @@
             "supported": false
         },
         "Zicntr": {
-            "supported": false
+            "supported": true
         },
         "Zicsr": {
             "supported": true
@@ -239,7 +239,7 @@
             "supported": false
         },
         "Sstc": {
-            "supported": false
+            "supported": true
         },
         "Svinval": {
             "supported": false

@@ -159,6 +159,12 @@ csrs:
   scounteren:
     read: csrs
     write: csrs
+  stimecmp:
+    read: LABEL
+    write: LABEL
+  stimecmph:
+    read: LABEL
+    write: LABEL
 
   # configuration
   senvcfg:

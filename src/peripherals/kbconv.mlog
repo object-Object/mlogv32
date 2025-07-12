@@ -3,8 +3,9 @@
 # source: https://github.com/BasedUser/mPC/blob/1096376c59018fee4718bd46e0c5edd552df2cb1/dev/kb/kbconv.mlog
 
 # init vars - just in case we changed proc
-set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, BasedUser. Released under GPLv3 (https://www.gnu.org/licenses/gpl-3.0.html).\nThis program is provided without any warranty."
-set SOURCELINK "https://github.com/BasedUser/mPC"
+set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, BasedUser. Modified by object-Object. Released under GPLv3 (https://www.gnu.org/licenses/gpl-3.0.html).\nThis program is provided without any warranty."
+set ORIGINAL_SOURCELINK "https://github.com/BasedUser/mPC"
+set MODIFIED_SOURCELINK "https://github.com/object-Object/mlogv32"
 
 read modifiers cell2 0
 op and shift modifiers 1

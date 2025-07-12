@@ -16,7 +16,7 @@ setup-buildroot:
 	curl --location "$(BUILDROOT_RELEASE)" | tar xzv --directory $(BUILDROOT)
 
 .PHONY: everything
-everything: load-configs dtbs all zsbl get-images
+everything: load-configs dtbs all opensbi-rebuild zsbl get-images
 
 .PHONY: dtbs-rebuild
 dtbs-rebuild: dtbs opensbi-rebuild zsbl get-images

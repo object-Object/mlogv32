@@ -7,23 +7,24 @@
     chassis-type = "embedded";
 
     chosen {
-        bootargs = "earlycon=sbi console=ttyS0";
+        // SBI: console=hvc
+        // UART0: console=ttyS0
+        // for debugging: kgdboc_earlycon=sbi kgdboc=ttyS0 kgdbwait
+        bootargs = "earlycon=sbi console=hvc";
         stdout-path = &uart0;
     };
 
     rom@0 {
         compatible = "mtd-rom";
         reg = <0x0 (16*1024*1024)>;
-        #address-cells = <1>;
-        #size-cells = <1>;
         bank-width = <1>; // 8-bit "bus"
 
-        // align rootfs to pgdir boundary
+        #address-cells = <1>;
+        #size-cells = <1>;
+
         rootfs@1000 {
             label = "rootfs";
             reg = <0x1000 (16*1024*1024 - 0x1000)>;
-            bank-width = <1>;
-            read-only;
             linux,rootfs;
         };
     };
@@ -78,37 +79,12 @@
         uart0: serial@f0000010 {
             compatible = "ns16550a";
             reg = <0xf0000010 0x20>;
-            clock-frequency = <10000000>;
             reg-shift = <2>;
-            no-loopback-test = <1>;
+            interrupts-extended = <&intc 9>;
+            clock-frequency = <(38400*16)>;
             fifo-size = <253>;
-        };
-
-        uart1: serial@f0000030 {
-            compatible = "ns16550a";
-            reg = <0xf0000030 0x20>;
-            clock-frequency = <10000000>;
-            reg-shift = <2>;
-            no-loopback-test = <1>;
-            fifo-size = <253>;
-        };
-
-        uart2: serial@f0000050 {
-            compatible = "ns16550a";
-            reg = <0xf0000050 0x20>;
-            clock-frequency = <10000000>;
-            reg-shift = <2>;
-            no-loopback-test = <1>;
-            fifo-size = <253>;
-        };
-
-        uart3: serial@f0000070 {
-            compatible = "ns16550a";
-            reg = <0xf0000070 0x20>;
-            clock-frequency = <10000000>;
-            reg-shift = <2>;
-            no-loopback-test = <1>;
-            fifo-size = <253>;
+            no-loopback-test;
+            // TODO: https://github.com/torvalds/linux/blob/8c2e52ebbe885c7eeaabd3b7ddcdc1246fc400d2/drivers/tty/serial/8250/8250_of.c#L233
         };
 
         syscon: syscon@fffffff0 {

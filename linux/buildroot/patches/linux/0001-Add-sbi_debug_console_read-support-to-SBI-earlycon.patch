@@ -1,0 +1,39 @@
+From 6dd1871b195d17d3ea2121cc030663c76da309e1 Mon Sep 17 00:00:00 2001
+From: object-Object <object@objectobject.ca>
+Date: Wed, 9 Jul 2025 16:50:43 -0400
+Subject: [PATCH 1/2] Add sbi_debug_console_read support to SBI earlycon
+
+---
+ drivers/tty/serial/earlycon-riscv-sbi.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/tty/serial/earlycon-riscv-sbi.c b/drivers/tty/serial/earlycon-riscv-sbi.c
+index 0162155f0c83..a526974c5416 100644
+--- a/drivers/tty/serial/earlycon-riscv-sbi.c
++++ b/drivers/tty/serial/earlycon-riscv-sbi.c
+@@ -37,12 +37,19 @@ static void sbi_dbcn_console_write(struct console *con,
+ 	}
+ }
+
++static int sbi_dbcn_console_read(struct console *con,
++				 char *s, unsigned int n)
++{
++	return sbi_debug_console_read(s, n);
++}
++
+ static int __init early_sbi_setup(struct earlycon_device *device,
+ 				  const char *opt)
+ {
+-	if (sbi_debug_console_available)
++	if (sbi_debug_console_available) {
+ 		device->con->write = sbi_dbcn_console_write;
+-	else if (IS_ENABLED(CONFIG_RISCV_SBI_V01))
++		device->con->read = sbi_dbcn_console_read;
++	} else if (IS_ENABLED(CONFIG_RISCV_SBI_V01))
+ 		device->con->write = sbi_0_1_console_write;
+ 	else
+ 		return -ENODEV;
+
+base-commit: 19272b37aa4f83ca52bdf9c16d5d81bdd1354494
+--
+2.25.1

@@ -1,0 +1,28 @@
+From 3d22caf2bee6f6ff4b9ce1c53a3bc046cfcd14e4 Mon Sep 17 00:00:00 2001
+From: object-Object <object@objectobject.ca>
+Date: Fri, 11 Jul 2025 16:43:41 -0400
+Subject: [PATCH 2/2] Hack: remove contents of flush_icache_pte
+
+---
+ arch/riscv/mm/cacheflush.c | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/arch/riscv/mm/cacheflush.c b/arch/riscv/mm/cacheflush.c
+index 4ca5aafce22e..667ab1659bb9 100644
+--- a/arch/riscv/mm/cacheflush.c
++++ b/arch/riscv/mm/cacheflush.c
+@@ -99,12 +99,6 @@ void flush_icache_mm(struct mm_struct *mm, bool local)
+ #ifdef CONFIG_MMU
+ void flush_icache_pte(struct mm_struct *mm, pte_t pte)
+ {
+-	struct folio *folio = page_folio(pte_page(pte));
+-
+-	if (!test_bit(PG_dcache_clean, &folio->flags)) {
+-		flush_icache_mm(mm, false);
+-		set_bit(PG_dcache_clean, &folio->flags);
+-	}
+ }
+ #endif /* CONFIG_MMU */
+
+--
+2.25.1

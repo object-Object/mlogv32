@@ -76,6 +76,25 @@ class ProcessorAccess:
         self._send_request(StatusRequest())
         return self._recv_response(StatusResponse)
 
+    def serial(
+        self,
+        device: UartDevice,
+        *,
+        overrun: bool = False,
+        stop_on_halt: bool = False,
+        disconnect_on_halt: bool = False,
+    ):
+        self._send_request(
+            SerialRequest(
+                device=device,
+                overrun=overrun,
+                direction="both",
+                stopOnHalt=stop_on_halt,
+                disconnectOnHalt=disconnect_on_halt,
+            )
+        )
+        return self.socket
+
     def _send_request(self, request: Request) -> None:
         message = request.model_dump_json() + "\n"
         logger.log(self.log_level, f"Sending request: {message.rstrip()}")
@@ -144,6 +163,21 @@ class StatusRequest(BaseModel):
     type: Literal["status"] = "status"
 
 
+type UartDevice = Literal["uart0", "uart1", "uart2", "uart3"]
+
+
+type UartDirection = Literal["both", "rx", "tx"]
+
+
+class SerialRequest(BaseModel):
+    type: Literal["serial"] = "serial"
+    device: UartDevice
+    overrun: bool
+    direction: UartDirection
+    stopOnHalt: bool
+    disconnectOnHalt: bool
+
+
 type Request = Annotated[
     FlashRequest
     | DumpRequest
@@ -151,7 +185,8 @@ type Request = Annotated[
     | WaitRequest
     | UnpauseRequest
     | StopRequest
-    | StatusRequest,
+    | StatusRequest
+    | SerialRequest,
     Field(discriminator="type"),
 ]
 

@@ -7,6 +7,8 @@ from jinja2 import Environment
 from jinja2.ext import Extension
 from jinja2.lexer import Token, TokenStream, count_newlines
 
+from mlogv32.preprocessor.filters import make_jinja_exceptions_suck_a_bit_less
+
 
 class CommentStatement(Extension):
     """Allows writing inline expressions without causing an mlogls error.
@@ -186,12 +188,14 @@ class LocalVariables(Extension):
     def _env(self):
         return LocalVariablesEnv.of(self.environment)
 
+    @make_jinja_exceptions_suck_a_bit_less
     def reset_locals(self, i: int = 1):
         if i < 1:
             raise ValueError(f"Invalid local variable index: {i}")
         self._env.local_variable_index = i
         self._env.local_variable_cache.clear()
 
+    @make_jinja_exceptions_suck_a_bit_less
     def declare_locals(self, *names: str | list[str], i: int = 1):
         self.reset_locals(i)
         for name in names:
@@ -200,6 +204,7 @@ class LocalVariables(Extension):
             else:
                 self.local_variable(name.removeprefix("$"))
 
+    @make_jinja_exceptions_suck_a_bit_less
     def local_variable(self, name: str | int | None = None):
         cache = self._env.local_variable_cache
 

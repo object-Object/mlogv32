@@ -1,4 +1,5 @@
 import functools
+import inspect
 from typing import Any, Callable
 
 from jinja2.runtime import Context
@@ -21,13 +22,18 @@ def register_filter[T: Callable[..., Any]](name: str | None = None) -> Callable[
 
 # from hexdoc.jinja.filters
 def make_jinja_exceptions_suck_a_bit_less[**P, R](f: Callable[P, R]) -> Callable[P, R]:
+    if params := inspect.signature(f).parameters:
+        is_method = next(iter(params.keys())) == "self"
+    else:
+        is_method = False
+
     @functools.wraps(f)
     def wrapper(*args: P.args, **kwargs: P.kwargs):
         try:
             return f(*args, **kwargs)
         except Exception as e:
             args_ = list(args)
-            if args_ and isinstance(args_[0], Context):
+            if args_ and (is_method or isinstance(args_[0], Context)):
                 args_ = args_[1:]
 
             e.add_note(f"args:   {args_}")

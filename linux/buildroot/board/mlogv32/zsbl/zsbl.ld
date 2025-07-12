@@ -3,7 +3,7 @@ ENTRY(_start)
 
 /* memory size definitions */
 __ROM = 16M;
-__RAM = 16M;
+__RAM = 14M;
 
 MEMORY {
     /* ROM */

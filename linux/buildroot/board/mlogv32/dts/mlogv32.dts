@@ -32,7 +32,7 @@
     memory@80000000 {
         device_type = "memory";
         // the last 256K are reserved for OpenSBI
-        reg = <0x80000000 (16*1024*1024 - 256*1024)>;
+        reg = <0x80000000 (14*1024*1024 - 256*1024)>;
     };
 
     cpus {

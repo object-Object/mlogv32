@@ -1,3 +1,5 @@
+#define FAST_ROM y
+
 .set UART0_BASE, 0xf0000010
 
 .macro log message
@@ -64,8 +66,10 @@ do_print:
 2:
     ret
 
+#ifndef FAST_ROM
 .section .loader, "ax", @progbits
 .balign 4
+#endif
 loader:
     // copy kernel to RAM
     // we do this here so the copy operation can be covered by the icache

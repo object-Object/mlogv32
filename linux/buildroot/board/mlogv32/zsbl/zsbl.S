@@ -1,4 +1,4 @@
-#define FAST_ROM y
+#define USE_PROGRAM_ROM y
 
 .set UART0_BASE, 0xf0000010
 
@@ -29,6 +29,14 @@ _start:
     la t0, UART0_BASE
     li t1, 1
     sb t1, 8(t0)
+
+#ifdef USE_PROGRAM_ROM
+    // initialize icache
+    // we don't include the kernel in this because the kernel is not executed from ROM
+    log "initializing icache..."
+    la t0, _erootfs
+    .insn i CUSTOM_0, 0, zero, t0, 0
+#endif
 
     // copy loader to RAM
     log "loading kernel..."
@@ -66,7 +74,7 @@ do_print:
 2:
     ret
 
-#ifndef FAST_ROM
+#ifndef USE_PROGRAM_ROM
 .section .loader, "ax", @progbits
 .balign 4
 #endif

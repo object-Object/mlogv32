@@ -6,14 +6,13 @@
 set COPYRIGHT "kbconv - a sortKB scancode decoder\n© 2025 camelStyleUser, BasedUser. Released under GPLv3 (https://www.gnu.org/licenses/gpl-3.0.html).\nThis program is provided without any warranty."
 set SOURCELINK "https://github.com/BasedUser/mPC"
 
-read UART_FIFO_MODULO processor1 "UART_FIFO_MODULO"
-
 read modifiers cell2 0
 op and shift modifiers 1
 op and ctrl modifiers 2
 op and caps modifiers 32
 
 loop:
+read UART_FIFO_MODULO processor1 "UART_FIFO_MODULO"
 read rptr cell1 62
 read wptr cell1 63
 jump loop equal wptr rptr

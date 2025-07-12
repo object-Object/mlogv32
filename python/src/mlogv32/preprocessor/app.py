@@ -97,8 +97,8 @@ def build(
     yaml_path: Path,
     cpu_config_name: Annotated[str | None, Option("-c", "--config")] = None,
     width: Annotated[int, Option("-w", "--width")] = 16,
-    height: Annotated[int, Option("-h", "--height")] = 16,
-    size: Annotated[int | None, Option("-s", "--size")] = None,
+    height: Annotated[int, Option("-h", "--height", max=16)] = 16,
+    size: Annotated[int | None, Option("-s", "--size", max=16)] = None,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
     bin_path: Annotated[Path | None, Option("--bin")] = None,
     include_all: Annotated[bool, Option("--all")] = False,
@@ -119,11 +119,11 @@ def build(
 
     Defaults:
 
-    - drom: 0
+    - data_rom_rows: 0
 
-    - icache: rom + ram
+    - icache_rows: rom + ram
 
-    - width: 32
+    - memory_width: 32
 
     - x_offset: -9
 
@@ -406,32 +406,32 @@ Code size:
     pause_switch_link = ProcessorLink(11, 17, "")
     single_step_switch_link = ProcessorLink(11, 16, "")
 
-    add_peripheral(ram_schem, 14, 16)
+    add_peripheral(ram_schem, 13, 16)
+    add_peripheral(ram_schem, 12, 17)
     add_peripheral(ram_schem, 13, 17)
-    add_peripheral(ram_schem, 14, 17)
     add_with_label(
-        Block(Content.SWITCH, 14, 18, True, 0),
+        Block(Content.SWITCH, 13, 18, True, 0),
         right="UART0 -> DISPLAY",
     )
 
     add_peripheral(
         Block(
             block=Content.WORLD_PROCESSOR,
-            x=13,
+            x=12,
             y=16,
             config=ProcessorConfig(
                 code=display_code,
                 links=relative_links(
                     *lookup_links,
-                    ProcessorLink(14, 16, "processor17"),  # BUFFER
-                    ProcessorLink(13, 17, "processor18"),  # INCR (display)
-                    ProcessorLink(14, 17, "processor19"),  # DECR
+                    ProcessorLink(13, 16, "processor17"),  # BUFFER
+                    ProcessorLink(12, 17, "processor18"),  # INCR (display)
+                    ProcessorLink(13, 17, "processor19"),  # DECR
                     config_link,
-                    ProcessorLink(14, 18, "switch1"),  # DISPLAY_POWER
+                    ProcessorLink(13, 18, "switch1"),  # DISPLAY_POWER
                     power_switch_link,
                     uart_links[0],
                     display_link,
-                    x=13,
+                    x=12,
                     y=16,
                 ),
             ),
@@ -439,7 +439,7 @@ Code size:
         )
     )
 
-    add_peripheral(sortkb_schem, 4, 21)
+    add_peripheral(sortkb_schem, 14, 16)
 
     # CPU
 

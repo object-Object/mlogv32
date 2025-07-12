@@ -2,7 +2,7 @@
 
 RISC-V processor in Mindustry logic that runs Linux. Requires Mindustry build 149+.
 
-![image](https://github.com/user-attachments/assets/3951b4b7-cc56-494a-85f8-54bd9f2ee7d5)
+<img width="1823" height="1008" alt="linux" src="https://github.com/user-attachments/assets/9b1fd6fa-ba4c-4498-9892-ae87a81d4588" />
 
 ## Architecture
 

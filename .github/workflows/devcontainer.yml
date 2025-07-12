@@ -2,8 +2,10 @@ name: Prebuild dev container
 
 on:
   push:
-    branches:
-      - main
+    paths:
+      - .github/workflows/devcontainer.yml
+      - .github/.devcontainer/**
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io

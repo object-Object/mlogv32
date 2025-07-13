@@ -202,10 +202,12 @@ class LocalVariables(Extension):
             if isinstance(name, list):
                 self.declare_locals(*name)
             else:
-                self.local_variable(name.removeprefix("$"))
+                if not name.startswith("$$"):
+                    raise ValueError(f"Invalid local variable declaration: {name}")
+                self.local_variable(name.removeprefix("$"), declare=True)
 
     @make_jinja_exceptions_suck_a_bit_less
-    def local_variable(self, name: str | int | None = None):
+    def local_variable(self, name: str | int | None = None, declare: bool = False):
         cache = self._env.local_variable_cache
 
         if name not in cache:
@@ -222,6 +224,10 @@ class LocalVariables(Extension):
 
             if not isinstance(name, str):
                 return value
+
+            # names starting with $$ should be declared ahead of time via declare_locals
+            if not declare and name.startswith("$"):
+                raise ValueError(f"Undeclared local variable: ${name}")
 
             cache[name] = value
 

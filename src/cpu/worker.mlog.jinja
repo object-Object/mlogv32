@@ -355,9 +355,9 @@ end_instruction_trap:
     # if next_pc was modified, icache_var should have also been set to null
     set pc next_pc
 
-    jump main lessThan csr_mip 0b01000000000000000000000000000000
-    jump poll_interrupts greaterThanEq csr_mip 0b10000000000000000000000000000000
-    jump fire_interrupts always
+    jump main            lessThan csr_mip 0b01000000000000000000000000000000
+    jump fire_interrupts lessThan csr_mip 0b10000000000000000000000000000000
+    jump poll_interrupts always
 
 # exceptions
 

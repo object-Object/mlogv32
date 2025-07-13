@@ -4,6 +4,7 @@
     read _address prev_proc "_address"
     read address prev_proc "address"
     read breakpoint_address prev_proc "breakpoint_address"
+    read csr_mideleg prev_proc "csr_mideleg"
     read csr_mie prev_proc "csr_mie"
     read csr_minstret prev_proc "csr_minstret"
     read csr_minstreth prev_proc "csr_minstreth"
@@ -85,6 +86,8 @@
 
 #%# constants
 
+#% set LN_2 = '0.6931471805599453'
+
 #%# Sv32
 #% set PAGESIZE = 2**12
 #% set LEVELS = 2
@@ -95,7 +98,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 157
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 152
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -187,6 +190,12 @@ fire_interrupts:
 #% do reset_locals()
     op and csr_mip csr_mip 0b10111111111111111111111111111111 # clear interrupt_flags.fire
 
+    # fire interrupt i if bit i is set in both mip and mie
+    op and $interrupts csr_mip csr_mie
+
+    # if no interrupts would be fired, short-circuit
+    jump main equal $interrupts 0
+
     # in U-mode, interrupts are always enabled
     jump fire_interrupts__ok lessThan privilege_mode 0b01
 
@@ -196,37 +205,32 @@ fire_interrupts:
     op and $mstatus.xie $mstatus.xie csr_mstatus
     jump main equal $mstatus.xie 0
 
+    # in M-mode, don't take delegated interrupts
+    jump fire_interrupts__ok lessThan privilege_mode 0b11
+
+    op not $mask csr_mideleg
+    op and $interrupts $interrupts $mask
+
 fire_interrupts__ok:
-#% do reset_locals()
     # interrupt priority order: MEI, MSI*, MTI, SEI, SSI, STI, LCOFI*
     # * not implemented
 
-    op and $interrupts csr_mip csr_mie
+    # we can check consecutive interrupts i and j at the same time if i > j
+    # for example, if MEI (11) and MTI (7) are both set, then floor(log_2(0b100010000000)) = 11
 
-    # machine external interrupt
-    set mcause 0x8000000b
-    op and $enabled $interrupts 0b100000000000 # MEIP
-    jump trap_without_mtval notEqual $enabled 0
+    # MEI                       -
+    # MTI                           -
+    op and mcause $interrupts 0b100010000000
+    jump interrupt notEqual mcause 0
 
-    # machine timer interrupt
-    set mcause 0x80000007
-    op and $enabled $interrupts 0b10000000 # MTIP
-    jump trap_without_mtval notEqual $enabled 0
+    # SEI                         -
+    # SSI                                 -
+    op and mcause $interrupts 0b001000000010
+    jump interrupt notEqual mcause 0
 
-    # supervisor external interrupt
-    set mcause 0x80000009
-    op and $enabled $interrupts 0b1000000000 # SEIP
-    jump supervisor_trap_without_mtval notEqual $enabled 0
-
-    # supervisor software interrupt
-    set mcause 0x80000001
-    op and $enabled $interrupts 0b10 # SSIP
-    jump supervisor_trap_without_mtval notEqual $enabled 0
-
-    # supervisor timer interrupt
-    set mcause 0x80000005
-    op and $enabled $interrupts 0b100000 # STIP
-    jump supervisor_trap_without_mtval notEqual $enabled 0
+    # STI                             -
+    op and mcause $interrupts 0b000000100000
+    jump interrupt notEqual mcause 0
 
 main:
     # store the pc for the following instruction in a separate variable, so jumps and traps don't need to account for the pc being incremented at the end of an instruction
@@ -252,8 +256,6 @@ main:
     jump main__access_ram_icache      lessThan address ICACHE_END
 
 main__slow_instruction_fetch:
-    jump default_mtvec_handler equal address {{SYSCON}}
-
     jump trap greaterThanEq address RAM_END # prevent executing from MMIO
 
     op add ret @counter 1
@@ -359,10 +361,10 @@ end_instruction_trap:
 
 # exceptions
 
-default_mtvec_handler:
+default_xtvec_handler:
     # if we set state before printing, atomicity should be guaranteed
     set state "halt"
-    print "Control transferred to {{SYSCON}} (default mtvec), halting."
+    print "Trap taken to {{SYSCON}} (default trap vector), halting."
     printflush {{ERROR_OUTPUT}}
     # continue into state->halt
 
@@ -374,13 +376,44 @@ state->reset:
     set state "reset"
     jump reset always
 
-supervisor_trap_without_mtval:
-#% do reset_locals()
+#% set trap_locals = ['$$mxdeleg']
+
+interrupt:
+#% do declare_locals(trap_locals)
+    # the highest bit set in mcause is the bit in (mip & mie) that triggered the interrupt
+    # so convert mcause to the actual trap code via floor(log_2(mcause)) = ln(mcause) // ln(2)
+    op log mcause mcause
+    op idiv mcause mcause {{LN_2}}
+
+    # check mideleg
+    # we can't use the original mcause value as a bitmask for this because it may also have lower bits set
+    op shr $$mxdeleg csr_mideleg mcause
+
+    # set interrupt bit
+    op or mcause mcause 0x80000000
+
+    # continue into trap_without_mtval
+
+trap_without_mtval:
     set mtval 0
+    jump trap__check_mxdeleg greaterThanEq mcause 0x80000000
+    # continue into trap
 
+trap:
+#% do declare_locals(trap_locals)
+    # check medeleg
+    read $$mxdeleg {{CSRS}} "{{ 'medeleg'|csr }}"
+    op shr $$mxdeleg $$mxdeleg mcause
+
+trap__check_mxdeleg:
     # don't trap from M-mode to S-mode
-    jump trap greaterThan privilege_mode 0b01
+    jump trap__machine greaterThan privilege_mode 0b01
 
+    # if not in M-mode, trap to S-mode if the corresponding mxdeleg bit is set, else trap to M-mode
+    op and $$mxdeleg $$mxdeleg 0b1
+    jump trap__machine equal $$mxdeleg 0
+
+#% do reset_locals()
     # set sstatus.SPIE to sstatus.SIE, set sstatus.SIE to 0, and set sstatus.SPP to privilege_mode
     op and $mstatus.xpie csr_mstatus 0b10
 
@@ -397,24 +430,16 @@ supervisor_trap_without_mtval:
     # set sepc to current pc
     write pc {{CSRS}} "{{ 'sepc'|csr }}"
 
-    # we only support direct mode, so set next_pc to mtvec
+    # we only support direct mode, so set next_pc to stvec
     read next_pc {{CSRS}} "{{ 'stvec'|csr }}"
 
     # trap into S-mode
     set privilege_mode 0b01
 
-    jump common_trap always
+    jump trap__common always
 
-ILLEGAL_OP:
-    set mcause 2
-    # TODO: return faulting instruction bits?
-    # continue into trap_without_mtval
-
-trap_without_mtval:
-    set mtval 0
-    # continue into trap
-
-trap:
+trap__machine:
+#% do reset_locals()
     # set mstatus.MPIE to mstatus.MIE, set mstatus.MIE to 0, and set mstatus.MPP to privilege_mode
     op and $mstatus.xpie csr_mstatus 0b1000
 
@@ -437,7 +462,7 @@ trap:
     # trap into M-mode
     set privilege_mode 0b11
 
-common_trap:
+trap__common:
     op shl $mstatus.xpie $mstatus.xpie 4
     op or csr_mstatus csr_mstatus $mstatus.xpie
     op or csr_mstatus csr_mstatus $mstatus.xpp
@@ -449,6 +474,9 @@ trap__breakpoint:
     set state "trap_breakpoint"
     stop
 trap__no_breakpoint:
+
+    # check for unhandled traps
+    jump default_xtvec_handler equal next_pc {{SYSCON}}
 
     # update effective_privilege_mode
     # tail call into end_instruction_trap so we don't update instret
@@ -2165,7 +2193,10 @@ PRIV:
     jump ILLEGAL_OP lessThan privilege_mode 0b11
     jump MRET   equal imm 0b001100000010
 
-    jump ILLEGAL_OP always
+ILLEGAL_OP:
+    # TODO: return faulting instruction bits?
+    set mcause 2
+    jump trap_without_mtval always
 
 ECALL:
     # 0b1000 (8) = ecall from U-mode
@@ -2361,15 +2392,6 @@ csr_read_zero:
     set rd 0
     set @counter $$modify_csr_op
 
-csr_read_mideleg:
-#% do declare_locals(modify_csr_locals)
-    # we always delegate supervisor interrupts to S-mode, so reflect that in mideleg
-    # SEIE                         -
-    # STIE                             -
-    # SSIE                                 -
-    set rd 0b00000000000000000000001000100010
-    set @counter $$modify_csr_op
-
 csr_read_sstatus:
 #% do declare_locals(modify_csr_locals)
     # subset of mstatus
@@ -2410,6 +2432,33 @@ csr_xstatus:
     # update effective_privilege_mode
     set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
     jump get_effective_privilege_mode always
+
+csr_write_medeleg:
+#% do declare_locals(modify_csr_locals)
+    # clear read-only zero fields
+    # custom               --------
+    # reserved                     ----  -- -   -
+    # M-mode ecall                             -
+    op and result result 0b00000000000011001011001111111111
+
+    # we only need to read medeleg in one place, so it's more compact to store it in CSRS
+    jump csr_write_csrs always
+
+csr_read_mideleg:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_mideleg
+    set @counter $$modify_csr_op
+
+csr_write_mideleg:
+    # get new writable fields
+    # MEI                                           -
+    # SEI                                             -
+    # MTI                                               -
+    # STI                                                 -
+    # MSI                                                   -
+    # SSI                                                     -
+    op and csr_mideleg result 0b00000000000000000000101010101010
+    jump end_instruction_with_rd_and_fire_interrupts always
 
 csr_read_sip:
 #% do declare_locals(modify_csr_locals)
@@ -2660,6 +2709,7 @@ set {{CONFIG}} null
 set {{CSR_LABELS}} null
 set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
+set {{LN_2}} null
 set {{PAGESIZE}} null
 set {{labels.next_tick}} null
 # unused variables
@@ -2765,6 +2815,8 @@ jump csr_read_timeh always
 jump csr_read_zero always
 jump csr_write_csrs always
 jump csr_write_csrs_align_4B always
+jump csr_write_medeleg always
+jump csr_write_mideleg always
 jump csr_write_mie always
 jump csr_write_minstret always
 jump csr_write_minstreth always

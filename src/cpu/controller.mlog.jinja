@@ -206,6 +206,10 @@ end_slow_init:
     write 0 {{CSRS}} "{{ 'mcycle'|csr }}"
     write 0 {{CSRS}} "{{ 'mcycleh'|csr }}"
 
+    # clear delegated traps
+    write 0 {{CSRS}} "{{ 'medeleg'|csr }}"
+    set csr_mideleg 0
+
     # clear pending/enabled interrupts
     set csr_mip 0
     set csr_mie 0
@@ -432,4 +436,5 @@ set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie
 set _ csr_satp
+set _ csr_mideleg
 # {% endraw %}

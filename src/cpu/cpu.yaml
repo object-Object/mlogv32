@@ -220,11 +220,11 @@ csrs:
     read: csrs
     write: readonly
   medeleg:
-    read: zero
-    write: readonly
+    read: csrs
+    write: LABEL
   mideleg:
     read: LABEL
-    write: readonly
+    write: LABEL
   mie:
     read: LABEL
     write: LABEL

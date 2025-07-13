@@ -36,7 +36,6 @@
     read rs1_id prev_proc "rs1_id"
     read rs2 prev_proc "rs2"
     read rs2_id prev_proc "rs2_id"
-    read single_step_enabled prev_proc "single_step_enabled"
     read state prev_proc "state"
     read value prev_proc "value"
     read variable prev_proc "variable"
@@ -96,7 +95,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 150
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 149
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -304,7 +303,7 @@ main__read_icache:
     read rs2 {{REGISTERS}} rs2_id
 
     jump main__breakpoint strictEqual pc breakpoint_address
-    jump main__no_breakpoint notEqual single_step_enabled true
+    jump main__no_breakpoint notEqual breakpoint_address "*"
 main__breakpoint:
     # the controller will increment @counter and set state to "running" when it's time to unpause
     set state "breakpoint"
@@ -468,7 +467,7 @@ trap__common:
 
     # check for breakpoints
     jump trap__breakpoint strictEqual pc breakpoint_address
-    jump trap__no_breakpoint notEqual single_step_enabled true
+    jump trap__no_breakpoint notEqual breakpoint_address "*"
 trap__breakpoint:
     set state "trap_breakpoint"
     stop

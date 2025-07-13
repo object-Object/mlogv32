@@ -161,8 +161,8 @@ end_slow_init:
     set __etext 0
 
     # debugging
-    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
-    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
+    op add ret @counter 1
+    jump get_breakpoint_address always
 
     # reset hart state as per machine-level ISA
 
@@ -275,13 +275,9 @@ end_breakpoint:
     sensor enabled {{POWER_SWITCH}} @enabled
     jump state->halt equal enabled false
 
-    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
+    op add ret @counter 1
+    jump get_breakpoint_address always
     write breakpoint_address prev_proc "breakpoint_address"
-
-    sensor single_step_enabled {{SINGLE_STEP_SWITCH}} @enabled
-    sensor pause_enabled {{PAUSE_SWITCH}} @enabled
-    op or single_step_enabled single_step_enabled pause_enabled
-    write single_step_enabled prev_proc "single_step_enabled"
 
     # check which CSR we're currently updating, if any
 
@@ -369,6 +365,21 @@ breakpoint__end_loop:
     set last_mcycle_update @tick
 
     jump end_breakpoint always
+
+# -> breakpoint_address
+get_breakpoint_address:
+    sensor enabled {{SINGLE_STEP_SWITCH}} @enabled
+    jump get_breakpoint_address__single_step equal enabled true
+
+    sensor enabled {{PAUSE_SWITCH}} @enabled
+    jump get_breakpoint_address__single_step equal enabled true
+
+    read breakpoint_address {{CONFIG}} "BREAKPOINT_ADDRESS"
+    set @counter ret
+
+get_breakpoint_address__single_step:
+    set breakpoint_address "*"
+    set @counter ret
 
 # given a value 0 <= address < RAM_PROC_BYTES, resolve that variable in the lookup table
 # address -> variable

@@ -190,7 +190,7 @@ loop:
     op add stimecmp stimecmp stimecmph
 
     read minstret {{CPU}} "csr_minstret"
-    read minstreth {{CPU}} "csr_minstreth"
+    read minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
     op shl minstreth minstreth 32
     op add minstret minstret minstreth
 

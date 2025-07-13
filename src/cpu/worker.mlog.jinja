@@ -7,7 +7,6 @@
     read csr_mideleg prev_proc "csr_mideleg"
     read csr_mie prev_proc "csr_mie"
     read csr_minstret prev_proc "csr_minstret"
-    read csr_minstreth prev_proc "csr_minstreth"
     read csr_mip prev_proc "csr_mip"
     read csr_mstatus prev_proc "csr_mstatus"
     read csr_mtime prev_proc "csr_mtime"
@@ -95,11 +94,11 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 149
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 148
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
-#% set labels.end_instruction_trap                        = _labels_vals|last + 4
+#% set labels.end_instruction_trap                        = _labels_vals|last + 6
 
 reset:
     setrate 1000
@@ -338,13 +337,16 @@ end_instruction_with_rd:
 # all instructions jump here after completing successfully
 #directive assert_counter {{ labels.end_instruction }}
 end_instruction:
+#% do reset_locals()
     # increment instret
     op add csr_minstret csr_minstret 1
     jump end_instruction_trap lessThan csr_minstret 0x100000000
 
     # overflow instret
     set csr_minstret 0
-    op add csr_minstreth csr_minstreth 1
+    read $minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
+    op add $minstreth $minstreth 1
+    write $minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
 #directive assert_counter {{ labels.end_instruction_trap }}
 end_instruction_trap:
@@ -2608,14 +2610,13 @@ csr_write_minstret:
 
 csr_read_minstreth:
 #% do declare_locals(modify_csr_locals)
-    set rd csr_minstreth
+    read rd {{CSRS}} "{{ 'minstreth'|csr }}"
     jump check_xcounteren always
 
 csr_write_minstreth:
     # a value written to instret by one instruction should be the value read by the following instruction
     op sub csr_minstret csr_minstret 1
-    set csr_minstreth result
-    jump end_instruction_with_rd always
+    jump csr_write_csrs always
 
 csr_read_hpmcounter:
 #% do declare_locals(modify_csr_locals)

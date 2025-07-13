@@ -202,7 +202,7 @@ end_slow_init:
     set csr_stimecmp 0
     set csr_stimecmph 0
     set csr_minstret 0
-    set csr_minstreth 0
+    write 0 {{CSRS}} "{{ 'minstreth'|csr }}"
     write 0 {{CSRS}} "{{ 'mcycle'|csr }}"
     write 0 {{CSRS}} "{{ 'mcycleh'|csr }}"
 
@@ -442,7 +442,6 @@ set _ csr_stimecmph
 set _ csr_mcycle
 set _ csr_mcycleh
 set _ csr_minstret
-set _ csr_minstreth
 set _ csr_mstatus
 set _ csr_mip
 set _ csr_mie

@@ -94,7 +94,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 148
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 147
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -246,8 +246,7 @@ main:
     # fall back to slow instruction fetch/decode if not in valid icache range
     # note: MLOGSYS enforces __etext <= ICACHE_SIZE and __etext <= PROGRAM_ROM_SIZE
     jump main__access_rom_icache      lessThan address __etext
-    jump main__slow_instruction_fetch lessThan address ROM_SIZE
-    jump trap                         lessThan address {{RAM_START}}
+    jump main__slow_instruction_fetch lessThan address {{RAM_START}}
     op add _address RAM_ICACHE_OFFSET address
     jump main__access_ram_icache      lessThan address ICACHE_END
 

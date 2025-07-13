@@ -18,7 +18,6 @@
     read csr_stimecmp prev_proc "csr_stimecmp"
     read csr_stimecmph prev_proc "csr_stimecmph"
     read effective_privilege_mode prev_proc "effective_privilege_mode"
-    read icache_payload prev_proc "icache_payload"
     read icache_ram prev_proc "icache_ram"
     read icache_var prev_proc "icache_var"
     read imm prev_proc "imm"
@@ -97,7 +96,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 151
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 150
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -281,21 +280,22 @@ main__access_ram_icache:
 
 main__read_icache:
     # load instruction and unpack arguments
-    read icache_payload icache_ram icache_var
+    read result icache_ram icache_var
     read icache_var {{INCR}} icache_var
-    op and imm icache_payload 0xffffffff
-    op shr op_id icache_payload 47
+    op and imm result 0xffffffff
+    op shr op_id result 47
 #directive end_assert_length
     # ret3 jumps here for the slow path
     # we can't jump any later because decode doesn't fully isolate the register fields
+    # NOTE: FENCE assumes the icache payload is in result
 
-    op shr rd_id icache_payload 32
+    op shr rd_id result 32
     op and rd_id rd_id 0b11111
 
-    op shr rs1_id icache_payload 37
+    op shr rs1_id result 37
     op and rs1_id rs1_id 0b11111
 
-    op shr rs2_id icache_payload 42
+    op shr rs2_id result 42
     op and rs2_id rs2_id 0b11111
 
     # read rs1 and rs2
@@ -1041,7 +1041,7 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 
 # decoder entry point: decodes a single instruction and writes it to the icache
 # the caller MUST set address (skip write) or variable (prevent fast write) to null before the first consecutive call to this function
-# value (instruction), address -> op_id, imm, payload
+# value (instruction), address -> op_id, imm, result (icache_payload)
 # ret: ret3
 decode:
 #% set decode_locals = ["$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
@@ -1061,8 +1061,8 @@ decode:
     op shl $icache_payload_rs2_rs1 $icache_payload_rs2_rs1 22 # instruction[24:15] -> icache_payload[46:37]
     op shl $icache_payload_rd $instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
 
-    # we put the registers into the icache_payload variable here so that we don't have to fully pack the payload if decoding during instruction fetch
-    op add icache_payload $icache_payload_rs2_rs1 $icache_payload_rd
+    # we put the registers into the result variable here so that we don't have to fully pack the payload if decoding during instruction fetch
+    op add result $icache_payload_rs2_rs1 $icache_payload_rd
 
     # this is used in both S-type and B-type
     op shr $$imm_4_0 $instruction_11_7 7 # instruction[11:7] -> imm[4:0]
@@ -1361,8 +1361,8 @@ decode_custom-0:
 decode_illegal_instruction:
     # use 0 as the illegal instruction id because null coerces to 0
     set op_id 0
-    # this is required to prevent the op_id field from theoretically being corrupted if we jump here before setting icache_payload in decode
-    set icache_payload 0
+    # this is required to prevent the op_id field from theoretically being corrupted if we jump here before setting result in decode
+    set result 0
     # continue into end_decode
 
 # all decoders jump here after completing successfully
@@ -1386,15 +1386,15 @@ end_decode__rom:
     jump access_ram_raw always
 
 end_decode__decode_var_valid:
-    # pack op_id, registers (already in icache_payload), and imm into a single double
+    # pack op_id, registers (already in result), and imm into a single double
     # this is skipped if decoding for instruction fetch because op_id and imm are already in variables
     # IMPORTANT: use or instead of add because op_id may be negative
     op shl $icache_payload_op_id op_id 47
-    op or icache_payload icache_payload $icache_payload_op_id
-    op or icache_payload icache_payload imm
+    op or result result $icache_payload_op_id
+    op or result result imm
 
     # write to the icache
-    write icache_payload ram variable
+    write result ram variable
 
 end_decode__no_write_icache:
     set @counter ret3
@@ -2155,7 +2155,8 @@ FENCE:
     # no-op if not PAUSE
     # PAUSE is encoded as a FENCE instruction with imm=0b000000010000, rd=x0, and rs1=x0
     # we can differentiate FENCE.I from PAUSE because FENCE.I is supposed to have imm=0
-    op and $rs1id_rdid_imm icache_payload 0x3ffffffffff
+    # NOTE: result always contains the icache payload at this point
+    op and $rs1id_rdid_imm result 0x3ffffffffff
     jump end_instruction notEqual $rs1id_rdid_imm 0b000000010000
     # continue into WFI
 

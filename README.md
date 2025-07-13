@@ -148,7 +148,7 @@ CSR values are stored either in a RAM processor (CSRS), in a variable in the CPU
 
 mlogv32 currently passes all compliance tests for the `RV32IMASUZicsr_Zifencei` ISA.
 
-Commit: [riscv-non-isa/riscv-arch-test@571b9eda](https://github.com/riscv-non-isa/riscv-arch-test/tree/571b9eda4184738ab872b70dc1bdb5a3dc32e959)
+Commit: [riscv-non-isa/riscv-arch-test@6731c039](https://github.com/riscv-non-isa/riscv-arch-test/tree/6731c0393d534f37fdb6768da40b5eb99fd720ad)
 
 | TEST NAME                                                                                | STATUS |
 | ---------------------------------------------------------------------------------------- | ------ |
@@ -209,47 +209,16 @@ Commit: [riscv-non-isa/riscv-arch-test@571b9eda](https://github.com/riscv-non-is
 | riscv-arch-test/riscv-test-suite/rv32i_m/M/src/rem-01.S                                  | Passed |
 | riscv-arch-test/riscv-test-suite/rv32i_m/M/src/remu-01.S                                 | Passed |
 | riscv-arch-test/riscv-test-suite/rv32i_m/Zifencei/src/Fencei.S                           | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-CFG-reg.S                         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-CSR-access.S                      | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-R-priority-level-2.S          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-R-priority.S                  | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-R.S                           | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RW-priority-level-2.S         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RW-priority.S                 | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RW.S                          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RWX.S                         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RX-priority-level-2.S         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RX-priority.S                 | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-RX.S                          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-X-priority-level-2.S          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-X-priority.S                  | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NA4-X.S                           | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-R-priority-level-2.S        | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-R-priority.S                | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-R.S                         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RW-priority-level-2.S       | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RW-priority.S               | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RW.S                        | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RWX.S                       | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RX-priority-level-2.S       | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RX-priority.S               | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-RX.S                        | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-X-priority-level-2.S        | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-X-priority.S                | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-NAPOT-X.S                         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-R-priority-level-2.S          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-R-priority.S                  | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-R.S                           | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RW-priority-level-2..S        | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RW-priority.S                 | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RW.S                          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RWX.S                         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RX-priority-level-2.S         | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RX-priority.S                 | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-RX.S                          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-X-priority-level-2.S          | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-X-priority.S                  | Passed |
-| riscv-arch-test/riscv-test-suite/rv32i_m/pmp32/src/pmp-TOR-X.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-CSR-ALL-MODES.S                   | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NA4-M.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NA4-S.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NA4-U.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NAPOT-M.S                         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NAPOT-S.S                         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-NAPOT-U.S                         | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-TOR-M.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-TOR-S.S                           | Passed |
+| riscv-arch-test/riscv-test-suite/rv32i_m/pmp/src/pmp32-TOR-U.S                           | Passed |
 | riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/ebreak.S                          | Passed |
 | riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/ecall.S                           | Passed |
 | riscv-arch-test/riscv-test-suite/rv32i_m/privilege/src/misalign-beq-01.S                 | Passed |

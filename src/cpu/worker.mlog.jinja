@@ -60,7 +60,6 @@
     read {{local_variable()}} prev_proc "{{ local_variable(7) }}"
     read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
     read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(10) }}"
 #% endmacro
 
 # {% macro start_assert_length(n) %}{{ n }}{{ '\n#directive start_assert_length ' }}{{ n }}{% endmacro %}
@@ -98,7 +97,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 152
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 151
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -1045,7 +1044,7 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 # value (instruction), address -> op_id, imm, payload
 # ret: ret3
 decode:
-#% set decode_locals = ["$$instruction_24_15", "$$instruction_11_7", "$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
+#% set decode_locals = ["$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
 #% do declare_locals(decode_locals)
     # the lowest 2 bits are always "11" for non-compressed instructions
     # check this first to increase the odds of an early exit for non-code addresses
@@ -1056,18 +1055,17 @@ decode:
     op and $opcode value 0b1111111
 
     # decode and pack registers into the payload
-    # we do it in this order because instruction_24_15 is used for I-type and instruction_11_7 is used for S-type
-    op and $$instruction_24_15 value 0b1111111111000000000000000
-    op and $$instruction_11_7 value  0b0000000000000111110000000
+    op and $icache_payload_rs2_rs1 value 0b1111111111000000000000000
+    op and $instruction_11_7 value  0b0000000000000111110000000
 
-    op shl $icache_payload_rs2_rs1 $$instruction_24_15 22 # instruction[24:15] -> icache_payload[46:37]
-    op shl $icache_payload_rd $$instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
+    op shl $icache_payload_rs2_rs1 $icache_payload_rs2_rs1 22 # instruction[24:15] -> icache_payload[46:37]
+    op shl $icache_payload_rd $instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
 
     # we put the registers into the icache_payload variable here so that we don't have to fully pack the payload if decoding during instruction fetch
     op add icache_payload $icache_payload_rs2_rs1 $icache_payload_rd
 
     # this is used in both S-type and B-type
-    op shr $$imm_4_0 $$instruction_11_7 7 # instruction[11:7] -> imm[4:0]
+    op shr $$imm_4_0 $instruction_11_7 7 # instruction[11:7] -> imm[4:0]
 
     # decode common fields
     # funct12
@@ -2032,7 +2030,7 @@ end_instruction_with_truncated_rd:
     op and rd rd 0xffffffff
     jump end_instruction_with_rd always
 
-#% set mul_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low", "$$rs1_negative", "$$rs2_negative"]
+#% set mul_locals = ["$$high_high", "$$high_low", "$$low_high", "$$low_low"]
 
 MUL:
     # R-type: rs1, rs2, rd_id
@@ -2065,12 +2063,14 @@ mul_decomp:
 
     jump end_instruction_with_truncated_rd always
 
+# nonlocal1 = rs1_negative
+# nonlocal2 = rs2_negative
+
 MULH:
     # R-type: rs1, rs2, rd_id
-#% do declare_locals(mul_locals)
-    op greaterThanEq $$rs2_negative rs2 0x80000000 # check if the sign bit is set
+    op greaterThanEq nonlocal2 rs2 0x80000000 # check if the sign bit is set
 MULH_mulhsu:
-    op greaterThanEq $$rs1_negative rs1 0x80000000
+    op greaterThanEq nonlocal1 rs1 0x80000000
     # continue into mulh_s_u
 
 mulh_s_u:
@@ -2086,11 +2086,11 @@ mulh_s_u:
     op add rd rd $$high_high
 
     # https://stackoverflow.com/a/22847373
-    jump mulh_s_u__rs1_positive notEqual $$rs1_negative true
+    jump mulh_s_u__rs1_positive notEqual nonlocal1 true
     op sub rd rd rs2
 mulh_s_u__rs1_positive:
 
-    jump mulh_s_u__rs2_positive notEqual $$rs2_negative true
+    jump mulh_s_u__rs2_positive notEqual nonlocal2 true
     op sub rd rd rs1
 mulh_s_u__rs2_positive:
 
@@ -2099,14 +2099,14 @@ mulh_s_u__rs2_positive:
 MULHSU:
     # R-type: rs1, rs2, rd_id
 #% do declare_locals(mul_locals)
-    set $$rs2_negative false
+    set nonlocal2 false
     jump MULH_mulhsu always
 
 MULHU:
     # R-type: rs1, rs2, rd_id
 #% do declare_locals(mul_locals)
-    set $$rs1_negative false
-    set $$rs2_negative false
+    set nonlocal1 false
+    set nonlocal2 false
     jump mulh_s_u always
 
 DIV:
@@ -2281,7 +2281,8 @@ SFENCE.VMA__no_tvm:
 
     jump end_instruction always
 
-#% set modify_csr_locals = ['$__clobbered', '$$modify_csr_op', '$$csr_labels']
+#%# the first local is clobbered by lookup_variable
+#% set modify_csr_locals = ['$$_', '$$modify_csr_op', '$$csr_labels']
 #% set modify_csr_op_offset = 1
 
 #% do declare_locals(modify_csr_locals)

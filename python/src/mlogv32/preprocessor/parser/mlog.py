@@ -176,11 +176,13 @@ def check_unsaved_variables(ast: Iterable[ASTNode]):
             case Directive(name="end_fetch"):
                 state = "check"
                 continue
-            case Directive(name="push_saved", args=[var]):
-                saved_variables.add(var)
+            case Directive(name="push_saved", args=args):
+                for var in args:
+                    saved_variables.add(var)
                 continue
-            case Directive(name="pop_saved", args=[var]):
-                saved_variables.remove(var)
+            case Directive(name="pop_saved", args=args):
+                for var in args:
+                    saved_variables.remove(var)
                 continue
             case _:
                 continue

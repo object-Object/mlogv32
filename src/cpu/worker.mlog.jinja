@@ -94,7 +94,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 147
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -140,16 +140,34 @@ reset:
     # tell the next worker to fetch the hart state from us
     write @this {{CONTROLLER}} "prev_proc"
 
+    # these variables don't need to be saved because this should only ever run at the start of a tick
+
+#directive push_saved __mcycle __mcycleh
+    # increment mcycle
+    read __mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    op add __mcycle __mcycle 1
+    jump reset__no_overflow lessThan __mcycle 0x100000000
+
+    # overflow mcycle into mcycleh
+    # TODO: handle mcycleh overflow
+    set __mcycle 0
+    read __mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
+    op add __mcycleh __mcycleh 1
+    write __mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
+
+reset__no_overflow:
+    write __mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+#directive pop_saved __mcycle __mcycleh
+
     # if we just started executing, don't restore @counter
     jump poll_interrupts equal prev_proc {{CONTROLLER}}
 
+#directive push_saved __counter
     # otherwise, jump to whatever instruction the previous worker would have executed next
-    # _counter doesn't need to be saved because this should only ever run at the start of a tick
-#directive push_saved _counter
-    read _counter prev_proc "@counter"
+    read __counter prev_proc "@counter"
     write {{labels.next_tick}} prev_proc "@counter"
-    set @counter _counter
-#directive pop_saved _counter
+    set @counter __counter
+#directive pop_saved __counter
 
 # check if software-manipulable interrupts should become pending
 # this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
@@ -296,7 +314,7 @@ main__read_icache:
     op and rs2_id rs2_id 0b11111
 
     # read rs1 and rs2
-    # this wastes 1 cycle for I-type and 2 cycles for U-type and J-type, but it saves a huge amount of space
+    # this wastes 1 instruction for I-type and 2 for U-type and J-type, but it saves a huge amount of space
     read rs1 {{REGISTERS}} rs1_id
     read rs2 {{REGISTERS}} rs2_id
 

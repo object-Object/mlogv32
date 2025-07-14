@@ -247,9 +247,8 @@ end_slow_init:
     # align to tick
     wait 1e-5
 
-    # set mtime/mcycle reference points
+    # set mtime reference point
     set last_mtime_update @time
-    set last_mcycle_update @tick
 
     # start the workers
     set prev_proc @this
@@ -282,7 +281,7 @@ end_breakpoint:
     # check which CSR we're currently updating, if any
 
     # update mtime
-    # TODO: handle mtimeh/mcycleh overflow
+    # TODO: handle mtimeh overflow
 
     op sub delta_ms @time last_mtime_update
 
@@ -298,29 +297,6 @@ end_breakpoint:
     write csr_mtimeh prev_proc "csr_mtimeh"
 
     set last_mtime_update @time
-
-    # update mcycle
-    # we define the rate of increase of mcycle as "@ipt * ticks"
-    # this should be a decent estimation of the number of mlog instructions executed
-
-    read csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
-    read csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
-
-    op sub delta_cycles @tick last_mcycle_update
-    op mul delta_cycles delta_cycles @ipt
-
-    op add csr_mcycle csr_mcycle delta_cycles
-    op floor csr_mcycle csr_mcycle
-
-    op shr overflow csr_mcycle 32
-    op add csr_mcycleh csr_mcycleh overflow
-
-    op mod csr_mcycle csr_mcycle 0x100000000
-
-    write csr_mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
-    write csr_mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
-
-    set last_mcycle_update @tick
 
     # tell the next worker to poll and fire interrupts
     op or csr_mip csr_mip 0b11000000000000000000000000000000
@@ -360,9 +336,8 @@ breakpoint__end_loop:
     set state "running"
     write state prev_proc "state"
 
-    # pause timers while at a breakpoint
+    # pause timer while at a breakpoint
     set last_mtime_update @time
-    set last_mcycle_update @tick
 
     jump end_breakpoint always
 
@@ -439,8 +414,6 @@ set _ csr_mtimecmp
 set _ csr_mtimecmph
 set _ csr_stimecmp
 set _ csr_stimecmph
-set _ csr_mcycle
-set _ csr_mcycleh
 set _ csr_minstret
 set _ csr_mstatus
 set _ csr_mip

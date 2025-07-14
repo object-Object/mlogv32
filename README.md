@@ -144,6 +144,14 @@ The `mlogsys.icache` M-mode instruction uses register _rs1_ as the number of byt
 
 CSR values are stored either in a RAM processor (CSRS), in a variable in the CPU, or as an implicit read-only zero value, depending on the CSR. See [cpu.yaml](src/cpu/cpu.yaml) for the full list of implemented CSRs. Attempts to access a CSR that is not in this list will raise an illegal instruction exception.
 
+### `cycle`
+
+The `[m]cycle[h]` counter is incremented at the start of each worker's tick, just before it jumps back into code execution. The period should be something like `number of workers * 1/60 seconds`, but it will vary based on FPS.
+
+### `time`
+
+The `[m]time[h]` counter is based on the `@time` value in Mindustry. It has a period of 1 ms, and is incremented once per tick by the controller based on the time delta since the previous tick.
+
 ## riscv-arch-test
 
 mlogv32 currently passes all compliance tests for the `RV32IMASUZicsr_Zifencei` ISA.

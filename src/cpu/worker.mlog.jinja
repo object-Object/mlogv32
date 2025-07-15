@@ -27,7 +27,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 154
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -83,7 +83,6 @@ reset:
     read csr_mtimecmp prev_proc "csr_mtimecmp"
     read csr_mtimecmph prev_proc "csr_mtimecmph"
     read csr_mtimeh prev_proc "csr_mtimeh"
-    read csr_satp prev_proc "csr_satp"
     read csr_stimecmp prev_proc "csr_stimecmp"
     read csr_stimecmph prev_proc "csr_stimecmph"
     read effective_privilege_mode prev_proc "effective_privilege_mode"
@@ -530,9 +529,11 @@ get_effective_privilege_mode__normal:
 # ret: ret3
 # clobbers: locals, nonlocal2
 translate_virtual_address:
+#% do declare_locals("$$a")
     # if this function is called, we know that the current effective privilege mode permits address translation
     # so the only thing we need to check here is satp.MODE
-    jump translate_virtual_address__unchanged lessThan csr_satp 0x80000000
+    read $satp {{CSRS}} "{{ 'satp'|csr }}"
+    jump translate_virtual_address__unchanged lessThan $satp 0x80000000
 
     # begin virtual address translation algorithm
     # PAGESIZE=2^12, LEVELS=2, PTESIZE=4
@@ -540,9 +541,8 @@ translate_virtual_address:
     # step 1
 
     # a = satp.ppn * PAGESIZE
-#% do reset_locals()
-    op and $a csr_satp 0x3fffff # satp.ppn
-    op mul $a $a {{PAGESIZE}}
+    op and $$a $satp 0x3fffff # satp.ppn
+    op mul $$a $$a {{PAGESIZE}}
     # i = LEVELS - 1 = 1
     # nonlocal2 = (i + 1) * 10
     # i is stored in this form because it simplifies step 2 and doesn't really matter for other steps
@@ -558,7 +558,7 @@ translate_virtual_address__step_2:
     #     = load(a + (va >> (x - 2))[11:2])
     op shr address mtval nonlocal2
     op and address address 0b111111111100
-    op add address address $a
+    op add address address $$a
 
     op add ret @counter 1
     jump load_word always
@@ -623,9 +623,9 @@ translate_virtual_address__step_2:
     jump translate_virtual_address__page_fault notEqual nonlocal2 20
 
     # otherwise, let a=pte.ppn * PAGESIZE, let i=i-1, and go to step 2
-#% do reset_locals()
-    op and $a result 0xfffffc00
-    op shl $a $a 2
+#% do declare_locals("$$a")
+    op and $$a result 0xfffffc00
+    op shl $$a $$a 2
     set nonlocal2 10 # i=0
     jump translate_virtual_address__step_2 always
 
@@ -2556,18 +2556,15 @@ csr_write_mie:
 csr_read_satp:
 #% do declare_locals(modify_csr_locals)
     # if executing in S-mode, raise an illegal instruction exception if TVM=1
-    jump csr_read_satp__ok notEqual privilege_mode 0b01
+    jump csr_read_csrs notEqual privilege_mode 0b01
     op and $mstatus.tvm csr_mstatus 0b100000000000000000000
-    jump ILLEGAL_OP notEqual $mstatus.tvm 0
-csr_read_satp__ok:
-
-    set rd csr_satp
-    set @counter $$modify_csr_op
+    jump csr_read_csrs equal $mstatus.tvm 0
+    jump ILLEGAL_OP always
 
 csr_write_satp:
     # we don't use ASID for anything, but riscv-sail doesn't allow us to configure ASIDLEN, so the tests will fail if we zero ASID
     # https://github.com/riscv/sail-riscv/blob/d8c3006f0ff4dbd33be876d9d62abb085c7f5298/model/riscv_xlen.sail#L25
-    set csr_satp result
+    write result {{CSRS}} variable
 
     # invalidate icache_var when writing satp because next_pc may now point to a different page
     # TODO: this may not be strictly required by the spec

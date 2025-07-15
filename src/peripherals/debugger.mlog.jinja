@@ -194,7 +194,7 @@ loop:
     op shl minstreth minstreth 32
     op add minstret minstret minstreth
 
-    read satp {{CPU}} "csr_satp"
+    read satp {{CSRS}} "{{ 'satp'|csr }}"
     read sscratch {{CSRS}} "{{ 'sscratch'|csr }}"
     read stvec {{CSRS}} "{{ 'stvec'|csr }}"
     read sepc {{CSRS}} "{{ 'sepc'|csr }}"

@@ -15,6 +15,24 @@ schematics:
 
 configs: ../config/configs.yaml
 
+inputs:
+  LOOKUP_PROC_SIZE: 260 # number of variables per lookup proc
+  ROM_BYTE_OFFSET: 174 # start character for ROM string byte data
+  ROM_PROC_BYTES: 16384 # number of bytes per ROM proc
+  RAM_PROC_BYTES: 16384 # number of bytes per RAM proc
+  RAM_PROC_VARS: 4096 # number of variables per RAM proc
+
+  # ROM starts at 0x00000000, so we don't need a variable for it
+  RAM_START:  '0x80000000'
+  MMIO_START: '0xf0000000'
+  SYSCON:     '0xfffffff0'
+
+  UART_RX_READ:  254
+  UART_RX_WRITE: 255
+  UART_TX_START: 256
+  UART_TX_READ:  510
+  UART_TX_WRITE: 511
+
 instructions:
   # runtime handlers
   - label: BEQ

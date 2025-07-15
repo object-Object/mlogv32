@@ -1,3 +1,73 @@
+#%# linked buildings
+
+#% set UART_START_LINK = 16
+
+#% set REGISTERS = 'cell1'
+#% set LABELS = 'cell2'
+
+#% set CSRS = 'processor17'
+#% set INCR = 'processor18'
+#% set CONFIG = 'processor19'
+#% set CSR_LABELS = 'processor20'
+#% set CONTROLLER = 'processor21'
+
+#% set ERROR_OUTPUT = 'message1'
+
+#%# constants
+
+#% set LN_2 = '0.6931471805599453'
+
+#%# Sv32
+#% set PAGESIZE = 2**12
+#% set LEVELS = 2
+#% set PTESIZE = 4
+
+#% set labels = namespace()
+#% set _labels_vals = (labels|namespace_dict).values()
+
+#% set labels.next_tick = 14
+
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
+#% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
+#% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
+#% set labels.end_instruction                             = _labels_vals|last + 2
+#% set labels.end_instruction_trap                        = _labels_vals|last + 6
+
+#%# macros
+
+#% macro start_assert_length(n)
+#{- n
+#directive start_assert_length {{ n }}
+#%- endmacro
+
+reset:
+    setrate 1000
+
+    # load config
+    read MEMORY_X {{CONFIG}} "MEMORY_X"
+    read MEMORY_Y {{CONFIG}} "MEMORY_Y"
+    read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
+    read PROGRAM_ROM_SIZE {{CONFIG}} "ROM_SIZE"
+    read ROM_SIZE {{CONFIG}} "ROM_SIZE"
+    read RAM_SIZE {{CONFIG}} "RAM_SIZE"
+    read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
+    read RAM_END {{CONFIG}} "RAM_END"
+    read ICACHE_END {{CONFIG}} "ICACHE_END"
+    read RAM_ICACHE_OFFSET {{CONFIG}} "RAM_ICACHE_OFFSET"
+    read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
+
+    op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
+
+    wait 1e-5
+
+    # @counter is moved here when the next worker starts executing
+#directive assert_counter {{ labels.next_tick }}
+
+    # fetch saved variables from the previous worker
+    read prev_proc {{CONTROLLER}} "prev_proc"
+
+#directive start_fetch
+
 #% macro fetch_variables()
     read _rom prev_proc "_rom"
     read __etext prev_proc "__etext"
@@ -58,78 +128,6 @@
     read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
     read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
 #% endmacro
-
-# {% macro start_assert_length(n) %}{{ n }}{{ '\n#directive start_assert_length ' }}{{ n }}{% endmacro %}
-
-#%# hack: use extends so we don't need to individually import all of the constants
-#% extends 'constants.jinja'
-#% block contents
-
-#%# linked buildings
-
-#% set UART_START_LINK = 16
-
-#% set REGISTERS = 'cell1'
-#% set LABELS = 'cell2'
-
-#% set CSRS = 'processor17'
-#% set INCR = 'processor18'
-#% set CONFIG = 'processor19'
-#% set CSR_LABELS = 'processor20'
-#% set CONTROLLER = 'processor21'
-
-#% set ERROR_OUTPUT = 'message1'
-
-#%# constants
-
-#% set LN_2 = '0.6931471805599453'
-
-#%# Sv32
-#% set PAGESIZE = 2**12
-#% set LEVELS = 2
-#% set PTESIZE = 4
-
-#% set labels = namespace()
-#% set _labels_vals = (labels|namespace_dict).values()
-
-#% set labels.next_tick = 14
-
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
-#% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
-#% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
-#% set labels.end_instruction                             = _labels_vals|last + 2
-#% set labels.end_instruction_trap                        = _labels_vals|last + 6
-
-reset:
-    setrate 1000
-
-    # define this variable FIRST so that we can read other variables over it
-    # set _rom null
-
-    # load config
-    read MEMORY_X {{CONFIG}} "MEMORY_X"
-    read MEMORY_Y {{CONFIG}} "MEMORY_Y"
-    read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
-    read PROGRAM_ROM_SIZE {{CONFIG}} "ROM_SIZE"
-    read ROM_SIZE {{CONFIG}} "ROM_SIZE"
-    read RAM_SIZE {{CONFIG}} "RAM_SIZE"
-    read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
-    read RAM_END {{CONFIG}} "RAM_END"
-    read ICACHE_END {{CONFIG}} "ICACHE_END"
-    read RAM_ICACHE_OFFSET {{CONFIG}} "RAM_ICACHE_OFFSET"
-    read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
-
-    op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
-
-    wait 1e-5
-
-    # @counter is moved here when the next worker starts executing
-#directive assert_counter {{ labels.next_tick }}
-
-    # fetch saved variables from the previous worker
-    read prev_proc {{CONTROLLER}} "prev_proc"
-
-#directive start_fetch
 
 #{ fetch_variables()
 
@@ -2703,11 +2701,9 @@ MLOGSYS__decode_loop:
 
     jump end_instruction always
 
-#% endblock contents
-
+#% if false
 # disable mlogls warnings
-# put this at the end of the file so it's not included in the output
-# and so that if we go over the 1000 instruction limit, we can ignore the errors below this line
+# put this at the end of the file so if we go over the 1000 instruction limit, we can ignore the errors below this line
 # {% raw %}
 # common preprocessor constants
 set {{ null
@@ -2853,3 +2849,4 @@ jump csr_write_sstatus always
 jump csr_write_stimecmp always
 jump csr_write_stimecmph always
 # {% endraw %}
+#% endif

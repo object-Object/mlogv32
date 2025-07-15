@@ -33,6 +33,7 @@ class BuildConfig(BaseModel):
     templates: Templates
     schematics: Schematics
     configs: RelativePath
+    inputs: dict[str, Any]
     instructions: list[Instruction]
     csrs: dict[str, CSR]
 

@@ -1,8 +1,5 @@
 #% from 'worker.mlog.jinja' import fetch_variables with context
 
-#% extends 'constants.jinja'
-#% block contents
-
 #% set REGISTERS = 'cell1'
 #% set LABELS = 'cell2'
 
@@ -372,8 +369,7 @@ lookup_variable:
 
     set @counter ret
 
-#% endblock contents
-
+#% if false
 # disable mlogls warnings
 # {% raw %}
 # common preprocessor constants
@@ -421,3 +417,4 @@ set _ csr_mie
 set _ csr_satp
 set _ csr_mideleg
 # {% endraw %}
+#% endif

@@ -252,6 +252,7 @@ def build(
         [LocalVariables],
         force=True,
         VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
+        **config.inputs,
     )
 
     i = LocalVariablesEnv.of(worker_env).largest_local_variable
@@ -283,6 +284,7 @@ Code size:
         csrs=config.csrs,
         labels=worker_labels,
         VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
+        **config.inputs,
     )
 
     # preprocess other code snippets

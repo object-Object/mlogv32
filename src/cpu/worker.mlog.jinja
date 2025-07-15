@@ -27,7 +27,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 154
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 153
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -69,7 +69,20 @@ reset:
 #directive start_fetch
 
 #% macro fetch_variables()
-    read _rom prev_proc "_rom"
+#% do reset_locals()
+    read {{local_variable()}} prev_proc "{{ local_variable(1) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(2) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(3) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(4) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(5) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(6) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(7) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
+    read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
+
+    read nonlocal1 prev_proc "nonlocal1"
+    read nonlocal2 prev_proc "nonlocal2"
+
     read __etext prev_proc "__etext"
     read _address prev_proc "_address"
     read address prev_proc "address"
@@ -112,20 +125,6 @@ reset:
     read ret2 prev_proc "ret2"
     read ret3 prev_proc "ret3"
     read ret4 prev_proc "ret4"
-
-    read nonlocal1 prev_proc "nonlocal1"
-    read nonlocal2 prev_proc "nonlocal2"
-
-#% do reset_locals()
-    read {{local_variable()}} prev_proc "{{ local_variable(1) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(2) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(3) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(4) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(5) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(6) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(7) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
 #% endmacro
 
 #{ fetch_variables()
@@ -913,13 +912,13 @@ swap_endianness:
 # loads a word from ROM
 # address -> result
 load_rom_word_unchecked:
-#% do reset_locals()
+#% do declare_locals("$$rom", "$$str_index")
     # align to 4 bytes
     op and $address address 0xfffffffc
 
     # get rom proc data
     op idiv $rom_index $address {{ROM_PROC_BYTES}}
-    op mod $str_index $address {{ROM_PROC_BYTES}}
+    op mod $$str_index $address {{ROM_PROC_BYTES}}
 
     op mod $rom_x $rom_index MEMORY_WIDTH
     op add $rom_x $rom_x MEMORY_X
@@ -927,29 +926,30 @@ load_rom_word_unchecked:
     op idiv $rom_y $rom_index MEMORY_WIDTH
     op add $rom_y $rom_y MEMORY_Y
 
-    getblock building _rom $rom_x $rom_y
-    read _rom _rom "v"
+    getblock building $$rom $rom_x $rom_y
+    read $$rom $$rom "v"
 
+#% do declare_locals("$$rom", "$$str_index")
     # read bytes of word
-    read $byte0 _rom $str_index
+    read $byte0 $$rom $$str_index
 
-    op add $str_index $str_index 1
-    read $byte1 _rom $str_index
+    op add $$str_index $$str_index 1
+    read $byte1 $$rom $$str_index
 
-    op add $str_index $str_index 1
-    read $byte2 _rom $str_index
+    op add $$str_index $$str_index 1
+    read $byte2 $$rom $$str_index
 
-    op add $str_index $str_index 1
-    read _rom _rom $str_index # clear _rom to avoid issues with the vars menu and block data size
+    op add $$str_index $$str_index 1
+    read $$rom $$rom $$str_index # overwrite rom variable to avoid issues with the vars menu and block data size
 
     # merge into big endian
     op shl $byte1 $byte1 8
     op shl $byte2 $byte2 16
-    op shl _rom _rom 24
+    op shl $$rom $$rom 24
 
     op add result $byte0 $byte1
     op add result result $byte2
-    op add result result _rom
+    op add result result $$rom
 
     op sub result result {{# ROM_BYTE_OFFSET * (1 + 2**8 + 2**16 + 2**24) }}
     op max result result 0 # if we're reading out of bounds, default to 0

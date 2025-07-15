@@ -33,7 +33,7 @@ The CPU is implemented using a variable-size build-order-independent subframe ar
 | `0xf0000030` | `0x20`       | R/W         | UART1       |
 | `0xf0000050` | `0x20`       | R/W         | UART2       |
 | `0xf0000070` | `0x20`       | R/W         | UART3       |
-| `0xfffffff0` | `0x4`        | W           | Syscon      |
+| `0xfffffff0` | `0x4`        | R/W         | Syscon      |
 
 \* Atomic instructions are only supported in RAM.
 
@@ -88,14 +88,15 @@ Note that the processor itself does not set the TX overflow flag or prevent code
 
 ### Syscon
 
-Address `0xfffffff0` contains a simple write-only peripheral which can be used to control the system by writing values from the following table. Unsupported values will have no effect if written.
+Address `0xfffffff0` contains a simple memory-mapped peripheral which can be used to control the system by writing values from the following table. Unsupported values will have no effect if written. Reads will always return `0`.
 
 | Value        | Effect    |
 | ------------ | --------- |
 | `0x00000000` | Power off |
 | `0x00000001` | Reboot    |
+| `0x00000002` | Power off |
 
-Additionally, the machine trap vector CSR `mtvec` is initialized to `0xfffffff0` at reset. To help catch issues with uninitialized `mtvec`, the processor will halt and output an error message if code jumps to this address.
+Additionally, the trap vector CSRs `mtvec` and `stvec` are initialized to `0xfffffff0` at reset. To help catch issues with uninitialized trap vectors, the processor will halt and output an error message if a trap jumps to this address.
 
 ## ISA
 

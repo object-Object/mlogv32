@@ -961,6 +961,10 @@ load_rom_word_unchecked:
 # address, mcause, mtval -> result
 load_mmio_word:
 #% do declare_locals(access_uart_locals)
+    # linux syscon driver does a read-modify-write, so the syscon needs to be readable
+    set result 0
+    jump load_mmio_word__ret equal address {{SYSCON}}
+
     # the extra 3 at the start is in case we jump here from address translation
     # in that case, address may be up to 34 bits
     op sub $$offset address {{MMIO_START}}
@@ -977,9 +981,9 @@ load_mmio_word:
 #directive end_assert_length
 
     # MCR, MSR, and SPR are all hardwired to zero
-    set result 0
     jump load_mmio_word__uart_lsr equal $$offset 0x24
     jump load_mmio_word__not_zero lessThan $$offset 0x20
+load_mmio_word__ret:
     set @counter ret
 load_mmio_word__not_zero:
 
@@ -1772,9 +1776,9 @@ store_mmio_word_unchecked__uart_fcr__no_reset_tx:
     jump end_instruction always
 
 store_value__syscon:
-    jump state->halt equal rs2 0
+    jump end_instruction greaterThan rs2 2
     jump state->reset equal rs2 1
-    jump end_instruction always
+    jump state->halt always # 0 or 2 (for linux syscon)
 
 LR.W:
     # R-type: rs1, rs2=0, rd_id

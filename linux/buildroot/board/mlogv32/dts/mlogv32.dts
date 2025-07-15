@@ -96,7 +96,7 @@
             compatible = "syscon-poweroff";
             regmap = <&syscon>;
             offset = <0x0>;
-            value = <0x0>;
+            value = <0x2>;
         };
 
         reboot {

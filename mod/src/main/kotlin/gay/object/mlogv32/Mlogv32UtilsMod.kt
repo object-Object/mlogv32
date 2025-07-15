@@ -95,6 +95,68 @@ class Mlogv32UtilsMod : Mod() {
 
             Log.info("Successfully dumped $bytes bytes from processor RAM to $file.")
         }
+
+        handler.register(
+            "mlogv32.start",
+            "<x> <y>",
+            "Start the processor.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            processor.powerSwitch.configure(true)
+            Log.info("Processor started.")
+        }
+
+        handler.register(
+            "mlogv32.pause",
+            "<x> <y>",
+            "Pause the processor.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            processor.singleStepSwitch.configure(true)
+            processor.pauseSwitch.configure(true)
+            Log.info("Processor paused.")
+        }
+
+        handler.register(
+            "mlogv32.step",
+            "<x> <y>",
+            "Step the processor by one instruction.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            processor.singleStepSwitch.configure(true)
+            processor.pauseSwitch.configure(false)
+            Log.info("Processor stepped.")
+        }
+
+        handler.register(
+            "mlogv32.unpause",
+            "<x> <y>",
+            "Unpause the processor.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            processor.singleStepSwitch.configure(false)
+            processor.pauseSwitch.configure(false)
+            Log.info("Processor unpaused.")
+        }
+
+        handler.register(
+            "mlogv32.stop",
+            "<x> <y>",
+            "Stop the processor.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            processor.powerSwitch.configure(false)
+            Log.info("Processor stopped.")
+        }
+
+        handler.register(
+            "mlogv32.status",
+            "<x> <y>",
+            "View the processor's status.",
+        ) { (x, y) ->
+            val processor = getProcessor(x, y) ?: return@register
+            Log.info(processor.getStatus().toPrettyDebugString(indentWidth = 2))
+        }
     }
 }
 
@@ -124,4 +186,21 @@ private fun getProcessor(x: String, y: String): ProcessorAccess? {
     }
 
     return result
+}
+
+// https://gist.github.com/mayankmkh/92084bdf2b59288d3e74c3735cccbf9f?permalink_comment_id=5355537#gistcomment-5355537
+private fun Any.toPrettyDebugString(indentWidth : Int = 4) = buildString {
+    fun StringBuilder.indent(level : Int) = append("".padStart(level * indentWidth))
+    var ignoreSpace = false
+    var indentLevel = 0
+    this@toPrettyDebugString.toString().onEach {
+        when (it) {
+            '(', '[', '{' -> appendLine(it).indent(++indentLevel)
+            ')', ']', '}' -> appendLine().indent(--indentLevel).append(it)
+            ','           -> appendLine(it).indent(indentLevel).also { ignoreSpace = true }
+            ' '           -> if (ignoreSpace) ignoreSpace = false else append(it)
+            '='           -> append(" = ")
+            else          -> append(it)
+        }
+    }
 }

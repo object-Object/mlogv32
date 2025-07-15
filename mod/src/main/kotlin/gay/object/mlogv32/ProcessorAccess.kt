@@ -118,6 +118,7 @@ class ProcessorAccess(
                                 val client = serverSocket.accept()
 
                                 if (runOnMainThread { build.isValid }) {
+                                    Log.info("Client connected!")
                                     launch {
                                         handleClient(client)
                                     }
@@ -148,10 +149,35 @@ class ProcessorAccess(
         ProcessorAccess.stopServer()
     }
 
-    fun getCSR(address: Int): UInt =
+    private fun getCSR(address: Int): UInt =
         csrs.executor.optionalVar(address + 1)
             ?.numu()
             ?: 0u
+
+    private fun getUIntVar(name: String) =
+        build.executor.optionalVar(name)?.numu() ?: 0u
+
+    fun getStatus() = StatusResponse(
+        running = powerSwitch.enabled,
+        paused = pauseSwitch.enabled,
+        state = (build.executor.optionalVar("state")?.obj() as? String) ?: "",
+        errorOutput = errorOutput.message?.toString() ?: "",
+        pc = build.executor.optionalVar("pc")?.numu(),
+        instruction = build.executor.optionalVar("instruction")?.numu(),
+        privilegeMode = build.executor.optionalVar("privilege_mode")?.numu(),
+        registers = registers.memory.take(32).map { it.toUInt() },
+        mscratch = getCSR(0x340),
+        mtvec = getCSR(0x305),
+        mepc = getCSR(0x341),
+        mcause = getCSR(0x342),
+        mtval = getCSR(0x343),
+        mstatus = getUIntVar("csr_mstatus"),
+        mip = getUIntVar("csr_mip"),
+        mie = getUIntVar("csr_mie"),
+        mcycle = (getCSR(0xB80).toULong() shl 32) or getCSR(0xB00).toULong(),
+        minstret = (getCSR(0xB82).toULong() shl 32) or getUIntVar("csr_minstret").toULong(),
+        mtime = (getUIntVar("csr_mtimeh").toULong() shl 32) or getUIntVar("csr_mtime").toULong(),
+    )
 
     private fun ramWordsSequence(startAddress: UInt) = sequence {
         require(startAddress in RAM_START..<ramEnd) { "Start address must be within RAM." }
@@ -220,7 +246,6 @@ class ProcessorAccess(
 
     private suspend fun handleClient(client: Socket) {
         client.use {
-            Log.info("Client connected!")
             val rx = client.openReadChannel()
             val tx = client.openWriteChannel(true)
             while (true) {
@@ -334,9 +359,14 @@ sealed class Request {
 @SerialName("flash")
 data class FlashRequest(
     val path: String,
+    val absolute: Boolean = true,
 ) : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
-        val file = Core.files.absolute(path)
+        val file = if (absolute) {
+            Core.files.absolute(path)
+        } else {
+            Core.files.local(path)
+        }
         require(file.exists()) { "File not found." }
 
         val bytes = processor.flashRom(file)
@@ -350,9 +380,14 @@ data class DumpRequest(
     val path: String,
     val address: UInt?,
     val bytes: Int?,
+    val absolute: Boolean = true,
 ) : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
-        val file = Core.files.absolute(path)
+        val file = if (absolute) {
+            Core.files.absolute(path)
+        } else {
+            Core.files.local(path)
+        }
         file.parent().mkdirs()
 
         val address = address ?: ProcessorAccess.RAM_START
@@ -511,23 +546,7 @@ data object StopRequest : Request() {
 @SerialName("status")
 data object StatusRequest : Request() {
     override suspend fun handle(processor: ProcessorAccess, rx: ByteReadChannel, tx: ByteWriteChannel) = runOnMainThread {
-        StatusResponse(
-            running = processor.powerSwitch.enabled,
-            paused = processor.pauseSwitch.enabled,
-            errorOutput = processor.errorOutput.message?.toString() ?: "",
-            pc = processor.build.executor.optionalVar("pc")?.numu(),
-            instruction = processor.build.executor.optionalVar("instruction")?.numu(),
-            privilegeMode = processor.build.executor.optionalVar("privilege_mode")?.numu(),
-            registers = processor.registers.memory.take(32).map { it.toUInt() },
-            mscratch = processor.getCSR(0x340),
-            mtvec = processor.getCSR(0x305),
-            mepc = processor.getCSR(0x341),
-            mcause = processor.getCSR(0x342),
-            mtval = processor.getCSR(0x343),
-            mstatus = processor.build.executor.optionalVar("csr_mstatus")?.numu() ?: 0u,
-            mip = processor.build.executor.optionalVar("csr_mip")?.numu() ?: 0u,
-            mie = processor.build.executor.optionalVar("csr_mie")?.numu() ?: 0u,
-        )
+        processor.getStatus()
     }
 }
 
@@ -543,6 +562,7 @@ data class SuccessResponse(val message: String) : Response()
 data class StatusResponse(
     val running: Boolean,
     val paused: Boolean,
+    val state: String,
     val errorOutput: String,
     val pc: UInt?,
     val instruction: UInt?,
@@ -556,6 +576,9 @@ data class StatusResponse(
     val mstatus: UInt,
     val mip: UInt,
     val mie: UInt,
+    val mcycle: ULong,
+    val minstret: ULong,
+    val mtime: ULong,
 ) : Response()
 
 @Serializable

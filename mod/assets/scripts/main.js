@@ -107,4 +107,85 @@ global.override.block(LogicBlock, {
     },
 });
 
+let activeProcessors = [];
+
+global.mlogv32 = {
+    loadSchematic: (/** @type {string} */ arg) => {
+        const [path, xRaw, yRaw, cpuXOffsetRaw, cpuYOffsetRaw, address, portRaw] = arg.split(" ");
+        const x = parseFloat(xRaw);
+        const y = parseFloat(yRaw);
+        const cpuXOffset = parseFloat(cpuXOffsetRaw);
+        const cpuYOffset = parseFloat(cpuYOffsetRaw);
+        const port = parseInt(portRaw);
+        if (
+            !path.length ||
+            isNaN(x) ||
+            isNaN(y) ||
+            isNaN(cpuXOffset) ||
+            isNaN(cpuYOffset) ||
+            isNaN(port) ||
+            port < 0 ||
+            port > 65535
+        ) {
+            Log.err("Invalid arguments.");
+            return;
+        }
+
+        /** @type {Fi} */
+        let file;
+        if (path[0] == "/") {
+            file = Core.files.absolute(path);
+        } else {
+            file = Core.files.local(path);
+        }
+
+        Log.info("Loading schematic: " + file);
+        const schem = Schematics.read(file);
+
+        Log.info("Placing schematic.");
+        Schematics.place(
+            schem,
+            x + schem.width / 2,
+            y + schem.height / 2,
+            Vars.state.rules.defaultTeam,
+            true
+        );
+
+        const cpuX = x + cpuXOffset;
+        const cpuY = cpuYOffset >= 0 ? y + cpuYOffset : y + schem.height + cpuYOffset;
+        Log.info("CPU position: " + cpuX + "," + cpuY);
+
+        const build = Vars.world.build(cpuX, cpuY);
+        if (build == null) {
+            Log.err("CPU not found.");
+            return;
+        }
+
+        Log.info("Waiting for CPU to initialize...");
+
+        Time.runTask(60, () => {
+            const processor = ProcessorAccess_Companion.of(build);
+            if (processor == null) {
+                Log.err("Invalid CPU: " + build);
+                return;
+            }
+
+            processor.startServer(address, port);
+            activeProcessors.push(processor);
+        });
+    },
+
+    stopAll: () => {
+        activeProcessors.forEach((processor) => processor.stopServer());
+        Log.info(
+            "Stopped " +
+                activeProcessors.length +
+                " processor" +
+                (activeProcessors.length === 1 ? "" : "s") +
+                "."
+        );
+        activeProcessors = [];
+    },
+};
+
 Log.info("Loaded mlogv32-utils scripts.");

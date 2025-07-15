@@ -97,8 +97,8 @@ def build(
     yaml_path: Path,
     cpu_config_name: Annotated[str | None, Option("-c", "--config")] = None,
     width: Annotated[int, Option("-w", "--width")] = 16,
-    height: Annotated[int, Option("-h", "--height", max=16)] = 16,
-    size: Annotated[int | None, Option("-s", "--size", max=16)] = None,
+    height: Annotated[int, Option("-h", "--height")] = 16,
+    size: Annotated[int | None, Option("-s", "--size")] = None,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
     bin_path: Annotated[Path | None, Option("--bin")] = None,
     include_all: Annotated[bool, Option("--all")] = False,
@@ -106,6 +106,7 @@ def build(
     include_peripherals: Annotated[bool, Option("--peripherals")] = False,
     include_memory: Annotated[bool, Option("--memory")] = False,
     include_debugger: Annotated[bool, Option("--debugger")] = False,
+    include_keyboard: Annotated[bool, Option("--keyboard/--no-keyboard")] = True,
 ):
     """Generate a CPU schematic.
 
@@ -143,6 +144,11 @@ def build(
     if size:
         width = size
         height = size
+
+    if include_keyboard and height > 16:
+        raise ValueError(
+            f"Maximum height is 16 if keyboard is enabled, but got {height}"
+        )
 
     if include_all:
         include_cpu = True
@@ -410,7 +416,7 @@ Code size:
     add_peripheral(ram_schem, 12, 17)
     add_peripheral(ram_schem, 13, 17)
     add_with_label(
-        Block(Content.SWITCH, 13, 18, True, 0),
+        Block(Content.SWITCH, 13, 18, False, 0),
         right="UART0 -> DISPLAY",
     )
 

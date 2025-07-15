@@ -35,25 +35,29 @@ class ProcessorAccess:
     def disconnect(self):
         self.socket.close()
 
-    def flash(self, path: str | Path):
+    def flash(self, path: str | Path, *, absolute: bool = True):
         path = Path(path)
-        if not path.is_absolute():
+        if absolute and not path.is_absolute():
             raise ValueError("Path must be absolute.")
 
-        self._send_request(FlashRequest(path=path))
+        self._send_request(FlashRequest(path=path, absolute=absolute))
         return self._recv_response(SuccessResponse)
 
     def dump(
         self,
         path: str | Path,
         address: int | None = None,
-        bytes: int | None = None,
+        data: int | None = None,
+        *,
+        absolute: bool = True,
     ):
         path = Path(path)
-        if not path.is_absolute():
+        if absolute and not path.is_absolute():
             raise ValueError("Path must be absolute.")
 
-        self._send_request(DumpRequest(path=path, address=address, bytes=bytes))
+        self._send_request(
+            DumpRequest(path=path, address=address, bytes=data, absolute=absolute)
+        )
         return self._recv_response(SuccessResponse)
 
     def start(self, *, single_step: bool = False):
@@ -131,6 +135,7 @@ class BaseModel(_BaseModel):
 class FlashRequest(BaseModel):
     type: Literal["flash"] = "flash"
     path: Path
+    absolute: bool
 
 
 class DumpRequest(BaseModel):
@@ -138,6 +143,7 @@ class DumpRequest(BaseModel):
     path: Path
     address: int | None
     bytes: int | None
+    absolute: bool
 
 
 class StartRequest(BaseModel):
@@ -200,6 +206,7 @@ class StatusResponse(BaseModel):
     type: Literal["status"]
     running: bool
     paused: bool
+    state: str
     error_output: str
     pc: int | None
     instruction: int | None
@@ -213,6 +220,9 @@ class StatusResponse(BaseModel):
     mstatus: int
     mip: int
     mie: int
+    mcycle: int
+    minstret: int
+    mtime: int
 
 
 class ErrorResponse(BaseModel):

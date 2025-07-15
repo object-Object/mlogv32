@@ -27,7 +27,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 153
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 152
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -78,7 +78,6 @@ reset:
     read {{local_variable()}} prev_proc "{{ local_variable(6) }}"
     read {{local_variable()}} prev_proc "{{ local_variable(7) }}"
     read {{local_variable()}} prev_proc "{{ local_variable(8) }}"
-    read {{local_variable()}} prev_proc "{{ local_variable(9) }}"
 
     read nonlocal1 prev_proc "nonlocal1"
     read nonlocal2 prev_proc "nonlocal2"
@@ -1016,6 +1015,7 @@ load_mmio_word__not_zero:
     set @counter ret
 
 load_mmio_word__uart_rhr:
+#% do declare_locals(access_uart_locals)
     # HACK: if mcause is 7, we're loading this word as part of a store instruction, so return 0 and don't modify UART state
     jump load_mmio_word__uart_rhr__empty equal mcause 7
 
@@ -1032,6 +1032,7 @@ load_mmio_word__uart_rhr__empty:
     set @counter ret
 
 load_mmio_word__uart_lsr:
+#% do declare_locals(access_uart_locals)
     # Line Status Register: transmitter/THR empty = TX FIFO empty, overrun error = RX FIFO overflowed, data ready = RX FIFO not empty, other flags 0
 
     # transmitter empty and THR empty
@@ -1066,23 +1067,23 @@ load_mmio_word__uart_lsr__no_rx_overrun:
 decode:
 #% set decode_locals = ["$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
 #% do declare_locals(decode_locals)
+    # decode and pack registers into the payload
+    op and result value 0b1111111111000000000000000 # rs1/rs2
+
     # the lowest 2 bits are always "11" for non-compressed instructions
-    # check this first to increase the odds of an early exit for non-code addresses
+    # check this here to increase the odds of an early exit for non-code addresses
+    # this needs to be after putting a value in result so we don't potentially corrupt op_id
     op and $tmp value 0b11
     jump decode_illegal_instruction notEqual $tmp 0b11
 
-    # opcode
-    op and $opcode value 0b1111111
+    # continue packing registers
+    op and $instruction_11_7 value 0b0000000000000111110000000
 
-    # decode and pack registers into the payload
-    op and $icache_payload_rs2_rs1 value 0b1111111111000000000000000
-    op and $instruction_11_7 value  0b0000000000000111110000000
-
-    op shl $icache_payload_rs2_rs1 $icache_payload_rs2_rs1 22 # instruction[24:15] -> icache_payload[46:37]
+    op shl result result 22 # instruction[24:15] -> icache_payload[46:37]
     op shl $icache_payload_rd $instruction_11_7 25 # instruction[11:7] -> icache_payload[36:32]
 
     # we put the registers into the result variable here so that we don't have to fully pack the payload if decoding during instruction fetch
-    op add result $icache_payload_rs2_rs1 $icache_payload_rd
+    op add result result $icache_payload_rd
 
     # this is used in both S-type and B-type
     op shr $$imm_4_0 $instruction_11_7 7 # instruction[11:7] -> imm[4:0]
@@ -1101,7 +1102,8 @@ decode:
 
     # jump table based on (opcode >> 2) since the low 2 bits don't matter
     # the jump table is stored in LABELS by the controller, starting at index 128
-    op shr $tmp $opcode 2
+    op and $tmp value 0b1111111
+    op shr $tmp $tmp 2
     op add $tmp $tmp 128
     read @counter {{LABELS}} $tmp
 
@@ -1381,8 +1383,6 @@ decode_custom-0:
 decode_illegal_instruction:
     # use 0 as the illegal instruction id because null coerces to 0
     set op_id 0
-    # this is required to prevent the op_id field from theoretically being corrupted if we jump here before setting result in decode
-    set result 0
     # continue into end_decode
 
 # all decoders jump here after completing successfully
@@ -1748,6 +1748,7 @@ store_mmio_word_unchecked:
     # NOTE: we don't check for overflow here, see readme
     # also, we don't truncate the value to 8 bits when writing
     # software can take advantage of this to send larger packets if the receiver can handle them
+#% do declare_locals(access_uart_locals)
     op add $tmp $$tx_write {{UART_TX_START}}
     write value $$uart $tmp
 
@@ -1761,6 +1762,7 @@ store_mmio_word_unchecked:
 store_mmio_word_unchecked__uart_fcr:
     # FIFO Control Register
 
+#% do declare_locals(access_uart_locals)
     op and $tmp value 0b11
     jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal $tmp 0
     write $$rx_write $$uart {{UART_RX_READ}}

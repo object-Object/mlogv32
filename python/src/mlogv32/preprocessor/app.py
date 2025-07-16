@@ -455,7 +455,8 @@ Controller:
         )
     )
 
-    add_peripheral(sortkb_schem, 14, 16)
+    if include_keyboard:
+        add_peripheral(sortkb_schem, 14, 16)
 
     # CPU
 

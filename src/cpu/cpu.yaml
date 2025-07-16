@@ -266,7 +266,7 @@ csrs:
     read: csrs
     write: LABEL
   mideleg:
-    read: LABEL
+    read: csrs
     write: LABEL
   mie:
     read: LABEL

@@ -86,7 +86,6 @@ reset:
     read _address prev_proc "_address"
     read address prev_proc "address"
     read breakpoint_address prev_proc "breakpoint_address"
-    read csr_mideleg prev_proc "csr_mideleg"
     read csr_mie prev_proc "csr_mie"
     read csr_minstret prev_proc "csr_minstret"
     read csr_mip prev_proc "csr_mip"
@@ -196,7 +195,8 @@ poll_interrupts:
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, if certain CSRs are modified, and after an xRET instruction
 fire_interrupts:
-#% do reset_locals()
+#% set trap_locals = ["$$mxdeleg"]
+#% do declare_locals(trap_locals)
     op and csr_mip csr_mip 0b10111111111111111111111111111111 # clear interrupt_flags.fire
 
     # fire interrupt i if bit i is set in both mip and mie
@@ -204,6 +204,9 @@ fire_interrupts:
 
     # if no interrupts would be fired, short-circuit
     jump main equal $interrupts 0
+
+    # read mideleg for later
+    read $$mxdeleg {{CSRS}} "{{ 'mideleg'|csr }}"
 
     # in U-mode, interrupts are always enabled
     jump fire_interrupts__ok lessThan privilege_mode 0b01
@@ -217,7 +220,7 @@ fire_interrupts:
     # in M-mode, don't take delegated interrupts
     jump fire_interrupts__ok lessThan privilege_mode 0b11
 
-    op not $mask csr_mideleg
+    op not $mask $$mxdeleg
     op and $interrupts $interrupts $mask
 
 fire_interrupts__ok:
@@ -391,18 +394,12 @@ state->reset:
     set state "reset"
     jump reset always
 
-#% set trap_locals = ['$$mxdeleg']
-
 interrupt:
 #% do declare_locals(trap_locals)
     # the highest bit set in mcause is the bit in (mip & mie) that triggered the interrupt
     # so convert mcause to the actual trap code via floor(log_2(mcause)) = ln(mcause) // ln(2)
     op log mcause mcause
     op idiv mcause mcause {{LN_2}}
-
-    # check mideleg
-    # we can't use the original mcause value as a bitmask for this because it may also have lower bits set
-    op shr $$mxdeleg csr_mideleg mcause
 
     # set interrupt bit
     op or mcause mcause 0x80000000
@@ -418,13 +415,14 @@ trap:
 #% do declare_locals(trap_locals)
     # check medeleg
     read $$mxdeleg {{CSRS}} "{{ 'medeleg'|csr }}"
-    op shr $$mxdeleg $$mxdeleg mcause
 
 trap__check_mxdeleg:
     # don't trap from M-mode to S-mode
     jump trap__machine greaterThan privilege_mode 0b01
 
     # if not in M-mode, trap to S-mode if the corresponding mxdeleg bit is set, else trap to M-mode
+    # this is safe for interrupt mcause values: https://docs.oracle.com/javase/specs/jls/se17/html/jls-15.html#jls-15.19
+    op shr $$mxdeleg $$mxdeleg mcause
     op and $$mxdeleg $$mxdeleg 0b1
     jump trap__machine equal $$mxdeleg 0
 
@@ -2465,25 +2463,19 @@ csr_write_medeleg:
     # reserved                     ----  -- -   -
     # M-mode ecall                             -
     op and result result 0b00000000000011001011001111111111
-
-    # we only need to read medeleg in one place, so it's more compact to store it in CSRS
     jump csr_write_csrs always
 
-csr_read_mideleg:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mideleg
-    set @counter $$modify_csr_op
-
 csr_write_mideleg:
+#% do declare_locals(modify_csr_locals)
     # get new writable fields
-    # MEI                                           -
-    # SEI                                             -
-    # MTI                                               -
-    # STI                                                 -
-    # MSI                                                   -
-    # SSI                                                     -
-    op and csr_mideleg result 0b00000000000000000000101010101010
-    jump end_instruction_with_rd_and_fire_interrupts always
+    # MEI                                      -
+    # SEI                                        -
+    # MTI                                          -
+    # STI                                            -
+    # MSI                                              -
+    # SSI                                                -
+    op and result result 0b00000000000000000000101010101010
+    jump csr_write_csrs always
 
 csr_read_sip:
 #% do declare_locals(modify_csr_locals)
@@ -2817,7 +2809,6 @@ jump csr_read_csrs always
 jump csr_read_cycle always
 jump csr_read_cycleh always
 jump csr_read_hpmcounter always
-jump csr_read_mideleg always
 jump csr_read_mie always
 jump csr_read_minstret always
 jump csr_read_minstreth always

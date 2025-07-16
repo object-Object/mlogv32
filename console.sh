@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 host=localhost
 port=5000
@@ -8,7 +8,7 @@ disconnectOnHalt=true
 sendRequest=true
 
 while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
-    h | --host )
+    -h | --host )
         shift; host=$1
         ;;
     -p | --port )

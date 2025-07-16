@@ -113,21 +113,22 @@ init_incr__not_null:
 
     # initialize label lookup table
 
-#% set ns = namespace(i=0, loop=0)
+#% set ns = namespace(loop=0)
 #% for instruction in instructions
+#% set ns.i = instruction.address
     # {{ instruction.label }}
 #%#- unroll the loop if it's equal or better in terms of code size, else generate a loop
 #% if instruction.count <= 4
 #% for _ in range(instruction.count)
     write {{labels[instruction.label]}} {{LABELS}} {{ns.i}}
-#% set ns.i = ns.i + 1
+#% set ns.i = ns.i + instruction.align
 #% endfor
 #% else
     set i {{ns.i}}
-#% set ns.i = ns.i + instruction.count
+#% set ns.i = ns.i + instruction.count * instruction.align
 init_labels__loop{{ns.loop}}:
     write {{labels[instruction.label]}} {{LABELS}} i
-    op add i i 1
+    op add i i {{instruction.align}}
     jump init_labels__loop{{ns.loop}} lessThan i {{ns.i}}
 #% set ns.loop = ns.loop + 1
 #% endif
@@ -389,6 +390,7 @@ set {{SINGLE_STEP_SWITCH}} null
 set {{POWER_SWITCH}} null
 set {{PAUSE_SWITCH}} null
 set {{labels[instruction.label]}} null
+set {{instruction.align}} null
 set {{loop.index0}} null
 set {{ns.i}} null
 set {{value}} null

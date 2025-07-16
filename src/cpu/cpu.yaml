@@ -34,8 +34,68 @@ inputs:
   UART_TX_WRITE: 511
 
 instructions:
+  # decoders
+  - label: decode_LOAD
+    align: 4
+  - label: decode_illegal_instruction # LOAD-FP
+    align: 4
+  - label: decode_custom-0
+    align: 4
+  - label: decode_MISC-MEM
+    align: 4
+  - label: decode_OP-IMM
+    align: 4
+  - label: decode_AUIPC
+    align: 4
+  - label: decode_illegal_instruction # OP-IMM-32
+    align: 4
+  - label: decode_illegal_instruction # 48b
+    align: 4
+  - label: decode_STORE
+    align: 4
+  - label: decode_illegal_instruction # STORE-FP
+    align: 4
+  - label: decode_illegal_instruction # custom-1
+    align: 4
+  - label: decode_AMO
+    align: 4
+  - label: decode_OP
+    align: 4
+  - label: decode_LUI
+    align: 4
+  - label: decode_illegal_instruction
+    align: 4
+    count: 10
+    # OP-32
+    # 64b
+    # MADD
+    # MSUB
+    # NMSUB
+    # NMADD
+    # OP-FP
+    # OP-V
+    # custom-2/rv128
+    # 48b
+  - label: decode_BRANCH
+    align: 4
+  - label: decode_JALR
+    align: 4
+  - label: decode_illegal_instruction # reserved
+    align: 4
+  - label: decode_JAL
+    align: 4
+  - label: decode_SYSTEM
+    align: 4
+  - label: decode_illegal_instruction
+    align: 4
+    count: 3
+    # OP-VE
+    # custom-3/rv128
+    # >=80b
+
   # runtime handlers
   - label: BEQ
+    address: 128
   - label: BNE
   - label: JAL
   - label: JALR
@@ -101,43 +161,8 @@ instructions:
   - label: SRAI
   - label: ILLEGAL_OP
   - label: MLOGSYS
-  # padding
   - label: ILLEGAL_OP
-    up_to: 127
-  # decoders, starting at index 128
-  - label: decode_LOAD
-  - label: decode_illegal_instruction # LOAD-FP
-  - label: decode_custom-0
-  - label: decode_MISC-MEM
-  - label: decode_OP-IMM
-  - label: decode_AUIPC
-  - label: decode_illegal_instruction # OP-IMM-32
-  - label: decode_illegal_instruction # 48b
-  - label: decode_STORE
-  - label: decode_illegal_instruction # STORE-FP
-  - label: decode_illegal_instruction # custom-1
-  - label: decode_AMO
-  - label: decode_OP
-  - label: decode_LUI
-  - label: decode_illegal_instruction # OP-32
-    count: 10
-    # 64b
-    # MADD
-    # MSUB
-    # NMSUB
-    # NMADD
-    # OP-FP
-    # OP-V
-    # custom-2/rv128
-    # 48b
-  - label: decode_BRANCH
-  - label: decode_JALR
-  - label: decode_illegal_instruction # reserved
-  - label: decode_JAL
-  - label: decode_SYSTEM
-  - label: decode_illegal_instruction # OP-VE
-  - label: decode_illegal_instruction # custom-3/rv128
-  - label: decode_illegal_instruction # >=80b
+    up_to: 255
 
 csrs:
   # -- unprivileged --

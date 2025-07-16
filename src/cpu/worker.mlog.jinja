@@ -323,7 +323,10 @@ main__no_breakpoint:
 
 #% do reset_locals()
     # jump to instruction handler
-    op add $index op_id 64 # op_id is in the range [-64, 63]
+    # op_id is in the range [-64, 63]
+    # and the instruction handlers in {{LABELS}} start at index 128
+    # so we need to add 64 + 128 = 192
+    op add $index op_id 192
     read @counter {{LABELS}} $index
 
 # this is a normal length for a label
@@ -1100,11 +1103,9 @@ decode:
     op shr $$funct3 value 12
     op and $$funct3 $$funct3 0b111
 
-    # jump table based on (opcode >> 2) since the low 2 bits don't matter
-    # the jump table is stored in LABELS by the controller, starting at index 128
-    op and $tmp value 0b1111111
-    op shr $tmp $tmp 2
-    op add $tmp $tmp 128
+    # jump table based on opcode[6:2] since the low 2 bits have already been checked
+    # the jump table is stored in LABELS by the controller, starting at index 0 at multiples of 4
+    op and $tmp value 0b1111100
     read @counter {{LABELS}} $tmp
 
 decode_LUI:

@@ -263,7 +263,7 @@ def build(
     check_unsaved_variables(worker_ast)
     print(
         f"""\
-Code size:
+Worker:
   Instructions: {len(list(n for n in worker_ast if isinstance(n, Statement)))} / 1000
   Bytes: {len(worker_code.encode())} / {1024 * 100}"""
     )
@@ -285,6 +285,14 @@ Code size:
         labels=worker_labels,
         VARIABLE_0_TO_PAGE_OFFSET="".join(variable_0_to_page_offset),
         **config.inputs,
+    )
+
+    controller_ast = parse_mlog(controller_code)
+    print(
+        f"""\
+Controller:
+  Instructions: {len(list(n for n in controller_ast if isinstance(n, Statement)))} / 1000
+  Bytes: {len(controller_code.encode())} / {1024 * 100}"""
     )
 
     # preprocess other code snippets

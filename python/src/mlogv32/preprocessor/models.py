@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -52,6 +53,8 @@ class BuildConfig(BaseModel):
         label: str
         count: int = Field(default=1, ge=1)
         up_to: int | None = None
+        align: int = Field(default=1, ge=1)
+        address: int | None = None
 
     class CSR(BaseModel):
         read: CSRLocation
@@ -65,9 +68,18 @@ class BuildConfig(BaseModel):
         address = 0
 
         for i, value in enumerate(instructions):
+            value = value.model_copy()
+            if value.address is None:
+                value.address = math.ceil(address / value.align) * value.align
+            elif value.address < address:
+                raise ValueError(
+                    f"Instruction {i} is at address {value.address}, but the previous instruction was at address {address}"
+                )
+            address = value.address
+
             if value.up_to is not None:
-                value = value.model_copy()
                 assert value.up_to is not None
+                assert value.align == 1, "Align != 1 is not supported with up_to"
 
                 if value.up_to < address:
                     raise ValueError(
@@ -77,7 +89,7 @@ class BuildConfig(BaseModel):
                 value.count = value.up_to - address + 1
 
             result.append(value)
-            address += value.count
+            address += value.count * value.align
 
         return result
 

@@ -2304,7 +2304,7 @@ SFENCE.VMA__no_tvm:
     jump end_instruction always
 
 #%# the first local is clobbered by lookup_variable
-#% set modify_csr_locals = ['$$_', '$$modify_csr_op', '$$csr_labels']
+#% set modify_csr_locals = ['$$_', '$$modify_csr_op', '$$csr_labels', '$$tmp']
 #% set modify_csr_op_offset = 1
 
 #% do declare_locals(modify_csr_locals)
@@ -2359,13 +2359,16 @@ modify_csr:
 
     # read
 
+    # a few handlers assume that we set rd to 0
+    set rd 0
+
     # convert modify_csr_op from relative to absolute
     # we could just use an absolute address in modify_csr_op, but it'd be annoying this far into the code
     op add $$modify_csr_op @counter $$modify_csr_op
 #directive start_assert_length {{ modify_csr_op_offset }}
 
     # jump to read handler
-    op idiv @counter $$csr_labels 1000
+    op mod @counter $$csr_labels 1000
 
     # modify
     # the old value is stored in the variable rd by this point
@@ -2389,17 +2392,34 @@ modify_csr__conditional_write:
     jump end_instruction_with_rd equal rs1_id 0
 
 modify_csr__always_write:
+    # apply static mask to result
+    # 0xffffffff * 1000000 takes up 52 bits, so this SHOULD be safe
+    op idiv $$tmp $$csr_labels 1000000
+    op and result result $$tmp
+
     # jump to write handler
     # if the CSR is read-only, this jumps to ILLEGAL_OP
-    op mod @counter $$csr_labels 1000
+    op idiv $$tmp $$csr_labels 1000
+    op mod @counter $$tmp 1000
 
 csr_read_csrs:
 #% do declare_locals(modify_csr_locals)
     read rd {{CSRS}} variable
+    # continue into csr_read_zero
+
+csr_read_zero:
+    # rd is set to 0 by modify_csr
     set @counter $$modify_csr_op
 
-csr_write_csrs_align_4B:
-    op and result result 0xfffffffc
+# this is up here instead of after csr_read_satp to save a jump
+csr_write_satp:
+#% do declare_locals(modify_csr_locals)
+    # we don't use ASID for anything, but riscv-sail doesn't allow us to configure ASIDLEN, so the tests will fail if we zero ASID
+    # https://github.com/riscv/sail-riscv/blob/d8c3006f0ff4dbd33be876d9d62abb085c7f5298/model/riscv_xlen.sail#L25
+
+    # invalidate icache_var when writing satp because next_pc may now point to a different page
+    # TODO: this may not be strictly required by the spec
+    set icache_var null
     # continue into csr_write_csrs
 
 csr_write_csrs:
@@ -2409,11 +2429,6 @@ csr_write_csrs:
 
 csr_write_readonly:
     jump end_instruction_with_rd always
-
-csr_read_zero:
-#% do declare_locals(modify_csr_locals)
-    set rd 0
-    set @counter $$modify_csr_op
 
 csr_read_sstatus:
 #% do declare_locals(modify_csr_locals)
@@ -2426,56 +2441,35 @@ csr_read_sstatus:
     op and rd csr_mstatus 0b00000000000011000000000100100010
     set @counter $$modify_csr_op
 
-csr_write_sstatus:
-    # insert new writable fields
-    op and csr_mstatus csr_mstatus 0b11111111111100111111111011011101
-    op and result result           0b00000000000011000000000100100010
-    op or csr_mstatus csr_mstatus result
-
-    jump csr_xstatus always
-
 csr_read_mstatus:
 #% do declare_locals(modify_csr_locals)
     set rd csr_mstatus
     set @counter $$modify_csr_op
 
 csr_write_mstatus:
-    # clear WPRI and read-only zero fields
-    # SD/XS/FS/VS               -              ----  --
-    # WPRI                       --------                  - - -
-    # UBE                                                -
-    op and csr_mstatus result 0b00000000011111100001100110101010
+    # no read-only non-zero fields
+    set csr_mstatus 0
 
     # if MPP was set to 10 (reserved), set it to 0
-    op and $mstatus.mpp csr_mstatus 0b1100000000000
-    jump csr_xstatus notEqual $mstatus.mpp 0b1000000000000
-    op and csr_mstatus csr_mstatus 0b11111111111111111110011111111111
+    op and $mstatus.mpp result                   0b1100000000000
+    jump csr_write_sstatus notEqual $mstatus.mpp 0b1000000000000
+    op and result result      0b11111111111111111110011111111111
+    # continue into csr_write_sstatus
 
-csr_xstatus:
+csr_write_sstatus:
+    # insert new writable fields
+    # MXR                                        -
+    # SUM                                         -
+    # SPP                                                   -
+    # SPIE                                                     -
+    # SIE                                                          -
+    op and csr_mstatus csr_mstatus 0b11111111111100111111111011011101
+
+    op or csr_mstatus csr_mstatus result
+
     # update effective_privilege_mode
     set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
     jump get_effective_privilege_mode always
-
-csr_write_medeleg:
-#% do declare_locals(modify_csr_locals)
-    # clear read-only zero fields
-    # custom               --------
-    # reserved                     ----  -- -   -
-    # M-mode ecall                             -
-    op and result result 0b00000000000011001011001111111111
-    jump csr_write_csrs always
-
-csr_write_mideleg:
-#% do declare_locals(modify_csr_locals)
-    # get new writable fields
-    # MEI                                      -
-    # SEI                                        -
-    # MTI                                          -
-    # STI                                            -
-    # MSI                                              -
-    # SSI                                                -
-    op and result result 0b00000000000000000000101010101010
-    jump csr_write_csrs always
 
 csr_read_sip:
 #% do declare_locals(modify_csr_locals)
@@ -2487,15 +2481,6 @@ csr_read_sip:
     op and rd csr_mip 0b00111111111111110000001000100010
     set @counter $$modify_csr_op
 
-csr_write_sip:
-    # insert new writable fields
-    # SSIP                                                 -
-    op and csr_mip csr_mip 0b11111111111111111111111111111101
-    op and result result   0b00000000000000000000000000000010
-    op or csr_mip csr_mip result
-
-    jump end_instruction_with_rd_and_fire_interrupts always
-
 csr_read_mip:
 #% do declare_locals(modify_csr_locals)
     # hide internal interrupt flags
@@ -2506,10 +2491,15 @@ csr_write_mip:
     # insert new writable fields
     # SEIP                                         -
     # SSIP                                                 -
-    op and csr_mip csr_mip 0b11111111111111111111110111011101
-    op and result result   0b00000000000000000000001000000010
-    op or csr_mip csr_mip result
+    op and csr_mip csr_mip 0b11111111111111111111110111111101
+    # continue into csr_write_sip
 
+csr_write_sip:
+    # insert new writable fields
+    # SSIP                                                 -
+    op and csr_mip csr_mip 0b11111111111111111111111111111101
+
+    op or csr_mip csr_mip result
     jump end_instruction_with_rd_and_fire_interrupts always
 
 csr_read_sie:
@@ -2528,7 +2518,6 @@ csr_write_sie:
     # STIE                                             -
     # SSIE                                                 -
     op and csr_mie csr_mie 0b11111111111111111111110111011101
-    op and result result   0b00000000000000000000001000100010
     op or csr_mie csr_mie result
 
     jump end_instruction_with_rd_and_fire_interrupts always
@@ -2555,15 +2544,6 @@ csr_read_satp:
     op and $mstatus.tvm csr_mstatus 0b100000000000000000000
     jump csr_read_csrs equal $mstatus.tvm 0
     jump ILLEGAL_OP always
-
-csr_write_satp:
-    # we don't use ASID for anything, but riscv-sail doesn't allow us to configure ASIDLEN, so the tests will fail if we zero ASID
-    # https://github.com/riscv/sail-riscv/blob/d8c3006f0ff4dbd33be876d9d62abb085c7f5298/model/riscv_xlen.sail#L25
-    write result {{CSRS}} variable
-
-    # invalidate icache_var when writing satp because next_pc may now point to a different page
-    # TODO: this may not be strictly required by the spec
-    jump end_instruction_with_rd_and_invalidate_icache always
 
 csr_read_stimecmp:
 #% do declare_locals(modify_csr_locals)
@@ -2599,16 +2579,6 @@ csr_read_cycleh:
     read rd {{CSRS}} "{{ 'mcycleh'|csr }}"
     jump check_xcounteren always
 
-csr_read_time:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mtime
-    jump check_xcounteren always
-
-csr_read_timeh:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mtimeh
-    jump check_xcounteren always
-
 csr_read_minstret:
 #% do declare_locals(modify_csr_locals)
     set rd csr_minstret
@@ -2626,12 +2596,23 @@ csr_read_minstreth:
 
 csr_write_minstreth:
     # a value written to instret by one instruction should be the value read by the following instruction
+    # TODO: is this necessary for minstreth?
     op sub csr_minstret csr_minstret 1
     jump csr_write_csrs always
 
+csr_read_time:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_mtime
+    jump check_xcounteren always
+
+csr_read_timeh:
+#% do declare_locals(modify_csr_locals)
+    set rd csr_mtimeh
+    # continue into check_xcounteren via csr_read_hpmcounter
+
 csr_read_hpmcounter:
 #% do declare_locals(modify_csr_locals)
-    set rd 0
+    # rd is set to 0 by modify_csr
     # continue into check_xcounteren
 
 check_xcounteren:
@@ -2824,9 +2805,6 @@ jump csr_read_time always
 jump csr_read_timeh always
 jump csr_read_zero always
 jump csr_write_csrs always
-jump csr_write_csrs_align_4B always
-jump csr_write_medeleg always
-jump csr_write_mideleg always
 jump csr_write_mie always
 jump csr_write_minstret always
 jump csr_write_minstreth always

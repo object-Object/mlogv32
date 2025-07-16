@@ -139,10 +139,11 @@ init_labels__loop{{ns.loop}}:
 #% for name, csr in csrs.items()
 #% set read_label = 'csr_read_' ~ csr.read
 #% set write_label = 'csr_write_' ~ csr.write if csr.write is not none else 'ILLEGAL_OP'
-#% set value = labels[read_label] * 1000 + labels[write_label]
+#% set value = csr.mask * 1_000_000 + labels[write_label] * 1000 + labels[read_label]
     # {{ name }}
     # read: {{ read_label }} ({{ labels[read_label] }})
     # write: {{ write_label }} ({{ labels[write_label] }})
+    # mask: {{ csr.mask|bin(32) }}
     write {{value}} {{CSR_LABELS}} "{{ name|csr }}"
 #% endfor
 

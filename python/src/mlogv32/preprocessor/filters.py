@@ -86,6 +86,14 @@ def hex_filter(n: int):
 
 
 @make_jinja_exceptions_suck_a_bit_less
+@register_filter("bin")
+def bin_filter(n: int, bits: int | None = None):
+    if bits:
+        return f"{n:#0{bits + 2}b}"
+    return bin(n)
+
+
+@make_jinja_exceptions_suck_a_bit_less
 @register_filter()
 def namespace_dict(namespace: Namespace):
     # cursed

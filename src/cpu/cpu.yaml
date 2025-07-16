@@ -193,12 +193,23 @@ csrs:
   sstatus:
     read: LABEL
     write: LABEL
+    # MXR               -
+    # SUM                -
+    # SPP                          -
+    # SPIE                            -
+    # SIE                                 -
+    mask: 0b00000000000011000000000100100010
   sie:
     read: LABEL
     write: LABEL
+    # SEIE                        -
+    # STIE                            -
+    # SSIE                                -
+    mask: 0b00000000000000000000001000100010
   stvec:
     read: csrs
-    write: csrs_align_4B
+    write: csrs
+    mask: &align_4B 0xfffffffc
   scounteren:
     read: csrs
     write: csrs
@@ -225,7 +236,8 @@ csrs:
     write: csrs
   sepc:
     read: csrs
-    write: csrs_align_4B
+    write: csrs
+    mask: *align_4B
   scause:
     read: csrs
     write: csrs
@@ -235,6 +247,8 @@ csrs:
   sip:
     read: LABEL
     write: LABEL
+    # SSIP                                -
+    mask: 0b00000000000000000000000000000010
 
   # protection and translation
   satp:
@@ -259,21 +273,37 @@ csrs:
   mstatus:
     read: LABEL
     write: LABEL
+    # state  -              ----  --
+    # WPRI    --------                  - - -
+    # UBE                             -
+    mask:  0b00000000011111100001100110101010
   misa:
     read: csrs
     write: readonly
   medeleg:
     read: csrs
-    write: LABEL
+    write: csrs
+    # custom    --------
+    # reserved          ----  -- -   -
+    # M-call                        -
+    mask:     0b00000000000011001011001111111111
   mideleg:
     read: csrs
-    write: LABEL
+    write: csrs
+    # MEI                       -
+    # SEI                         -
+    # MTI                           -
+    # STI                             -
+    # MSI                               -
+    # SSI                                 -
+    mask: 0b00000000000000000000101010101010
   mie:
     read: LABEL
     write: LABEL
   mtvec:
     read: csrs
-    write: csrs_align_4B
+    write: csrs
+    mask: *align_4B
   mcounteren:
     read: csrs
     write: csrs
@@ -290,7 +320,8 @@ csrs:
     write: csrs
   mepc:
     read: csrs
-    write: csrs_align_4B
+    write: csrs
+    mask: *align_4B
   mcause:
     read: csrs
     write: csrs
@@ -300,6 +331,9 @@ csrs:
   mip:
     read: LABEL
     write: LABEL
+    # SEIP                        -
+    # SSIP                                -
+    mask: 0b00000000000000000000001000000010
 
   # configuration
   menvcfg:

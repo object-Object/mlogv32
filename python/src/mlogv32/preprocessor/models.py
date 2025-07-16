@@ -59,6 +59,7 @@ class BuildConfig(BaseModel):
     class CSR(BaseModel):
         read: CSRLocation
         write: CSRLocation | None = None
+        mask: int = Field(default=0xFFFF_FFFF, ge=0, le=0xFFFF_FFFF)
         args: Iterable[Any] | None = None
 
     @field_validator("instructions", mode="after")

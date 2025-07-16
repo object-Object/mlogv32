@@ -169,7 +169,7 @@ csrs:
 
   # counter/timers
   cycle:
-    read: LABEL
+    read: mcycle
   time:
     read: LABEL
   instret:
@@ -345,8 +345,8 @@ csrs:
 
   # counter/timers
   mcycle:
-    read: csrs
-    write: csrs
+    read: LABEL
+    write: LABEL
   minstret:
     read: LABEL
     write: LABEL

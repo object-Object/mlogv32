@@ -174,7 +174,7 @@ class ProcessorAccess(
         mstatus = getUIntVar("csr_mstatus"),
         mip = getUIntVar("csr_mip"),
         mie = getUIntVar("csr_mie"),
-        mcycle = (getCSR(0xB80).toULong() shl 32) or getCSR(0xB00).toULong(),
+        mcycle = (getCSR(0xB80).toULong() shl 32) or getUIntVar("csr_mcycle").toULong(),
         minstret = (getCSR(0xB82).toULong() shl 32) or getUIntVar("csr_minstret").toULong(),
         mtime = (getUIntVar("csr_mtimeh").toULong() shl 32) or getUIntVar("csr_mtime").toULong(),
     )

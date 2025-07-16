@@ -202,7 +202,7 @@ end_slow_init:
     set csr_stimecmph 0
     set csr_minstret 0
     write 0 {{CSRS}} "{{ 'minstreth'|csr }}"
-    write 0 {{CSRS}} "{{ 'mcycle'|csr }}"
+    set csr_mcycle 0
     write 0 {{CSRS}} "{{ 'mcycleh'|csr }}"
 
     # clear delegated traps
@@ -407,6 +407,7 @@ set _ __etext
 set _ privilege_mode
 set _ effective_privilege_mode
 set _ reservation_set
+set _ csr_mcycle
 set _ csr_mtime
 set _ csr_mtimeh
 set _ csr_mtimecmp

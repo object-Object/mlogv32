@@ -169,7 +169,7 @@ loop:
     set ICACHE_START RAM_END
     op add ICACHE_END ICACHE_START ICACHE_SIZE
 
-    read mcycle {{CSRS}} "{{ 'mcycle'|csr }}"
+    read mcycle {{CPU}} "csr_mcycle"
     read mcycleh {{CSRS}} "{{ 'mcycleh'|csr }}"
     op shl mcycleh mcycleh 32
     op add mcycle mcycle mcycleh

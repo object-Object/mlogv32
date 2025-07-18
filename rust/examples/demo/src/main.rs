@@ -1,53 +1,26 @@
 #![no_std]
 #![no_main]
 
-use itoa::Buffer;
-use mlogv32::graphics::*;
 use mlogv32::prelude::*;
-use mlogv32::register::{cycle, instret, time};
+use mlogv32::register::{mcycle, minstret};
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 #[mlogv32::entry]
 fn main() -> ! {
-    let mut buf = Buffer::new();
+    let mut rng = SmallRng::seed_from_u64(0);
 
-    print_str("hello rust!");
+    let mut data = [0u8; 512];
+    rng.fill(&mut data);
 
-    let cycle0 = cycle::read();
-    let instret0 = instret::read();
-    let time0 = time::read();
+    sleep();
+    unsafe {
+        core::ptr::write_volatile(0xf0000000 as *mut u64, 0);
+        mcycle::write64(0);
+        minstret::write64(0);
+    };
 
-    print_str("\n\ncycle 0: ");
-    print_str(buf.format(cycle0));
-    print_str("\ninstret 0: ");
-    print_str(buf.format(instret0));
-    print_str("\ntime 0: ");
-    print_str(buf.format(time0));
+    data.sort_unstable();
 
-    draw_reset();
-    draw_scale(8, 8);
-
-    draw_clear(255, 255, 255);
-    draw_col(0x000000ff);
-    draw_stroke(1);
-
-    draw_rect(12, 30, 2, 12);
-    draw_rect(28, 30, 2, 12);
-    draw_rect(34, 30, 2, 8);
-    draw_rect(12, 12, 2, 12);
-    draw_rect(18, 12, 2, 12);
-    draw_rect(28, 12, 2, 12);
-    draw_rect(32, 12, 8, 2);
-
-    let cycle1 = cycle::read();
-    let instret1 = instret::read();
-    let time1 = time::read();
-
-    print_str("\n\ncycle 1: ");
-    print_str(buf.format(cycle1));
-    print_str("\ninstret 1: ");
-    print_str(buf.format(instret1));
-    print_str("\ntime 1: ");
-    print_str(buf.format(time1));
-
-    halt()
+    halt();
 }

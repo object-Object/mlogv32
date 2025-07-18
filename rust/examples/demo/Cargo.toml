@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 mlogv32 = { path = "../../mlogv32", features = ["default-memory"] }
 itoa = { workspace = true }
+rand = { version = "0.9.1", default-features = false, features = ["small_rng"] }

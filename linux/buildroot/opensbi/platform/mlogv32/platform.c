@@ -61,6 +61,9 @@ static int mlogv32_early_init(bool cold_boot)
  */
 static int mlogv32_final_init(bool cold_boot)
 {
+	// delegate UART interrupts to S-mode
+	csr_set(CSR_MIDELEG, MIP_MEIP);
+
 	return 0;
 }
 

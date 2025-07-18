@@ -1,9 +1,15 @@
+include $(sort $(wildcard $(BR2_EXTERNAL_MLOGV32_PATH)/package/*/*.mk))
+
 .PHONY: save-configs
 save-configs: linux-update-defconfig
 	$(MAKE) savedefconfig BR2_DEFCONFIG=$(BR2_EXTERNAL_MLOGV32_PATH)/configs/mlogv32_defconfig
 
 .PHONY: dtbs
 dtbs: $(BR2_EXTERNAL_MLOGV32_PATH)/board/mlogv32/dts/mlogv32.dtb
+
+.PHONY: gen-compile-commands
+gen-compile-commands:
+	cd $(LINUX_DIR) && scripts/clang-tools/gen_compile_commands.py -o $(BR2_EXTERNAL_MLOGV32_PATH)/compile_commands.json
 
 .PHONY: zsbl
 zsbl:

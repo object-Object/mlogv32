@@ -25,6 +25,8 @@ logicids.json
 
 .kotlin/
 
+compile_commands.json
+
 ## Gradle
 .gradle
 **/build/

@@ -1,5 +1,7 @@
 #% from 'worker.mlog.jinja' import fetch_variables with context
 
+#% set UART_START_LINK = 16
+
 #% set REGISTERS = 'cell1'
 #% set LABELS = 'cell2'
 
@@ -163,6 +165,14 @@ end_slow_init:
     op add ret @counter 1
     jump get_breakpoint_address always
 
+    # UARTs
+    set uart_flags 0
+    set uart_rlsi_ptrs 0xffffffff
+    set uart_thri_ptrs 0xffffffff
+
+    op add ret @counter 1
+    jump update_uart_flags always
+
     # reset hart state as per machine-level ISA
 
     # set privilege mode to M
@@ -277,6 +287,10 @@ end_breakpoint:
     jump get_breakpoint_address always
     write breakpoint_address prev_proc "breakpoint_address"
 
+    op add ret @counter 1
+    jump update_uart_flags always
+    write uart_flags prev_proc "uart_flags"
+
     # check which CSR we're currently updating, if any
 
     # update mtime
@@ -355,6 +369,106 @@ get_breakpoint_address__single_step:
     set breakpoint_address "*"
     set @counter ret
 
+update_uart_flags:
+    set _i 0
+
+update_uart_flags__loop:
+    op add _uart _i {{UART_START_LINK}}
+    getlink _uart _uart
+
+    read _rx_read _uart {{UART_RX_READ}}
+    read _rx_write_raw _uart {{UART_RX_WRITE}}
+    op and _rx_write _rx_write_raw 0xff
+    read _tx_read _uart {{UART_TX_READ}}
+    read _tx_write _uart {{UART_TX_WRITE}}
+
+    op mul _ptr_shift _i 8
+
+    op shr _rlsi_ptr uart_rlsi_ptrs _ptr_shift
+    op and _rlsi_ptr _rlsi_ptr 0xff
+
+    op shr _thri_ptr uart_thri_ptrs _ptr_shift
+    op and _thri_ptr _thri_ptr 0xff
+
+    op mul _uart_shift _i 8
+
+    set _new_flags 0
+
+    # RX overrun
+
+    # we know an overrun occurred if read == wrap(write + 1) (ie. rx is full)
+    op add _next_rx_write _rx_write 1
+    op mod _next_rx_write _next_rx_write UART_FIFO_MODULO
+    jump update_uart_flags__no_rx_overrun notEqual _next_rx_write _rx_read
+
+    # AND if the overflow flag is set in rx_write_raw
+    jump update_uart_flags__no_rx_overrun lessThan _rx_write_raw 0x100
+
+    # if we've already signaled an interrupt at this write ptr, don't signal it again
+    # this avoids re-triggering the interrupt after the processor has cleared it
+    jump update_uart_flags__done_rx_overrun equal _rlsi_ptr _rx_write
+
+    # otherwise, set RLSIP and rlsi_ptr
+    op or _new_flags _new_flags 0b01000000
+    set _rlsi_ptr _rx_write
+    jump update_uart_flags__set_rlsi_ptr always
+
+update_uart_flags__no_rx_overrun:
+    # if an overrun didn't occur, set rlsi_ptr to an invalid value so we don't mask a later overrun
+    set _rlsi_ptr 0xff
+
+update_uart_flags__set_rlsi_ptr:
+    op shl _mask 0xff _ptr_shift
+    op not _mask _mask
+    op and uart_rlsi_ptrs uart_rlsi_ptrs _mask
+
+    op shl _rlsi_ptr _rlsi_ptr _ptr_shift
+    op or uart_rlsi_ptrs uart_rlsi_ptrs _rlsi_ptr
+update_uart_flags__done_rx_overrun:
+
+    # THR empty
+
+    # the THR is empty if rptr == wptr
+    jump update_uart_flags__thr_not_empty notEqual _tx_read _tx_write
+
+    # if we've already signaled an interrupt at this write ptr, don't signal it again
+    # this avoids re-triggering the interrupt after the processor has cleared it by reading the ISR
+    jump update_uart_flags__done_thr equal _thri_ptr _tx_write
+
+    # otherwise, set THRIP and thri_ptr
+    op or _new_flags _new_flags 0b00100000
+    set _thri_ptr _tx_write
+    jump update_uart_flags__set_thri_ptr always
+
+update_uart_flags__thr_not_empty:
+    # if the THR isn't empty, set thri_ptr to an invalid value so we don't mask the interrupt when it becomes empty
+    set _thri_ptr 0xff
+
+update_uart_flags__set_thri_ptr:
+    op shl _mask 0xff _ptr_shift
+    op not _mask _mask
+    op and uart_thri_ptrs uart_thri_ptrs _mask
+
+    op shl _thri_ptr _thri_ptr _ptr_shift
+    op or uart_thri_ptrs uart_thri_ptrs _thri_ptr
+update_uart_flags__done_thr:
+
+    # RX data ready
+
+    jump update_uart_flags__rx_empty equal _rx_read _rx_write
+    op or _new_flags _new_flags 0b00010000 # RDIP
+update_uart_flags__rx_empty:
+
+    # set new interrupts (if any)
+    # the controller never clears values in uart_flags, only sets them
+    op shl _new_flags _new_flags _uart_shift
+    op or uart_flags uart_flags _new_flags
+
+    op add _i _i 1
+    jump update_uart_flags__loop lessThan _i 4
+
+    set @counter ret
+
 # given a value 0 <= address < RAM_PROC_BYTES, resolve that variable in the lookup table
 # address -> variable
 lookup_variable:
@@ -379,7 +493,12 @@ set {{LOOKUP_PROC_SIZE}} null
 set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_BYTES}} null
 set {{SYSCON}} null
+set {{UART_RX_READ}} null
+set {{UART_RX_WRITE}} null
+set {{UART_TX_READ}} null
+set {{UART_TX_WRITE}} null
 # local preprocessor constants
+set {{UART_START_LINK}} null
 set {{REGISTERS}} null
 set {{LABELS}} null
 set {{CSRS}} null

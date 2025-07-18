@@ -202,10 +202,6 @@ csrs:
   sie:
     read: LABEL
     write: LABEL
-    # SEIE                        -
-    # STIE                            -
-    # SSIE                                -
-    mask: 0b00000000000000000000001000100010
   stvec:
     read: csrs
     write: csrs
@@ -247,8 +243,6 @@ csrs:
   sip:
     read: LABEL
     write: LABEL
-    # SSIP                                -
-    mask: 0b00000000000000000000000000000010
 
   # protection and translation
   satp:
@@ -294,9 +288,8 @@ csrs:
     # SEI                         -
     # MTI                           -
     # STI                             -
-    # MSI                               -
     # SSI                                 -
-    mask: 0b00000000000000000000101010101010
+    mask: 0b00000000000000000000101010100010
   mie:
     read: LABEL
     write: LABEL

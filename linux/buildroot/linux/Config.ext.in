@@ -1,0 +1,3 @@
+config BR2_LINUX_KERNEL_EXT_MLOGV32_DRIVERS
+    bool "mlogv32-drivers"
+    select BR2_PACKAGE_MLOGV32_DRIVERS

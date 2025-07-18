@@ -10,7 +10,7 @@
         // SBI: console=hvc
         // UART0: console=ttyS0
         // for debugging: kgdboc_earlycon=sbi kgdboc=ttyS0 kgdbwait
-        bootargs = "earlycon=sbi console=hvc";
+        bootargs = "earlycon=sbi console=ttyS0";
         stdout-path = &uart0;
     };
 
@@ -57,7 +57,7 @@
                 "sstc",
                 "svade";
 
-            intc: interrupt-controller {
+            cpu0_intc: interrupt-controller {
                 compatible = "riscv,cpu-intc";
                 #interrupt-cells = <1>;
                 interrupt-controller;
@@ -67,7 +67,14 @@
 
     timer {
         compatible = "riscv,timer";
-        interrupts-extended = <&intc 5>;
+        interrupts-extended = <&cpu0_intc 5>;
+    };
+
+    intc: interrupt-controller {
+        compatible = "mlogv32,cpu-intc";
+        #interrupt-cells = <1>;
+        interrupt-controller;
+        interrupts-extended = <&cpu0_intc 11>;
     };
 
     soc {
@@ -80,11 +87,41 @@
             compatible = "ns16550a";
             reg = <0xf0000010 0x20>;
             reg-shift = <2>;
-            interrupts-extended = <&intc 9>;
+            interrupts-extended = <&intc 11>;
             clock-frequency = <(38400*16)>;
             fifo-size = <253>;
             no-loopback-test;
             // TODO: https://github.com/torvalds/linux/blob/8c2e52ebbe885c7eeaabd3b7ddcdc1246fc400d2/drivers/tty/serial/8250/8250_of.c#L233
+        };
+
+        uart1: serial@f0000030 {
+            compatible = "ns16550a";
+            reg = <0xf0000030 0x20>;
+            reg-shift = <2>;
+            interrupts-extended = <&intc 11>;
+            clock-frequency = <(38400*16)>;
+            fifo-size = <253>;
+            no-loopback-test;
+        };
+
+        uart2: serial@f0000050 {
+            compatible = "ns16550a";
+            reg = <0xf0000050 0x20>;
+            reg-shift = <2>;
+            interrupts-extended = <&intc 11>;
+            clock-frequency = <(38400*16)>;
+            fifo-size = <253>;
+            no-loopback-test;
+        };
+
+        uart3: serial@f0000070 {
+            compatible = "ns16550a";
+            reg = <0xf0000070 0x20>;
+            reg-shift = <2>;
+            interrupts-extended = <&intc 11>;
+            clock-frequency = <(38400*16)>;
+            fifo-size = <253>;
+            no-loopback-test;
         };
 
         syscon: syscon@fffffff0 {

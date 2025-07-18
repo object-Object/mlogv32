@@ -221,6 +221,8 @@ loop:
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
     op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
 
+    read uart_flags {{CPU}} "uart_flags"
+
     set addr1 ""
     set pte1 ""
     set addr0 ""
@@ -357,9 +359,8 @@ loop__no_mark_icache:
     jump format_hex_or_empty always
 
     set n physical_address
-    op add ret @counter 2
-    jump format_hex_or_empty strictEqual trap_cause null
-    jump format_unknown always
+    op add ret @counter 1
+    jump format_hex_or_empty always
 
     set n instruction
     op add ret @counter 2
@@ -564,6 +565,8 @@ loop__no_mark_icache:
     jump format_hex always
 
     set n mstatus
+    set length 32
+    set separator 32
     op add ret @counter 1
     jump format_bin always
 
@@ -646,6 +649,13 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_uart always
 
+    print "{0}\n"
+    set n uart_flags
+    set length 32
+    set separator 8
+    op add ret @counter 1
+    jump format_bin always
+
     #{ print(30, level_4_row)
 
     wait 0.02
@@ -713,7 +723,12 @@ format_bin__loop:
 format_bin__next:
     op shr n n 1
     op add i i 1
-    jump format_bin__loop lessThan i 32
+    op mod _rem i separator
+    jump format_bin__no_sep notEqual _rem 0
+    jump format_bin__no_sep greaterThanEq i length
+    format "{0}_"
+format_bin__no_sep:
+    jump format_bin__loop lessThan i length
     format "0b"
     set @counter ret
 

@@ -27,7 +27,7 @@
 
 #% set labels.next_tick = 14
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 151
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 157
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -117,6 +117,7 @@ reset:
     read rs2 prev_proc "rs2"
     read rs2_id prev_proc "rs2_id"
     read state prev_proc "state"
+    read uart_flags prev_proc "uart_flags"
     read value prev_proc "value"
     read variable prev_proc "variable"
 
@@ -164,31 +165,44 @@ reset__no_overflow:
 # check if software-manipulable interrupts should become pending
 # this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
 poll_interrupts:
-#% do reset_locals()
+#% set poll_interrupt_locals = ["$$mip.meip", "$$mip.mtip", "$$mip.stip"]
+#% do declare_locals(poll_interrupt_locals)
+    # machine external interrupt (UARTs)
+    op shl $uart_interrupts uart_flags 4
+    op and $uart_interrupts $uart_interrupts uart_flags
+    op and $uart_interrupts $uart_interrupts 0b11110000111100001111000011110000
+
+    op notEqual $$mip.meip $uart_interrupts 0
+    op shl $$mip.meip $$mip.meip 11
+
+#% do declare_locals(poll_interrupt_locals)
     # machine timer interrupt
     op greaterThan $high_gt csr_mtimeh csr_mtimecmph
     op equal $high_eq csr_mtimeh csr_mtimecmph
     op greaterThanEq $low_ge csr_mtime csr_mtimecmp
 
-    op and $mip.mtip $high_eq $low_ge
-    op or $mip.mtip $mip.mtip $high_gt
-    op shl $mip.mtip $mip.mtip 7
+    op and $$mip.mtip $high_eq $low_ge
+    op or $$mip.mtip $$mip.mtip $high_gt
+    op shl $$mip.mtip $$mip.mtip 7
 
+#% do declare_locals(poll_interrupt_locals)
     # supervisor timer interrupt
     op greaterThan $high_gt csr_mtimeh csr_stimecmph
     op equal $high_eq csr_mtimeh csr_stimecmph
     op greaterThanEq $low_ge csr_mtime csr_stimecmp
 
-    op and $mip.stip $high_eq $low_ge
-    op or $mip.stip $mip.stip $high_gt
-    op shl $mip.stip $mip.stip 5
+    op and $$mip.stip $high_eq $low_ge
+    op or $$mip.stip $$mip.stip $high_gt
+    op shl $$mip.stip $$mip.stip 5
 
     # poll                   -
-    # mtip                                           -
-    # stip                                             -
-    op and csr_mip csr_mip 0b01111111111111111111111101011111
-    op or csr_mip csr_mip $mip.mtip
-    op or csr_mip csr_mip $mip.stip
+    # MEIP                                       -
+    # MTIP                                           -
+    # STIP                                             -
+    op and csr_mip csr_mip 0b01111111111111111111011101011111
+    op or csr_mip csr_mip $$mip.meip
+    op or csr_mip csr_mip $$mip.mtip
+    op or csr_mip csr_mip $$mip.stip
 
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, if certain CSRs are modified, and after an xRET instruction
@@ -211,6 +225,7 @@ fire_interrupts:
 
     # in S-mode or M-mode, interrupts are enabled if mstatus.xIE is 1
     # conveniently, SIE is bit 1 and MIE is bit 3
+    # FIXME: this is incorrect, we should still take interrupts to M-mode if in S-mode with SIE=0
     op shl $mstatus.xie 1 privilege_mode
     op and $mstatus.xie $mstatus.xie csr_mstatus
     jump main equal $mstatus.xie 0
@@ -270,12 +285,11 @@ main__slow_instruction_fetch:
     op add ret @counter 1
     jump load_word always
 
-    set value result
     set address null
 
     # IMPORTANT: remember to update this value if anything in access_icache or read_icache is changed
     op add ret3 @counter {{# start_assert_length(10) }}
-    jump decode always
+    jump decode_value_in_result always
 
 main__access_rom_icache:
     # the icache is stored in RAM cells immediately after the end of RAM with the same density as regular memory
@@ -785,6 +799,53 @@ translate_virtual_address__page_fault:
     op max mcause mcause 12
     jump trap always
 
+# caller must ensure offset is 4-byte aligned and in uart range
+# ret: ret2
+access_uart:
+#% set access_uart_locals = ["$$offset", "$$uart_shift", "$$uart", "$$rx_read", "$$rx_write", "$$tx_read", "$$tx_write"]
+#% do declare_locals(access_uart_locals)
+    op sub $$offset $$offset 0x10
+
+    op idiv $$uart $$offset 0x20
+    op mul $$uart_shift $$uart 8
+
+    op add $$uart $$uart {{UART_START_LINK}}
+    getlink $$uart $$uart
+
+    op mod $$offset $$offset 0x20
+    op add $$offset $$offset 0x10
+
+    read $$rx_read $$uart {{UART_RX_READ}}
+
+    read $$rx_write $$uart {{UART_RX_WRITE}}
+    op and $$rx_write $$rx_write 0xff
+
+    read $$tx_read $$uart {{UART_TX_READ}}
+
+    read $$tx_write $$uart {{UART_TX_WRITE}}
+
+    set @counter ret2
+
+# loads the word from memory that contains the specified address
+# mcause is required in order to raise the correct exception in case of access fault
+# address, mcause, mtval -> result
+# ret: ret
+# clobbers: locals, ret2, value
+load_word:
+    jump load_rom_word_unchecked lessThan address ROM_SIZE
+
+load_ram_or_mmio_word:
+    jump load_mmio_word greaterThanEq address {{MMIO_START}}
+
+    jump trap lessThan address {{RAM_START}}
+    jump trap greaterThanEq address RAM_END
+    # continue into load_ram_word_unchecked
+
+load_ram_word_unchecked:
+    # locate and read value from ram
+    op add ret2 @counter {{# start_assert_length(17) }}
+    # continue into access_ram
+
 # helper function to find the ram proc and variable for a given address
 # address -> ram, variable
 # ret: ret2
@@ -831,50 +892,7 @@ lookup_variable:
 
     set @counter ret2
 
-# caller must ensure offset is 4-byte aligned and in uart range
-# ret: ret2
-access_uart:
-#% set access_uart_locals = ["$$offset", "$$uart", "$$rx_read", "$$rx_write_raw", "$$rx_write", "$$tx_read", "$$tx_write"]
-#% do declare_locals(access_uart_locals)
-    op sub $$offset $$offset 0x10
-
-    op idiv $$uart $$offset 0x20
-    op add $$uart $$uart {{UART_START_LINK}}
-    getlink $$uart $$uart
-
-    op mod $$offset $$offset 0x20
-    op add $$offset $$offset 0x10
-
-    read $$rx_read $$uart {{UART_RX_READ}}
-
-    read $$rx_write_raw $$uart {{UART_RX_WRITE}}
-    op and $$rx_write $$rx_write_raw 0xff
-
-    read $$tx_read $$uart {{UART_TX_READ}}
-
-    read $$tx_write $$uart {{UART_TX_WRITE}}
-
-    set @counter ret2
-
-# loads the word from memory that contains the specified address
-# mcause is required in order to raise the correct exception in case of access fault
-# address, mcause, mtval -> result
-# ret: ret
-# clobbers: locals, ret2, value
-load_word:
-    jump load_rom_word_unchecked lessThan address ROM_SIZE
-
-load_ram_or_mmio_word:
-    jump load_mmio_word greaterThanEq address {{MMIO_START}}
-
-    jump trap lessThan address {{RAM_START}}
-    jump trap greaterThanEq address RAM_END
-    # continue into load_ram_word_unchecked
-
-load_ram_word_unchecked:
-    # locate and read value from ram
-    op add ret2 @counter 1
-    jump access_ram always
+#directive end_assert_length
     read value ram variable
     # null is coerced to 0 by swap_endianness
 
@@ -1002,13 +1020,12 @@ load_mmio_word__not_zero:
     # Receiver Holding Register: character received, or 0 if RX FIFO is empty
     jump load_mmio_word__uart_rhr notEqual $$rx_read $$rx_write
     set @counter ret
-    # Interrupt Enable Register: 0 (not supported)
-    set result 0b00000000
-    set @counter ret
-    # Interrupt Status Register: both FIFOs enabled, no interrupt pending, other flags 0
-    # TODO: we should return 0 for FIFOs enabled until they actually get enabled
-    set result 0b11000001
-    set @counter ret
+    # Interrupt Enable Register
+    op shr result uart_flags $$uart_shift
+    jump load_mmio_word__uart_ier always
+    # Interrupt Status Register: both FIFOs enabled, interrupts based on uart_flags
+    op shr result uart_flags $$uart_shift
+    jump load_mmio_word__uart_isr always
     # Line Control Register: word length = 8 bits, other flags 0
     set result 0b00000011
     set @counter ret
@@ -1016,19 +1033,66 @@ load_mmio_word__not_zero:
 load_mmio_word__uart_rhr:
 #% do declare_locals(access_uart_locals)
     # HACK: if mcause is 7, we're loading this word as part of a store instruction, so return 0 and don't modify UART state
-    jump load_mmio_word__uart_rhr__empty equal mcause 7
+    jump load_mmio_word__ret equal mcause 7
 
     # read one byte from the FIFO
     read result $$uart $$rx_read
-    op and result result 0xff
 
-    # else, advance read
+    # advance read
     op add $$rx_read $$rx_read 1
     op mod $$rx_read $$rx_read UART_FIFO_MODULO
     write $$rx_read $$uart {{UART_RX_READ}}
 
-load_mmio_word__uart_rhr__empty:
+    # if the FIFO has more data, we're done
+    jump load_mmio_word__ret notEqual $$rx_read $$rx_write
+
+    # if the FIFO is empty, clear the data ready interrupt
+    # if more data has been written since we read rx_write, the interrupt will become pending again next tick
+#% do declare_locals(access_uart_locals, "$$flag")
+    op shl $$flag 0b00010000 $$uart_shift
+
+load_mmio_word__uart__clear_interrupt_and_ret:
+    op not $$flag $$flag
+    op and uart_flags uart_flags $$flag
+
+    # set interrupt_flags.poll
+    op or csr_mip csr_mip 0b10000000000000000000000000000000
+
     set @counter ret
+
+load_mmio_word__uart_ier:
+#% do declare_locals(access_uart_locals)
+    op and result result 0b1111
+    set @counter ret
+
+load_mmio_word__uart_isr:
+#% do declare_locals(access_uart_locals)
+    # check which interrupts are both pending and enabled
+    # result has the segment of uart_flags for this UART
+    op shr $interrupts result 4
+    op and $interrupts $interrupts result
+    op and $interrupts $interrupts 0b0111 # ignore MSI
+
+    # priority: RLSI, RDI, THRI
+
+    # RLSI | THRI | RDI | interrupt | ISR        | character
+    # 0    | 0    | 0   | none      | 0b11000001 | Á
+    # 0    | 0    | 1   | RDI       | 0b11000100 | Ä
+    # 0    | 1    | 0   | THRI      | 0b11000010 | Â
+    # 0    | 1    | 1   | RDI       | 0b11000100 | Ä
+    # 1    | 0    | 0   | RLSI      | 0b11000110 | Æ
+    # 1    | 0    | 1   | RLSI      | 0b11000110 | Æ
+    # 1    | 1    | 0   | RLSI      | 0b11000110 | Æ
+    # 1    | 1    | 1   | RLSI      | 0b11000110 | Æ
+
+    read result "ÁÄÂÄÆÆÆÆ" $interrupts
+
+    jump load_mmio_word__ret notEqual result 0b11000010 # THRI
+
+    # if THRI is currently being indicated, clear the THRI interrupt
+#% do declare_locals(access_uart_locals, "$$flag")
+    op shl $$flag 0b00100000 $$uart_shift
+    jump load_mmio_word__uart__clear_interrupt_and_ret always
 
 load_mmio_word__uart_lsr:
 #% do declare_locals(access_uart_locals)
@@ -1039,25 +1103,29 @@ load_mmio_word__uart_lsr:
     set result 0b01100000
 load_mmio_word__uart_lsr__tx_not_empty:
 
-    # rx overrun error
-    # we know an overrun occurred if read == wrap(write + 1) (ie. rx is full)
-    op add $tmp $$rx_write 1
-    op mod $tmp $tmp UART_FIFO_MODULO
-    jump load_mmio_word__uart_lsr__no_rx_overrun notEqual $tmp $$rx_read
-
-    # AND if rx_write_raw != rx_write (ie. overflow flag is set)
-    jump load_mmio_word__uart_lsr__no_rx_overrun equal $$rx_write_raw $$rx_write
-
-    op or result result 0b10
-load_mmio_word__uart_lsr__no_rx_overrun:
-
     # rx data ready
     op notEqual $tmp $$rx_read $$rx_write
     op or result result $tmp
 
-    set @counter ret
+    # rx overrun error
+    # we just get this from the RLSI pending flag
+#% do declare_locals(access_uart_locals, "$$flag")
+    op shl $$flag 0b01000000 $$uart_shift
+    op and $$flag $$flag uart_flags
+    jump load_mmio_word__ret equal $$flag 0
+
+    # set overrun flag
+    op or result result 0b10
+
+    # clear interrupt because we read the LSR
+    jump load_mmio_word__uart__clear_interrupt_and_ret always
 
 # instruction decoder
+
+# same as decode, but the value argument is passed in the result variable as a code size optimization
+decode_value_in_result:
+    set value result
+    # continue into decode
 
 # decoder entry point: decodes a single instruction and writes it to the icache
 # the caller MUST set address (skip write) or variable (prevent fast write) to null before the first consecutive call to this function
@@ -1578,21 +1646,25 @@ load_value_unsigned:
 # rs1 (address), imm (offset), rd_id, length, nonlocal1 (is_signed) ->
 load_value:
 #% do reset_locals()
+    set mcause 4 # load address misaligned
+    op add ret3 @counter {{# start_assert_length(9) }}
+
+setup_load_and_store_value:
     op add address rs1 imm
     op mod address address 0x100000000 # 2^32 (trunc 32)
 
     # check alignment
     op idiv $bytes length 8
     op mod $alignment address $bytes
-    set mcause 4 # load address misaligned
     set mtval address
     jump trap notEqual $alignment 0
 
-    # translate to physical address
-    set mcause 5 # load access fault
-    op add ret3 @counter 1
+    # translate to physical address (tail call)
+    op add mcause mcause 1 # access fault
     jump translate_virtual_address lessThan effective_privilege_mode 0b11
+    set @counter ret3
 
+#directive end_assert_length
     # load the word containing the address
     op add ret @counter 1
     jump load_word always
@@ -1639,27 +1711,16 @@ store_value:
     # so if we jump to store_value, set rd_id to 0 so we don't write garbage to a random register
     set rd_id 0
 
-    op add address rs1 imm
-    op mod address address 0x100000000 # 2^32 (trunc 32)
-
-    # check alignment
-    op idiv $bytes length 8
-    op mod $alignment address $bytes
     set mcause 6 # store/AMO address misaligned
-    set mtval address
-    jump trap notEqual $alignment 0
-
-    # translate to physical address
-    set mcause 7 # store/AMO access fault
     op add ret3 @counter 1
-    jump translate_virtual_address lessThan effective_privilege_mode 0b11
+    jump setup_load_and_store_value always
 
     # handle write-only MMIO
     jump store_value__syscon equal address {{SYSCON}}
 
     # fast path for 32-bit writes
     set value rs2
-    op add ret2 @counter 13 # update this if anything below is changed
+    op add ret2 @counter {{# start_assert_length(13) }}
     jump access_ram equal length 32
 
     # create a bitmask with 0 in the section we want to replace and 1 everywhere else
@@ -1685,6 +1746,7 @@ store_value:
     op and result result nonlocal1 # bitmask
     op add value result nonlocal2 # inserted value
 
+#directive end_assert_length
     # align address to word
     # NOTE: we jump to this line from access_ram if length == 32
     op and address address 0xfffffffc
@@ -1719,8 +1781,9 @@ store_mmio_word_unchecked:
     op add ret2 @counter 1
     jump access_uart greaterThanEq $$offset 0x10
 
-    # ignore writes to UART registers other than THR and FCR
+    # ignore writes to UART registers other than THR, IER, and FCR
     jump store_mmio_word_unchecked__uart_fcr equal $$offset 0x18
+    jump store_mmio_word_unchecked__uart_ier equal $$offset 0x14
     jump end_instruction greaterThan $$offset 0x10
 
     # NOTE: if we get to this point, the MMIO address must be valid, so we don't need bounds or privilege checks
@@ -1749,12 +1812,33 @@ store_mmio_word_unchecked:
     op add $tmp $$tx_write {{UART_TX_START}}
     write value $$uart $tmp
 
+    # clear THRI
+    # do this before advancing the write pointer to hopefully avoid race conditions
+    op shl $tmp 0b00100000 $$uart_shift
+    op not $tmp $tmp
+    op and uart_flags uart_flags $tmp
+
     # advance write
     op add $$tx_write $$tx_write 1
     op mod $$tx_write $$tx_write UART_FIFO_MODULO
     write $$tx_write $$uart {{UART_TX_WRITE}}
 
-    jump end_instruction always
+    jump end_instruction_with_rd_and_poll_interrupts always
+
+store_mmio_word_unchecked__uart_ier:
+    # Interrupt Enable Register
+#% do declare_locals(access_uart_locals)
+    # clear existing bits
+    op shl $mask 0b1111 $$uart_shift
+    op not $mask $mask
+    op and uart_flags uart_flags $mask
+
+    # set new bits
+    op and value value 0b1111
+    op shl value value $$uart_shift
+    op or uart_flags uart_flags value
+
+    jump end_instruction_with_rd_and_poll_interrupts always
 
 store_mmio_word_unchecked__uart_fcr:
     # FIFO Control Register
@@ -2344,9 +2428,6 @@ modify_csr:
     op and $required_privilege $required_privilege 0b11
     jump ILLEGAL_OP lessThan privilege_mode $required_privilege
 
-    # disable all hypervisor CSRs
-    jump ILLEGAL_OP equal $required_privilege 0b10
-
     # look up the CSR labels
     # NOTE: this value in _address is later used by check_xtimecmp
     # csr_labels = csr_read * 1000 + csr_write
@@ -2471,13 +2552,19 @@ csr_write_sstatus:
 
 csr_read_sip:
 #% do declare_locals(modify_csr_locals)
-    # subset of mip
-    # platform            --------------
-    # SEIP                                    -
-    # STIP                                        -
-    # SSIP                                            -
-    op and rd csr_mip 0b00111111111111110000001000100010
+    # subset of mip according to mideleg
+    read $mideleg {{CSRS}} "{{ 'mideleg'|csr }}"
+    op and rd csr_mip $mideleg
     set @counter $$modify_csr_op
+
+csr_write_sip:
+    # clear delegated fields
+    op not $mask $mideleg
+    op and csr_mip csr_mip $mask
+
+    # write new delegated fields
+    op and result result $mideleg
+    jump csr_write_xip always
 
 csr_read_mip:
 #% do declare_locals(modify_csr_locals)
@@ -2490,32 +2577,25 @@ csr_write_mip:
     # SEIP                                         -
     # SSIP                                                 -
     op and csr_mip csr_mip 0b11111111111111111111110111111101
-    # continue into csr_write_sip
 
-csr_write_sip:
-    # insert new writable fields
-    # SSIP                                                 -
-    op and csr_mip csr_mip 0b11111111111111111111111111111101
-
+csr_write_xip:
     op or csr_mip csr_mip result
     jump end_instruction_with_rd_and_fire_interrupts always
 
 csr_read_sie:
 #% do declare_locals(modify_csr_locals)
-    # subset of mie
-    # platform          ----------------
-    # SEIE                                    -
-    # STIE                                        -
-    # SSIE                                            -
-    op and rd csr_mie 0b11111111111111110000001000100010
+    # subset of mie according to mideleg
+    read $mideleg {{CSRS}} "{{ 'mideleg'|csr }}"
+    op and rd csr_mie $mideleg
     set @counter $$modify_csr_op
 
 csr_write_sie:
-    # insert new writable fields
-    # SEIE                                         -
-    # STIE                                             -
-    # SSIE                                                 -
-    op and csr_mie csr_mie 0b11111111111111111111110111011101
+    # clear delegated fields
+    op not $mask $mideleg
+    op and csr_mie csr_mie $mask
+
+    # set new delegated fields
+    op and result result $mideleg
     op or csr_mie csr_mie result
 
     jump end_instruction_with_rd_and_fire_interrupts always
@@ -2665,10 +2745,9 @@ MLOGSYS__decode_loop:
     # load_rom_word_unchecked does not clobber ram or variable
     op add ret @counter 1
     jump load_rom_word_unchecked always
-    set value result
 
     op add ret3 @counter 1
-    jump decode always
+    jump decode_value_in_result always
     read variable {{INCR}} variable
 
     op add address address 4

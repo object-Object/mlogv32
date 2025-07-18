@@ -7,7 +7,7 @@ from typing import Annotated, Any, Iterable, Literal, Unpack, cast, overload
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from jinja2.ext import Extension
-from pymsch import Block, Content, ProcessorConfig, ProcessorLink, Schematic
+from pymsch import Block, Content, ProcessorLink, Schematic
 from typer import Option, Typer
 
 from mlogv32.utils.msch import (
@@ -388,7 +388,13 @@ Controller:
     add_peripheral(ram_schem, 9, 18)
     add_peripheral(ram_schem, 9, 17)
     add_peripheral(
-        Block(Content.MICRO_PROCESSOR, 9, 16, ProcessorConfig(config_code, []), 0)
+        Block(
+            Content.MICRO_PROCESSOR,
+            9,
+            16,
+            ProcessorConfigUTF8(config_code, []).compress(),
+            0,
+        )
     )
 
     registers_link = ProcessorLink(9, 19, "cell1")
@@ -435,7 +441,7 @@ Controller:
             block=Content.WORLD_PROCESSOR,
             x=12,
             y=16,
-            config=ProcessorConfig(
+            config=ProcessorConfigUTF8(
                 code=display_code,
                 links=relative_links(
                     *lookup_links,
@@ -450,7 +456,7 @@ Controller:
                     x=12,
                     y=16,
                 ),
-            ),
+            ).compress(),
             rotation=0,
         )
     )
@@ -468,7 +474,7 @@ Controller:
                 block=Content.WORLD_PROCESSOR,
                 x=16,
                 y=0,
-                config=ProcessorConfig(
+                config=ProcessorConfigUTF8(
                     code=controller_code,
                     links=relative_links(
                         *lookup_links,
@@ -486,7 +492,7 @@ Controller:
                         x=16,
                         y=0,
                     ),
-                ),
+                ).compress(),
                 rotation=0,
             )
         )
@@ -502,7 +508,7 @@ Controller:
                         block=Content.WORLD_PROCESSOR,
                         x=x,
                         y=y,
-                        config=ProcessorConfig(
+                        config=ProcessorConfigUTF8(
                             code=worker_code,
                             links=relative_links(
                                 *lookup_links,
@@ -518,7 +524,7 @@ Controller:
                                 x=x,
                                 y=y,
                             ),
-                        ),
+                        ).compress(),
                         rotation=0,
                     )
                 )
@@ -587,7 +593,7 @@ Controller:
                 block=Content.WORLD_PROCESSOR,
                 x=-2,
                 y=0,
-                config=ProcessorConfig(
+                config=ProcessorConfigUTF8(
                     code=debugger_code,
                     links=relative_links(
                         *lookup_links,
@@ -600,7 +606,7 @@ Controller:
                         x=-2,
                         y=0,
                     ),
-                ),
+                ).compress(),
                 rotation=0,
             )
         )

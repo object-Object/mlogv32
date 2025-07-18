@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_MLOGV32_PATH/package/mlogv32-drivers/Config.in"

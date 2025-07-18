@@ -1,10 +1,10 @@
 import zlib
+from dataclasses import dataclass
 from enum import Enum
-from typing import override
 
 from pymsch import (
     ContentBlock,
-    ProcessorConfig,
+    ProcessorLink,
     _ByteBuffer,  # pyright: ignore[reportPrivateUsage]
 )
 
@@ -13,8 +13,11 @@ class BEContent(Enum):
     TILE_LOGIC_DISPLAY = ContentBlock(415, 1)
 
 
-class ProcessorConfigUTF8(ProcessorConfig):
-    @override
+@dataclass
+class ProcessorConfigUTF8:
+    code: str
+    links: list[ProcessorLink]
+
     def compress(self):
         buffer = _ByteBuffer()
 

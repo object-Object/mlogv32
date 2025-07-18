@@ -5,7 +5,9 @@
 ### objdump
 
 ```
-riscv32-unknown-linux-gnu-objdump --disassembler-color=on --visualize-jumps=color --start-address=0xc00109ac --stop-address=0xc0010a2c --disassemble --source --line-numbers --show-all-symbols --wide output/build/vmlinux
+riscv32-unknown-linux-gnu-objdump --disassembler-color=on --visualize-jumps=color --disassemble --source --line-numbers --show-all-symbols --wide output/build/vmlinux --start-address=0xc00109ac --stop-address=0xc0010a2c
+
+riscv32-unknown-linux-gnu-objdump --disassembler-color=on --visualize-jumps=color --disassemble --source --line-numbers --show-all-symbols --wide output/build/vmlinux --disassemble=handle_irq_desc
 ```
 
 ### GDB

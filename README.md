@@ -86,6 +86,25 @@ Read/write pointers are stored modulo `capacity + 1`. A buffer is empty when `rp
 
 Note that the processor itself does not set the TX overflow flag or prevent code from overflowing the TX buffer. Users are expected to check the Line Status Register and avoid writing too much data at once.
 
+If any UART interrupt is pending, `mip.MEIP` will become pending. To make UART interrupts visible to S-mode, M-mode software must either delegate `mip.MEIP` via `mideleg`, or manually update `mip.SEIP` in an M-mode interrupt handler.
+
+Internally, UART interrupts are implemented using the `uart_flags` variable.
+
+| 31:24 | 23:16 | 15:8  | 7:0   |
+| ----- | ----- | ----- | ----- |
+| UART3 | UART2 | UART1 | UART0 |
+
+| 7           | 6            | 5            | 4           | 3           | 2            | 1            | 0           |
+| ----------- | ------------ | ------------ | ----------- | ----------- | ------------ | ------------ | ----------- |
+| MSI pending | RLSI pending | THRI pending | RDI pending | MSI enabled | RLSI enabled | THRI enabled | RDI enabled |
+
+| Interrupt | Description                        |
+| --------- | ---------------------------------- |
+| MSI       | Modem Status                       |
+| RLSI      | Receiver Line Status               |
+| THRI      | Transmitter Holding Register Empty |
+| RDI       | Receiver Data Ready                |
+
 ### Syscon
 
 Address `0xfffffff0` contains a simple memory-mapped peripheral which can be used to control the system by writing values from the following table. Unsupported values will have no effect if written. Reads will always return `0`.

@@ -127,26 +127,21 @@ _local_re = re.compile(r"(?:(?<=[\n #\t;])|^)\$([^\n #\t;]+)")
 class LocalVariablesEnv(Protocol):
     local_variable_index: int
     largest_local_variable: int
-    local_variable_cache: dict[str, str]
+    local_variable_cache: dict[str, int]
+    freed_local_variables: list[int]
+    """Sorted in reverse order."""
 
     @staticmethod
     def of(environment: Environment) -> LocalVariablesEnv:
         return cast(LocalVariablesEnv, environment)
 
     @staticmethod
-    def extend(
-        environment: Environment,
-        *,
-        local_variable_index: int = 1,
-        largest_local_variable: int = 0,
-        local_variable_cache: dict[str, str] | None = None,
-    ):
-        if local_variable_cache is None:
-            local_variable_cache = {}
+    def extend(environment: Environment):
         environment.extend(
-            local_variable_index=local_variable_index,
-            largest_local_variable=largest_local_variable,
-            local_variable_cache=local_variable_cache,
+            local_variable_index=1,
+            largest_local_variable=0,
+            local_variable_cache={},
+            freed_local_variables=[],
         )
 
 
@@ -181,6 +176,7 @@ class LocalVariables(Extension):
         environment.globals |= {  # type: ignore
             "reset_locals": self.reset_locals,
             "declare_locals": self.declare_locals,
+            "free_locals": self.free_locals,
             "local_variable": self.local_variable,
         }
 
@@ -194,10 +190,17 @@ class LocalVariables(Extension):
             raise ValueError(f"Invalid local variable index: {i}")
         self._env.local_variable_index = i
         self._env.local_variable_cache.clear()
+        self._env.freed_local_variables.clear()
 
     @make_jinja_exceptions_suck_a_bit_less
-    def declare_locals(self, *names: str | list[str], i: int = 1):
-        self.reset_locals(i)
+    def declare_locals(
+        self,
+        *names: str | list[str],
+        i: int = 1,
+        reset: bool = True,
+    ):
+        if reset:
+            self.reset_locals(i)
         for name in names:
             if isinstance(name, list):
                 self.declare_locals(*name)
@@ -207,7 +210,33 @@ class LocalVariables(Extension):
                 self.local_variable(name.removeprefix("$"), declare=True)
 
     @make_jinja_exceptions_suck_a_bit_less
-    def local_variable(self, name: str | int | None = None, declare: bool = False):
+    def free_locals(self, *names: str | list[str]):
+        cache = self._env.local_variable_cache
+        freed = self._env.freed_local_variables
+
+        for name in names:
+            if isinstance(name, list):
+                self.free_locals(*name)
+            else:
+                if not name.startswith("$"):
+                    raise ValueError(f"Invalid local variable: {name}")
+
+                key = name.removeprefix("$")
+                if key not in cache:
+                    raise ValueError(f"Unknown local variable: {name}")
+
+                i = cache.pop(key)
+                assert i not in freed, f"Internal error: variable {i} was freed twice"
+                freed.append(i)
+
+        freed.sort(reverse=True)
+
+    @make_jinja_exceptions_suck_a_bit_less
+    def local_variable(
+        self,
+        name: str | int | None = None,
+        declare: bool = False,
+    ) -> str:
         cache = self._env.local_variable_cache
 
         if name not in cache:
@@ -215,25 +244,25 @@ class LocalVariables(Extension):
                 i = name
                 if i < 1:
                     raise ValueError(f"Invalid local variable index: {i}")
+                self._env.local_variable_index = i + 1
+            elif self._env.freed_local_variables:
+                i = self._env.freed_local_variables.pop()
             else:
                 i = self._env.local_variable_index
-
-            value = f"local{i}"
-
-            self._env.local_variable_index = i + 1
+                self._env.local_variable_index = i + 1
 
             if not isinstance(name, str):
-                return value
+                return f"local{i}"
 
             # names starting with $$ should be declared ahead of time via declare_locals
             if not declare and name.startswith("$"):
                 raise ValueError(f"Undeclared local variable: ${name}")
 
-            cache[name] = value
+            cache[name] = i
 
             self._env.largest_local_variable = max(i, self._env.largest_local_variable)
 
-        return cache[name]
+        return f"local{cache[name]}"
 
     @override
     def filter_stream(self, stream: TokenStream) -> TokenStream | Iterable[Token]:

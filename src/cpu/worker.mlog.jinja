@@ -25,9 +25,9 @@
 #% set labels = namespace()
 #% set _labels_vals = (labels|namespace_dict).values()
 
-#% set labels.next_tick = 14
+#% set labels.next_tick = 13
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 157
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 156
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -47,10 +47,9 @@ reset:
     read MEMORY_X {{CONFIG}} "MEMORY_X"
     read MEMORY_Y {{CONFIG}} "MEMORY_Y"
     read MEMORY_WIDTH {{CONFIG}} "MEMORY_WIDTH"
-    read PROGRAM_ROM_SIZE {{CONFIG}} "ROM_SIZE"
+    read PROGRAM_ROM_ICACHE_SIZE {{CONFIG}} "PROGRAM_ROM_ICACHE_SIZE"
     read ROM_SIZE {{CONFIG}} "ROM_SIZE"
     read RAM_SIZE {{CONFIG}} "RAM_SIZE"
-    read ICACHE_SIZE {{CONFIG}} "ICACHE_SIZE"
     read RAM_END {{CONFIG}} "RAM_END"
     read ICACHE_END {{CONFIG}} "ICACHE_END"
     read RAM_ICACHE_OFFSET {{CONFIG}} "RAM_ICACHE_OFFSET"
@@ -2731,27 +2730,31 @@ MLOGSYS:
     jump ILLEGAL_OP lessThan privilege_mode 0b11
 
     # round up to the nearest page boundary
-    op div rs1 rs1 4096
-    op ceil rs1 rs1
-    op mul rs1 rs1 4096
+    # if we're exactly on a page boundary, this results in decoding one extra page
+    # we use "variable" for this so we don't need to use an instruction to explicitly set it to null
+    # since we know reading from INCR at a numeric address will return null
+    op add variable rs1 4096
+    op and variable variable 0xfffff000
 
-    op min __etext rs1 PROGRAM_ROM_SIZE
-    op min __etext __etext ICACHE_SIZE
+    op min __etext variable PROGRAM_ROM_ICACHE_SIZE
 
-    set address 0
-    set variable null
+    # start at -4 so the first address read is 0
+    set address -4
 
-MLOGSYS__decode_loop:
-    # load_rom_word_unchecked does not clobber ram or variable
-    op add ret @counter 1
-    jump load_rom_word_unchecked always
-
-    op add ret3 @counter 1
-    jump decode_value_in_result always
+#% set mlogsys_decode_loop = 5
+#directive start_assert_length {{ mlogsys_decode_loop }}
+    op add address address 4
     read variable {{INCR}} variable
 
-    op add address address 4
-    jump MLOGSYS__decode_loop lessThan address __etext
+    # load_rom_word_unchecked does not clobber ram or variable
+    op add ret @counter 1
+    jump load_rom_word_unchecked lessThan address __etext
+
+    # if address is in range, decode returns to the top of this loop
+    # otherwise, we continue to end_instruction
+    op sub ret3 @counter {{# mlogsys_decode_loop }}
+#directive end_assert_length
+    jump decode_value_in_result lessThan address __etext
 
     jump end_instruction always
 

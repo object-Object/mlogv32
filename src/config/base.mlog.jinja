@@ -30,6 +30,8 @@
     op add MEMORY_X @thisx MEMORY_X_OFFSET  # absolute x position of bottom left memory proc
     op add MEMORY_Y @thisy MEMORY_Y_OFFSET  # absolute y position of bottom left memory proc
 
+    op min PROGRAM_ROM_ICACHE_SIZE PROGRAM_ROM_SIZE ICACHE_SIZE
+
     op add ROM_SIZE PROGRAM_ROM_SIZE DATA_ROM_SIZE
 
     op add RAM_END {{RAM_START}} RAM_SIZE
@@ -56,6 +58,7 @@ set {{RAM_START}} null
 set _ BREAKPOINT_ADDRESS
 set _ MEMORY_WIDTH
 set _ ROM_SIZE
+set _ PROGRAM_ROM_ICACHE_SIZE
 set _ UART_FIFO_MODULO
 set _ MEMORY_X
 set _ MEMORY_Y

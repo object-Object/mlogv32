@@ -2,7 +2,7 @@ OUTPUT_ARCH(riscv)
 ENTRY(_start)
 
 /* memory size definitions */
-__ROM = 16M;
+__ROM = 22M;
 __RAM = 14M;
 
 MEMORY {

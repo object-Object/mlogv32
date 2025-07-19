@@ -16,7 +16,7 @@
 
     rom@0 {
         compatible = "mtd-rom";
-        reg = <0x0 (16*1024*1024)>;
+        reg = <0x0 (22*1024*1024)>;
         bank-width = <1>; // 8-bit "bus"
 
         #address-cells = <1>;
@@ -24,7 +24,7 @@
 
         rootfs@1000 {
             label = "rootfs";
-            reg = <0x1000 (16*1024*1024 - 0x1000)>;
+            reg = <0x1000 (22*1024*1024 - 0x1000)>;
             linux,rootfs;
         };
     };

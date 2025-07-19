@@ -36,9 +36,9 @@ configs:
 
   linux:
     MEMORY_X_OFFSET: -9
-    MEMORY_Y_OFFSET: !py!sum [[-16, -0, -16, -14, -14]]
+    MEMORY_Y_OFFSET: !py!sum [[-16, -8, -14, -14, -14]]
     MEMORY_WIDTH: 64
     PROGRAM_ROM_ROWS: 8
-    DATA_ROM_ROWS: 8
+    DATA_ROM_ROWS: 14
     RAM_ROWS: 14
     ICACHE_ROWS: 14

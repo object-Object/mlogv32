@@ -18,10 +18,10 @@ while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
         shift; device=$1
         ;;
     --no-disconnect )
-        shift; disconnectOnHalt=false
+        disconnectOnHalt=false
         ;;
     --no-request )
-        shift; sendRequest=false
+        sendRequest=false
         ;;
     *)
         echo "Unknown option: $1"

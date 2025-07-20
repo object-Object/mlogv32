@@ -29,5 +29,8 @@
         "tag:yaml.org,2002:python/object/apply:builtins.range sequence",
         "tag:yaml.org,2002:python/object/apply:builtins.sum sequence"
     ],
-    "git.detectSubmodules": false
+    "git.detectSubmodules": false,
+    "[c]": {
+        "editor.tabSize": 8
+    }
 }

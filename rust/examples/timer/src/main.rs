@@ -5,7 +5,7 @@ use core::{cell::RefCell, hint};
 
 use critical_section::Mutex;
 use itoa::Buffer;
-use mlogv32::io::UartPort;
+use mlogv32::io::{UartAddress, UartPort};
 use riscv::{
     interrupt::{self, Interrupt},
     register::mie,
@@ -21,7 +21,7 @@ static UART0: Mutex<RefCell<Option<UartPort>>> = Mutex::new(RefCell::new(None));
 fn main() -> ! {
     critical_section::with(|cs| {
         let mut uart0 = UART0.borrow_ref_mut(cs);
-        uart0.replace(unsafe { UartPort::new_uart0(253) });
+        uart0.replace(unsafe { UartPort::new(UartAddress::Uart0) });
 
         let mut timer = TIMER.borrow_ref_mut(cs);
         timer.write_mtime(0);

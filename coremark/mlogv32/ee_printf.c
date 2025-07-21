@@ -661,42 +661,28 @@ ee_vsprintf(char *buf, const char *fmt, va_list args)
 }
 
 typedef struct {
-    unsigned char rhr_thr[4];
-    unsigned char ier[4];
-    unsigned char isr_fcr[4];
-    unsigned char lcr[4];
-    unsigned char mcr[4];
-    unsigned char lsr[4];
-    unsigned char msr[4];
-    unsigned char spr[4];
+    unsigned char rx[4];
+    unsigned char tx[4];
+    unsigned char status[4];
+    unsigned char control[4];
 } uart_mmio_t;
 
 #define UART0_BASE ((volatile uart_mmio_t*)(0xf0000010))
-
-#define UART_FIFO_CAPACITY 253
-
-static unsigned int uart0_fifo_size = 0;
 
 void
 uart_send_char(char c)
 {
     volatile uart_mmio_t* uart0 = UART0_BASE;
 
-    if (uart0_fifo_size >= UART_FIFO_CAPACITY) {
-        while ((uart0->lsr[0] & 0b1100000) != 0b1100000) {}
-        uart0_fifo_size = 0;
-    }
+    while (uart0->status[0] & 0b1000) {}
 
-    uart0->rhr_thr[0] = c;
-    uart0_fifo_size += 1;
+    uart0->tx[0] = c;
 }
 
 void init_printf() {
     volatile uart_mmio_t* uart0 = UART0_BASE;
-    uart0->isr_fcr[0] = 0b00000111;
-    while (uart0->lsr[0] & 0b1) {
-        uart0->isr_fcr[0] = 0b00000111;
-    }
+
+    uart0->control[0] = 0b11;
 }
 
 int

@@ -1,9 +1,8 @@
 use core::{hint, slice};
 
+use bitbybit::bitfield;
+use derive_mmio::Mmio;
 use embassy_hal_internal::atomic_ring_buffer::RingBuffer;
-use uart::{Data, FifoControl, LineStatus, Uart, address::MmioAddress};
-
-pub use uart;
 
 pub fn print_str(msg: &str) {
     for c in msg.chars() {
@@ -18,53 +17,114 @@ pub fn print_char(_c: char) {
 
 // TODO: create Peripherals struct?
 
-const UART0_ADDRESS: usize = 0xf0000010;
-const UART1_ADDRESS: usize = 0xf0000030;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum UartAddress {
+    Uart0,
+    Uart1,
+    Uart2,
+    Uart3,
+}
+
+impl UartAddress {
+    pub fn addr(&self) -> usize {
+        match self {
+            Self::Uart0 => 0xf0000010,
+            Self::Uart1 => 0xf0000020,
+            Self::Uart2 => 0xf0000030,
+            Self::Uart3 => 0xf0000040,
+        }
+    }
+
+    pub fn ptr(&self) -> *mut Uart {
+        self.addr() as *mut Uart
+    }
+}
+
+#[bitfield(u32)]
+pub struct UartStatus {
+    #[bit(7, r)]
+    pub parity_error: bool,
+    #[bit(6, r)]
+    pub frame_error: bool,
+    #[bit(5, r)]
+    pub overrun_error: bool,
+    #[bit(4, r)]
+    pub interrupts: bool,
+    #[bit(3, r)]
+    pub tx_full: bool,
+    #[bit(2, r)]
+    pub tx_empty: bool,
+    #[bit(1, r)]
+    pub rx_full: bool,
+    #[bit(0, r)]
+    pub rx_not_empty: bool,
+}
+
+#[bitfield(u32)]
+pub struct UartControl {
+    #[bit(4, w)]
+    pub interrupts: bool,
+    #[bit(1, w)]
+    pub reset_rx: bool,
+    #[bit(0, w)]
+    pub reset_tx: bool,
+}
+
+#[derive(Mmio)]
+#[mmio(no_ctors)]
+#[repr(C)]
+pub struct Uart {
+    #[mmio(Read)]
+    rx: u32,
+    #[mmio(Write)]
+    tx: u32,
+    #[mmio(Read)]
+    status: UartStatus,
+    #[mmio(Write)]
+    control: UartControl,
+}
+
+impl Uart {
+    /// # Safety
+    ///
+    /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral.
+    pub unsafe fn new_mmio(addr: UartAddress) -> MmioUart<'static> {
+        MmioUart {
+            ptr: addr.ptr(),
+            phantom: core::marker::PhantomData,
+        }
+    }
+}
 
 pub struct UartPort {
-    uart: Uart<MmioAddress, Data>,
-    fifo_capacity: usize,
-    fifo_len: usize,
+    uart: MmioUart<'static>,
 }
 
 impl UartPort {
     /// # Safety
     ///
     /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral.
-    pub unsafe fn new_uart0(fifo_capacity: usize) -> Self {
-        unsafe { Self::new_with_address(UART0_ADDRESS as *mut u8, fifo_capacity) }
-    }
-
-    /// # Safety
-    ///
-    /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral.
-    pub unsafe fn new_uart1(fifo_capacity: usize) -> Self {
-        unsafe { Self::new_with_address(UART1_ADDRESS as *mut u8, fifo_capacity) }
-    }
-
-    /// # Safety
-    ///
-    /// This function is unsafe because the caller must ensure that only one instance of each device exists at a time, as it represents a physical memory-mapped peripheral. The caller must also ensure that the fifo capacity is correct.
-    unsafe fn new_with_address(base: *mut u8, fifo_capacity: usize) -> Self {
+    pub unsafe fn new(addr: UartAddress) -> Self {
         Self {
-            uart: unsafe { Uart::new(MmioAddress::new(base, 4)) },
-            fifo_capacity,
-            fifo_len: 0,
+            uart: unsafe { Uart::new_mmio(addr) },
         }
     }
 
     pub fn init(&mut self) {
-        self.uart.write_fifo_control(
-            FifoControl::ENABLE | FifoControl::CLEAR_RX | FifoControl::CLEAR_TX,
+        self.uart.write_control(
+            UartControl::ZERO
+                .with_interrupts(false)
+                .with_reset_rx(true)
+                .with_reset_tx(true),
         );
     }
 
     pub fn clear(&mut self) {
         self.uart
-            .write_fifo_control(FifoControl::CLEAR_RX | FifoControl::CLEAR_TX);
+            .write_control(UartControl::ZERO.with_reset_rx(true).with_reset_tx(true));
     }
 
-    pub fn uart_mut(&mut self) -> &mut Uart<MmioAddress, Data> {
+    pub fn uart_mut(&mut self) -> &mut MmioUart<'static> {
         &mut self.uart
     }
 
@@ -81,16 +141,14 @@ impl UartPort {
 
     pub fn read_byte(&mut self) -> Option<u8> {
         if self.has_data() {
-            Some(self.uart.read_byte())
+            Some(self.uart.read_rx() as u8)
         } else {
             None
         }
     }
 
-    pub fn has_data(&self) -> bool {
-        self.uart
-            .read_line_status()
-            .contains(LineStatus::DATA_AVAILABLE)
+    pub fn has_data(&mut self) -> bool {
+        self.uart.read_status().rx_not_empty()
     }
 
     pub fn blocking_write(&mut self, buf: &[u8]) {
@@ -115,21 +173,15 @@ impl UartPort {
     }
 
     pub fn try_write_byte(&mut self, byte: u8) -> bool {
-        if self.uart.read_line_status().contains(LineStatus::THR_EMPTY) {
-            self.fifo_len = 0
+        if !self.can_write() {
+            return false;
         }
-        if self.fifo_len < self.fifo_capacity {
-            self.uart.write_byte(byte);
-            self.fifo_len += 1;
-            true
-        } else {
-            false
-        }
+        self.uart.write_tx(byte as u32);
+        true
     }
 
-    pub fn can_write(&self) -> bool {
-        self.uart.read_line_status().contains(LineStatus::THR_EMPTY)
-            || self.fifo_len < self.fifo_capacity
+    pub fn can_write(&mut self) -> bool {
+        !self.uart.read_status().tx_full()
     }
 }
 
@@ -164,11 +216,7 @@ impl embedded_io_async::Read for UartPort {
             embassy_futures::yield_now().await;
         }
 
-        if self
-            .uart
-            .read_line_status()
-            .contains(LineStatus::OVERRUN_ERROR)
-        {
+        if self.uart.read_status().overrun_error() {
             return Err(Error::Overrun);
         }
 
@@ -206,11 +254,7 @@ impl embedded_io::Read for UartPort {
             hint::spin_loop();
         }
 
-        if self
-            .uart
-            .read_line_status()
-            .contains(LineStatus::OVERRUN_ERROR)
-        {
+        if self.uart.read_status().overrun_error() {
             return Err(Error::Overrun);
         }
 

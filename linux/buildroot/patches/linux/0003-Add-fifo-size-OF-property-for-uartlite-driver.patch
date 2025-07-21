@@ -1,0 +1,61 @@
+From a7ebd614d4041e7d5494120a77f94c6df7f855f6 Mon Sep 17 00:00:00 2001
+From: object-Object <object@objectobject.ca>
+Date: Sun, 20 Jul 2025 00:24:54 -0400
+Subject: [PATCH 3/3] Add fifo-size OF property for uartlite driver
+
+---
+ drivers/tty/serial/uartlite.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/uartlite.c b/drivers/tty/serial/uartlite.c
+index 39c1fd1ff9ce..4130fc38858b 100644
+--- a/drivers/tty/serial/uartlite.c
++++ b/drivers/tty/serial/uartlite.c
+@@ -72,12 +72,14 @@ static struct uart_port *console_port;
+  * @clk: Our parent clock, if present
+  * @baud: The baud rate configured when this device was synthesized
+  * @cflags: The cflags for parity and data bits
++ * @fifosize: The FIFO size configured when this device was synthesized
+  */
+ struct uartlite_data {
+ 	const struct uartlite_reg_ops *reg_ops;
+ 	struct clk *clk;
+ 	unsigned int baud;
+ 	tcflag_t cflags;
++	unsigned int fifosize;
+ };
+
+ struct uartlite_reg_ops {
+@@ -658,7 +660,7 @@ static int ulite_assign(struct device *dev, int id, phys_addr_t base, int irq,
+ 	port = &ulite_ports[id];
+
+ 	spin_lock_init(&port->lock);
+-	port->fifosize = 16;
++	port->fifosize = pdata->fifosize;
+ 	port->regshift = 2;
+ 	port->iotype = UPIO_MEM;
+ 	port->iobase = 1; /* mark port in use */
+@@ -788,6 +790,9 @@ static int ulite_probe(struct platform_device *pdev)
+ 	if (!pdata)
+ 		return -ENOMEM;
+
++	/* Set default FIFO size */
++	pdata->fifosize = 16;
++
+ 	if (IS_ENABLED(CONFIG_OF)) {
+ 		const char *prop;
+ 		struct device_node *np = pdev->dev.of_node;
+@@ -844,6 +849,11 @@ static int ulite_probe(struct platform_device *pdev)
+ 			return dev_err_probe(&pdev->dev, -EINVAL,
+ 					     "bad data bits %d\n", val);
+ 		}
++
++		prop = "fifo-size";
++		ret = of_property_read_u32(np, prop, &pdata->fifosize);
++		if (ret && ret != -EINVAL)
++			goto of_err;
+ 	} else {
+ 		pdata->baud = 9600;
+ 		pdata->cflags = CS8;
+--
+2.25.1

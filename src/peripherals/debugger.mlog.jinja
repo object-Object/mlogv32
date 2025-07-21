@@ -219,7 +219,6 @@ loop:
     read effective_privilege_mode {{CPU}} "effective_privilege_mode"
 
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
-    op sub UART_FIFO_CAPACITY UART_FIFO_MODULO 1
 
     read uart_flags {{CPU}} "uart_flags"
 
@@ -649,10 +648,16 @@ loop__no_mark_icache:
     op add ret @counter 1
     jump format_uart always
 
-    print "{0}\n"
-    set n uart_flags
-    set length 32
-    set separator 8
+    print "flags: ip={0} ie={1}\n"
+    set length 4
+    set separator 4
+
+    op and n uart_flags 0b1111
+    op add ret @counter 1
+    jump format_bin always
+
+    op shr n uart_flags 4
+    op and n n 0b1111
     op add ret @counter 1
     jump format_bin always
 
@@ -896,11 +901,9 @@ format_null:
 # uart, uart_index ->
 format_uart:
     read rx_rptr uart 254
-    read rx_wptr_raw uart 255
+    read rx_wptr uart 255
     read tx_rptr uart 510
     read tx_wptr uart 511
-
-    op and rx_wptr rx_wptr_raw 0xff
 
     op sub rx_fifo_size rx_wptr rx_rptr
     op add rx_fifo_size rx_fifo_size UART_FIFO_MODULO
@@ -910,19 +913,7 @@ format_uart:
     op add tx_fifo_size tx_fifo_size UART_FIFO_MODULO
     op mod tx_fifo_size tx_fifo_size UART_FIFO_MODULO
 
-    op equal rx_full rx_fifo_size UART_FIFO_CAPACITY
-    op notEqual rx_overflow_flag rx_wptr rx_wptr_raw
-    op land rx_overrun rx_full rx_overflow_flag
-
-    print "uart{0}: rx={1}"
-    jump format_uart__rx_fifo_size__no_overrun notEqual rx_overrun true
-    print "!"
-    jump format_uart__rx_fifo_size__no_overrun__done always
-format_uart__rx_fifo_size__no_overrun:
-    print " "
-format_uart__rx_fifo_size__no_overrun__done:
-    print "({2}-{3}) tx={4} ({5}-{6})\n"
-
+    print "uart{0}: rx={1} ({2}-{3}) tx={4} ({5}-{6})\n"
     format uart_index
     format rx_fifo_size
     format rx_rptr

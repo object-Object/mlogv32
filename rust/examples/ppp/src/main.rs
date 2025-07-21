@@ -3,14 +3,14 @@
 #![no_std]
 #![no_main]
 
-use mlogv32::io::UartPort;
+use mlogv32::io::{UartAddress, UartPort};
 use ppproto::Config;
 use ppproto::pppos::{PPPoS, PPPoSAction};
 
 #[mlogv32::entry]
 fn main() -> ! {
-    let mut log_port = unsafe { UartPort::new_uart0(253) };
-    let mut ppp_port = unsafe { UartPort::new_uart1(253) };
+    let mut log_port = unsafe { UartPort::new(UartAddress::Uart0) };
+    let mut ppp_port = unsafe { UartPort::new(UartAddress::Uart1) };
 
     log_port.init();
     ppp_port.init();

@@ -25,10 +25,10 @@
 .section .text
 .global _start
 _start:
-    // enable UART
+    // reset UART0 FIFO
     la t0, UART0_BASE
-    li t1, 1
-    sb t1, 8(t0)
+    li t1, 0b11
+    sb t1, 0xc(t0)
 
 #ifdef USE_PROGRAM_ROM
     // initialize icache
@@ -54,8 +54,8 @@ _start:
     // wait for UART THR to drain so we don't lose any logs if OpenSBI initializes UART0 in the same tick
     la t0, UART0_BASE
 1:
-    lbu t1, 0x14(t0)
-    andi t1, t1, 0b100000
+    lbu t1, 0x8(t0)
+    andi t1, t1, 0b100
     beqz t1, 1b
 
     // jump to OpenSBI
@@ -68,7 +68,7 @@ do_print:
 1:
     lbu t1, 0(a0)
     beqz t1, 2f
-    sb t1, 0(t0)
+    sb t1, 0x4(t0)
     addi a0, a0, 1
     j 1b
 2:

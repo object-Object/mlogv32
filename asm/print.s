@@ -7,12 +7,12 @@ _start:
     # UART0
     li a0, 0xf0000010
 
-    li t0, 0b111
-    sb t0, 8(a0) # FCR
+    li t0, 0b11
+    sb t0, 0xc(a0) # control
 
 loop:
     lbu t0, 0(s0)
-    sb t0, 0(a0) # THR
+    sb t0, 0x4(a0) # tx
 
     addi s0, s0, 1
     addi s1, s1, 1

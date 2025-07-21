@@ -1,26 +1,15 @@
 #include "py/mpconfig.h"
 #include "uart.h"
 
-#ifndef UART_FIFO_CAPACITY
-#define UART_FIFO_CAPACITY 253
-#endif
-
-static unsigned int uart0_fifo_size = 0;
-
 static void send_char(char c) {
-    if (uart0_fifo_size >= UART_FIFO_CAPACITY) {
-        while ((*UART0_LSR & 0b1100000) != 0b1100000) {}
-        uart0_fifo_size = 0;
-    }
-
-    *UART0_THR = c;
-    uart0_fifo_size += 1;
+    while (*UART0_STATUS & UART_STATUS_TX_FULL) {}
+    *UART0_TX = c;
 }
 
 // Receive single character, blocking until one is available.
 int mp_hal_stdin_rx_chr(void) {
-    while (!(*UART0_LSR & 1)) {}
-    return *UART0_RHR;
+    while (!(*UART0_STATUS & UART_STATUS_RX_DATA)) {}
+    return *UART0_RX;
 }
 
 // Send the string of given length.

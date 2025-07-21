@@ -27,7 +27,7 @@
 
 #% set labels.next_tick = 13
 
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 156
+#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
 #% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
 #% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
 #% set labels.end_instruction                             = _labels_vals|last + 2
@@ -167,9 +167,8 @@ poll_interrupts:
 #% set poll_interrupt_locals = ["$$mip.meip", "$$mip.mtip", "$$mip.stip"]
 #% do declare_locals(poll_interrupt_locals)
     # machine external interrupt (UARTs)
-    op shl $uart_interrupts uart_flags 4
+    op shr $uart_interrupts uart_flags 4
     op and $uart_interrupts $uart_interrupts uart_flags
-    op and $uart_interrupts $uart_interrupts 0b11110000111100001111000011110000
 
     op notEqual $$mip.meip $uart_interrupts 0
     op shl $$mip.meip $$mip.meip 11
@@ -801,27 +800,43 @@ translate_virtual_address__page_fault:
 # caller must ensure offset is 4-byte aligned and in uart range
 # ret: ret2
 access_uart:
-#% set access_uart_locals = ["$$offset", "$$uart_shift", "$$uart", "$$rx_read", "$$rx_write", "$$tx_read", "$$tx_write"]
+#% set access_uart_locals = ["$$offset", "$$uart_shift", "$$uart", "$$rx_read", "$$rx_write", "$$tx_read", "$$tx_write", "$$next_tx_write"]
 #% do declare_locals(access_uart_locals)
-    op sub $$offset $$offset 0x10
+    op sub $$offset $$offset {{UART_RX_OFFSET}}
 
-    op idiv $$uart $$offset 0x20
-    op mul $$uart_shift $$uart 8
+    op idiv $$uart_shift $$offset {{UART_MMIO_SIZE}}
+    op mod $$offset $$offset {{UART_MMIO_SIZE}}
 
-    op add $$uart $$uart {{UART_START_LINK}}
+    op add $$offset $$offset {{UART_RX_OFFSET}}
+
+#% do free_locals("$$uart")
+    # check if interrupt is pending for this port
+    op shl $mask 1 $$uart_shift
+    op and $mask uart_flags $mask
+    jump access_uart__no_clear_ip equal $mask 0
+
+    # clear pending interrupt
+    op not $mask $mask
+    op and uart_flags uart_flags $mask
+
+    # set interrupt_flags.poll
+    op or csr_mip csr_mip 0b10000000000000000000000000000000
+#% do declare_locals(access_uart_locals)
+access_uart__no_clear_ip:
+
+    op add $$uart $$uart_shift {{UART_START_LINK}}
     getlink $$uart $$uart
-
-    op mod $$offset $$offset 0x20
-    op add $$offset $$offset 0x10
 
     read $$rx_read $$uart {{UART_RX_READ}}
 
     read $$rx_write $$uart {{UART_RX_WRITE}}
-    op and $$rx_write $$rx_write 0xff
 
     read $$tx_read $$uart {{UART_TX_READ}}
 
     read $$tx_write $$uart {{UART_TX_WRITE}}
+
+    op add $$next_tx_write $$tx_write 1
+    op mod $$next_tx_write $$next_tx_write UART_FIFO_MODULO
 
     set @counter ret2
 
@@ -982,26 +997,26 @@ load_mmio_word:
     # in that case, address may be up to 34 bits
     op sub $$offset address {{MMIO_START}}
     op and $$offset $$offset 0x3fffffffc
-    jump trap greaterThanEq $$offset 0x90
+    jump trap greaterThanEq $$offset {{# (UART_RX_OFFSET|int(base=16) + 4 * UART_MMIO_SIZE|int(base=16))|hex }}
 
     # if we're in UART range, look it up
     # skip privilege check if accessing uart
     op add ret2 @counter {{# start_assert_length(2) }}
-    jump access_uart greaterThanEq $$offset 0x10
+    jump access_uart greaterThanEq $$offset {{UART_RX_OFFSET}}
     # otherwise, we're in machine timer range, so trap for PMA if not in M-mode
     # MMIO is not executable, so always use the effective privilege mode here
     jump trap lessThan effective_privilege_mode 0b11
 #directive end_assert_length
 
-    # MCR, MSR, and SPR are all hardwired to zero
-    jump load_mmio_word__uart_lsr equal $$offset 0x24
-    jump load_mmio_word__not_zero lessThan $$offset 0x20
+    # return 0 for write-only registers
+    jump load_mmio_word__uart_status equal $$offset {{UART_STATUS_OFFSET}}
+    jump load_mmio_word__not_zero lessThanEq $$offset {{UART_RX_OFFSET}}
 load_mmio_word__ret:
     set @counter ret
 load_mmio_word__not_zero:
 
-    op idiv $jump $$offset 2
-    op add @counter @counter $jump
+    op idiv $$offset $$offset 2
+    op add @counter @counter $$offset
 
     # mtime
     set result csr_mtime
@@ -1015,109 +1030,56 @@ load_mmio_word__not_zero:
     # mtimecmph
     set result csr_mtimecmph
     set @counter ret
-    # UART
-    # Receiver Holding Register: character received, or 0 if RX FIFO is empty
-    jump load_mmio_word__uart_rhr notEqual $$rx_read $$rx_write
-    set @counter ret
-    # Interrupt Enable Register
-    op shr result uart_flags $$uart_shift
-    jump load_mmio_word__uart_ier always
-    # Interrupt Status Register: both FIFOs enabled, interrupts based on uart_flags
-    op shr result uart_flags $$uart_shift
-    jump load_mmio_word__uart_isr always
-    # Line Control Register: word length = 8 bits, other flags 0
-    set result 0b00000011
-    set @counter ret
-
-load_mmio_word__uart_rhr:
+    # UART RX FIFO
 #% do declare_locals(access_uart_locals)
+#% do free_locals("$$offset")
+    # return 0 if the FIFO is empty
+    jump load_mmio_word__ret equal $$rx_read $$rx_write
+
     # HACK: if mcause is 7, we're loading this word as part of a store instruction, so return 0 and don't modify UART state
     jump load_mmio_word__ret equal mcause 7
 
-    # read one byte from the FIFO
+    # read one value from the FIFO
     read result $$uart $$rx_read
+    op and result result 0xffffffff
 
     # advance read
     op add $$rx_read $$rx_read 1
     op mod $$rx_read $$rx_read UART_FIFO_MODULO
     write $$rx_read $$uart {{UART_RX_READ}}
 
-    # if the FIFO has more data, we're done
-    jump load_mmio_word__ret notEqual $$rx_read $$rx_write
-
-    # if the FIFO is empty, clear the data ready interrupt
-    # if more data has been written since we read rx_write, the interrupt will become pending again next tick
-#% do declare_locals(access_uart_locals, "$$flag")
-    op shl $$flag 0b00010000 $$uart_shift
-
-load_mmio_word__uart__clear_interrupt_and_ret:
-    op not $$flag $$flag
-    op and uart_flags uart_flags $$flag
-
-    # set interrupt_flags.poll
-    op or csr_mip csr_mip 0b10000000000000000000000000000000
-
     set @counter ret
 
-load_mmio_word__uart_ier:
+load_mmio_word__uart_status:
 #% do declare_locals(access_uart_locals)
-    op and result result 0b1111
+#% do free_locals("$$offset")
+    # interrupt enabled
+    op shr result uart_flags $$uart_shift
+    op and result result 0b10000
+
+    # TX FIFO empty
+    jump load_mmio_word__uart_status__tx_not_empty notEqual $$tx_read $$tx_write
+    op or result result 0b00100
+load_mmio_word__uart_status__tx_not_empty:
+
+    # TX FIFO full
+    jump load_mmio_word__uart_status__tx_not_full notEqual $$tx_read $$next_tx_write
+    op or result result 0b01000
+load_mmio_word__uart_status__tx_not_full:
+
+    # RX FIFO valid data
+    jump load_mmio_word__uart_status__rx_empty equal $$rx_read $$rx_write
+    op or result result 0b00001
+load_mmio_word__uart_status__rx_empty:
+
+    # RX FIFO full
+    op add $next_rx_write $$rx_write 1
+    op mod $next_rx_write $next_rx_write UART_FIFO_MODULO
+    jump load_mmio_word__uart_status__rx_not_full notEqual $$rx_read $next_rx_write
+    op or result result 0b00010
+load_mmio_word__uart_status__rx_not_full:
+
     set @counter ret
-
-load_mmio_word__uart_isr:
-#% do declare_locals(access_uart_locals)
-    # check which interrupts are both pending and enabled
-    # result has the segment of uart_flags for this UART
-    op shr $interrupts result 4
-    op and $interrupts $interrupts result
-    op and $interrupts $interrupts 0b0111 # ignore MSI
-
-    # priority: RLSI, RDI, THRI
-
-    # RLSI | THRI | RDI | interrupt | ISR        | character
-    # 0    | 0    | 0   | none      | 0b11000001 | Á
-    # 0    | 0    | 1   | RDI       | 0b11000100 | Ä
-    # 0    | 1    | 0   | THRI      | 0b11000010 | Â
-    # 0    | 1    | 1   | RDI       | 0b11000100 | Ä
-    # 1    | 0    | 0   | RLSI      | 0b11000110 | Æ
-    # 1    | 0    | 1   | RLSI      | 0b11000110 | Æ
-    # 1    | 1    | 0   | RLSI      | 0b11000110 | Æ
-    # 1    | 1    | 1   | RLSI      | 0b11000110 | Æ
-
-    read result "ÁÄÂÄÆÆÆÆ" $interrupts
-
-    jump load_mmio_word__ret notEqual result 0b11000010 # THRI
-
-    # if THRI is currently being indicated, clear the THRI interrupt
-#% do declare_locals(access_uart_locals, "$$flag")
-    op shl $$flag 0b00100000 $$uart_shift
-    jump load_mmio_word__uart__clear_interrupt_and_ret always
-
-load_mmio_word__uart_lsr:
-#% do declare_locals(access_uart_locals)
-    # Line Status Register: transmitter/THR empty = TX FIFO empty, overrun error = RX FIFO overflowed, data ready = RX FIFO not empty, other flags 0
-
-    # transmitter empty and THR empty
-    jump load_mmio_word__uart_lsr__tx_not_empty notEqual $$tx_read $$tx_write
-    set result 0b01100000
-load_mmio_word__uart_lsr__tx_not_empty:
-
-    # rx data ready
-    op notEqual $tmp $$rx_read $$rx_write
-    op or result result $tmp
-
-    # rx overrun error
-    # we just get this from the RLSI pending flag
-#% do declare_locals(access_uart_locals, "$$flag")
-    op shl $$flag 0b01000000 $$uart_shift
-    op and $$flag $$flag uart_flags
-    jump load_mmio_word__ret equal $$flag 0
-
-    # set overrun flag
-    op or result result 0b10
-
-    # clear interrupt because we read the LSR
-    jump load_mmio_word__uart__clear_interrupt_and_ret always
 
 # instruction decoder
 
@@ -1778,16 +1740,16 @@ store_mmio_word_unchecked:
 
     # if we're in UART range, look it up
     op add ret2 @counter 1
-    jump access_uart greaterThanEq $$offset 0x10
+    jump access_uart greaterThanEq $$offset {{UART_RX_OFFSET}}
 
-    # ignore writes to UART registers other than THR, IER, and FCR
-    jump store_mmio_word_unchecked__uart_fcr equal $$offset 0x18
-    jump store_mmio_word_unchecked__uart_ier equal $$offset 0x14
-    jump end_instruction greaterThan $$offset 0x10
+    # ignore writes to read-only registers
+    jump store_mmio_word_unchecked__uart_tx equal $$offset {{UART_TX_OFFSET}}
+    jump store_mmio_word_unchecked__uart_control equal $$offset {{UART_CONTROL_OFFSET}}
+    jump end_instruction greaterThanEq $$offset {{UART_RX_OFFSET}}
 
     # NOTE: if we get to this point, the MMIO address must be valid, so we don't need bounds or privilege checks
-    op idiv $jump $$offset 2
-    op add @counter @counter $jump
+    op idiv $$offset $$offset 2
+    op add @counter @counter $$offset
 
     # mtime
     set csr_mtime value
@@ -1801,57 +1763,43 @@ store_mmio_word_unchecked:
     # mtimecmph
     set csr_mtimecmph value
     jump end_instruction_with_rd_and_poll_interrupts always
-    # UART
-    # Transmitter Holding Register
+
+store_mmio_word_unchecked__uart_tx:
+#% do declare_locals(access_uart_locals)
+#% do free_locals("$$offset")
     # append value to queue
     # NOTE: we don't check for overflow here, see readme
-    # also, we don't truncate the value to 8 bits when writing
-    # software can take advantage of this to send larger packets if the receiver can handle them
-#% do declare_locals(access_uart_locals)
     op add $tmp $$tx_write {{UART_TX_START}}
     write value $$uart $tmp
 
-    # clear THRI
-    # do this before advancing the write pointer to hopefully avoid race conditions
-    op shl $tmp 0b00100000 $$uart_shift
+    # advance write
+    write $$next_tx_write $$uart {{UART_TX_WRITE}}
+
+    jump end_instruction always
+
+store_mmio_word_unchecked__uart_control:
+#% do declare_locals(access_uart_locals)
+#% do free_locals("$$offset")
+    # enable/disable interrupts
+    op shl $tmp 0b10000 $$uart_shift
     op not $tmp $tmp
     op and uart_flags uart_flags $tmp
 
-    # advance write
-    op add $$tx_write $$tx_write 1
-    op mod $$tx_write $$tx_write UART_FIFO_MODULO
-    write $$tx_write $$uart {{UART_TX_WRITE}}
+    op and $tmp value 0b10000
+    op shl $tmp $tmp $$uart_shift
+    op or uart_flags uart_flags $tmp
 
-    jump end_instruction_with_rd_and_poll_interrupts always
-
-store_mmio_word_unchecked__uart_ier:
-    # Interrupt Enable Register
-#% do declare_locals(access_uart_locals)
-    # clear existing bits
-    op shl $mask 0b1111 $$uart_shift
-    op not $mask $mask
-    op and uart_flags uart_flags $mask
-
-    # set new bits
-    op and value value 0b1111
-    op shl value value $$uart_shift
-    op or uart_flags uart_flags value
-
-    jump end_instruction_with_rd_and_poll_interrupts always
-
-store_mmio_word_unchecked__uart_fcr:
-    # FIFO Control Register
-
-#% do declare_locals(access_uart_locals)
-    op and $tmp value 0b11
-    jump store_mmio_word_unchecked__uart_fcr__no_reset_rx equal $tmp 0
+    # reset RX FIFO
+    op and $tmp value 0b10
+    jump store_mmio_word_unchecked__uart_control__no_reset_rx equal $tmp 0
     write $$rx_write $$uart {{UART_RX_READ}}
-store_mmio_word_unchecked__uart_fcr__no_reset_rx:
+store_mmio_word_unchecked__uart_control__no_reset_rx:
 
-    op and $tmp value 0b101
-    jump store_mmio_word_unchecked__uart_fcr__no_reset_tx equal $tmp 0
+    # reset TX FIFO
+    op and $tmp value 0b01
+    jump store_mmio_word_unchecked__uart_control__no_reset_tx equal $tmp 0
     write $$tx_read $$uart {{UART_TX_WRITE}}
-store_mmio_word_unchecked__uart_fcr__no_reset_tx:
+store_mmio_word_unchecked__uart_control__no_reset_tx:
 
     jump end_instruction always
 
@@ -2731,15 +2679,14 @@ MLOGSYS:
 
     # round up to the nearest page boundary
     # if we're exactly on a page boundary, this results in decoding one extra page
-    # we use "variable" for this so we don't need to use an instruction to explicitly set it to null
-    # since we know reading from INCR at a numeric address will return null
-    op add variable rs1 4096
-    op and variable variable 0xfffff000
+    op add rs1 rs1 4096
+    op and rs1 rs1 0xfffff000
 
-    op min __etext variable PROGRAM_ROM_ICACHE_SIZE
+    op min __etext rs1 PROGRAM_ROM_ICACHE_SIZE
 
     # start at -4 so the first address read is 0
     set address -4
+    set variable null
 
 #% set mlogsys_decode_loop = 5
 #directive start_assert_length {{ mlogsys_decode_loop }}
@@ -2769,6 +2716,11 @@ set {{ROM_PROC_BYTES}} null
 set {{RAM_PROC_VARS}} null
 set {{RAM_START}} null
 set {{MMIO_START}} null
+set {{UART_RX_OFFSET}} null
+set {{UART_TX_OFFSET}} null
+set {{UART_STATUS_OFFSET}} null
+set {{UART_CONTROL_OFFSET}} null
+set {{UART_MMIO_SIZE}} null
 set {{SYSCON}} null
 set {{UART_RX_READ}} null
 set {{UART_RX_WRITE}} null

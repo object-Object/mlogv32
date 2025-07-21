@@ -32,7 +32,7 @@ PLATFORM_RISCV_ISA = rv32ima_zicsr_zifencei_zihintpause
 PLATFORM_RISCV_CODE_MODEL = medany
 
 # Space separated list of object file names to be compiled for the platform
-platform-objs-y += platform.o uart16550.o
+platform-objs-y += platform.o
 
 #
 # If the platform support requires a builtin device tree file, the name of

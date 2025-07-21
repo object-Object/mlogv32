@@ -26,8 +26,8 @@
   \
   /* initialize UART */ \
   li t0, 0xf0000010; \
-  li t1, 0b111; \
-  sb t1, 0x08(t0); \
+  li t1, 0b11; \
+  sb t1, 0xc(t0); \
   \
   /* copy .text from ROM to RAM */ \
   la t0, __sitext; \
@@ -93,7 +93,7 @@ mlogv32_bss_done: \
   lbu a0, 0(a2); \
   beqz a0, 1f; \
   li a1, 0xf0000010; \
-  sb a0, 0(a1); \
+  sb a0, 0x4(a1); \
   addi a2, a2, 1; \
   j 0b; \
 1: \
@@ -116,7 +116,7 @@ mlogv32_bss_done: \
   addi a0, a0, 7; \
 0: \
   li a1, 0xf0000010; \
-  sb a0, 0(a1);
+  sb a0, 0x4(a1);
 
 #define MLOGV32_IO_WRITE_HEX(ScrReg, Reg) \
   la ScrReg, 1f; \

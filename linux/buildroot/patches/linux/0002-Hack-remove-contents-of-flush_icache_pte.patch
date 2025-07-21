@@ -1,7 +1,7 @@
 From 3d22caf2bee6f6ff4b9ce1c53a3bc046cfcd14e4 Mon Sep 17 00:00:00 2001
 From: object-Object <object@objectobject.ca>
 Date: Fri, 11 Jul 2025 16:43:41 -0400
-Subject: [PATCH 2/2] Hack: remove contents of flush_icache_pte
+Subject: [PATCH 2/3] Hack: remove contents of flush_icache_pte
 
 ---
  arch/riscv/mm/cacheflush.c | 6 ------

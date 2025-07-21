@@ -4,8 +4,7 @@
 use core::hint::spin_loop;
 
 use mlogv32::graphics::*;
-use mlogv32::io::uart::LineStatus;
-use mlogv32::io::{UartPort, print_char};
+use mlogv32::io::{UartAddress, UartPort, print_char};
 
 pub const CHAR_WIDTH: u32 = 7;
 pub const CHAR_HEIGHT: u32 = 13;
@@ -15,33 +14,23 @@ fn main() -> ! {
     let mut printer = DisplayPrinter::new();
     printer.clear();
 
-    let mut uart0 = unsafe { UartPort::new_uart0(1) };
-    let mut uart1 = unsafe { UartPort::new_uart0(1) };
+    let mut uart0 = unsafe { UartPort::new(UartAddress::Uart0) };
+    let mut uart1 = unsafe { UartPort::new(UartAddress::Uart1) };
 
     uart0.init();
     uart1.init();
 
     loop {
         // forward sortKB input from uart0 to uart1
-        if uart0
-            .uart_mut()
-            .read_line_status()
-            .contains(LineStatus::DATA_AVAILABLE)
-            && uart1
-                .uart_mut()
-                .read_line_status()
-                .contains(LineStatus::THR_EMPTY)
+        if uart0.uart_mut().read_status().rx_not_empty()
+            && !uart1.uart_mut().read_status().tx_full()
         {
-            uart1.uart_mut().write_byte(uart0.uart_mut().read_byte());
+            uart1.uart_mut().write_tx(uart0.uart_mut().read_rx());
         }
 
         // print uart1 to display
-        while uart1
-            .uart_mut()
-            .read_line_status()
-            .contains(LineStatus::DATA_AVAILABLE)
-        {
-            printer.print_char(uart1.uart_mut().read_byte() as char);
+        while uart1.uart_mut().read_status().rx_not_empty() {
+            printer.print_char(uart1.uart_mut().read_rx() as u8 as char);
             printer.flush();
         }
 

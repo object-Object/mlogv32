@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bitflags = { workspace = true }
+bitbybit = { workspace = true }
 derive-mmio = { workspace = true }
 embassy-futures = { workspace = true }
 embassy-hal-internal = "0.2.0"
@@ -12,7 +12,6 @@ embedded-io = { workspace = true }
 embedded-io-async = { workspace = true }
 riscv = { workspace = true }
 riscv-rt = { workspace = true }
-uart = { workspace = true }
 
 [features]
 default = ["panic-handler"]

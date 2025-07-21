@@ -25,14 +25,12 @@ The CPU is implemented using a variable-size build-order-independent subframe ar
 | `0x00000000` | Configurable | R/X         | Program ROM |
 | Configurable | Configurable | R/X         | Data ROM    |
 | `0x80000000` | Configurable | R/W/X/A\*   | RAM         |
-| `0xf0000000` | `0x4`        | R/W         | `mtime`     |
-| `0xf0000004` | `0x4`        | R/W         | `mtimeh`    |
-| `0xf0000008` | `0x4`        | R/W         | `mtimecmp`  |
-| `0xf000000c` | `0x4`        | R/W         | `mtimecmph` |
-| `0xf0000010` | `0x20`       | R/W         | UART0       |
-| `0xf0000030` | `0x20`       | R/W         | UART1       |
-| `0xf0000050` | `0x20`       | R/W         | UART2       |
-| `0xf0000070` | `0x20`       | R/W         | UART3       |
+| `0xf0000000` | `0x8`        | R/W         | `mtime`     |
+| `0xf0000008` | `0x8`        | R/W         | `mtimecmp`  |
+| `0xf0000010` | `0x10`       | R/W         | UART0       |
+| `0xf0000020` | `0x10`       | R/W         | UART1       |
+| `0xf0000030` | `0x10`       | R/W         | UART2       |
+| `0xf0000040` | `0x10`       | R/W         | UART3       |
 | `0xfffffff0` | `0x4`        | R/W         | Syscon      |
 
 \* Atomic instructions are only supported in RAM.
@@ -49,27 +47,19 @@ The `mtime` and `mtimecmp` registers are mapped to `0xf0000000` and `0xf0000008`
 
 ### UART
 
-The processor includes four identical emulated UART 16550 peripherals based on [this datasheet](https://caro.su/msx/ocm_de1/16550.pdf). The UARTs support the following features:
+The processor includes four instances of an emulated UART peripheral compatible with the [AXI UART Lite](https://docs.amd.com/v/u/en-US/pg142-axi-uartlite). The UARTs support the following features:
 
+- Up to 32 data bits.
 - Configurable FIFO capacity (up to 253 bytes) for TX and RX, stored as a variable in the CONFIG processor.
 - Theoretical maximum transfer rate of 121440 bits/sec (253 bytes/tick).
-- Line Status Register flags: Transmitter Empty, THR Empty, Overrun Error, Data Ready.
-- FIFO Control Register flags: Enable FIFOs (0 is ignored), Reset RX/TX FIFO
+- Edge-triggered interrupts for RX FIFO non-empty and TX FIFO empty.
 
-The UART registers have a stride of 4 bytes to simplify some internal logic.
-
-| Offset | Access Type | Register                     |
-| ------ | ----------- | ---------------------------- |
-| `0x00` | R           | Receiver Holding Register    |
-| `0x00` | W           | Transmitter Holding Register |
-| `0x04` | R/W         | Interrupt Enable Register    |
-| `0x08` | R           | Interrupt Status Register    |
-| `0x08` | W           | FIFO Control Register        |
-| `0x0c` | R/W         | Line Control Register        |
-| `0x10` | R/W         | Modem Control Register       |
-| `0x14` | R           | Line Status Register         |
-| `0x18` | R           | Modem Status Register        |
-| `0x1c` | R/W         | Scratch Pad Register         |
+| Offset | Access Type | Register |
+| ------ | ----------- | -------- |
+| `0x0`  | R           | RX FIFO  |
+| `0x4`  | W           | TX FIFO  |
+| `0x8`  | R           | Status   |
+| `0xc`  | W           | Control  |
 
 Each UART is implemented as two circular buffers in a memory bank with the following layout. Note that RX refers to data sent to / read by the processor, and TX refers to data sent from / written by the processor.
 
@@ -82,28 +72,19 @@ Each UART is implemented as two circular buffers in a memory bank with the follo
 | 510   | TX buffer read pointer                  |
 | 511   | TX buffer write pointer                 |
 
-Read/write pointers are stored modulo `capacity + 1`. A buffer is empty when `rptr == wptr` and full when `rptr == (wptr + 1) % (capacity + 1)`. If the RX buffer is full and more data arrives, producers should discard the new data rather than overwriting old data in the buffer. An overflow may optionally be indicated to the processor by setting bit 8 of `rx_wptr` (ie. `rx_wptr | 0x100`).
+Read/write pointers are stored modulo `capacity + 1`. A buffer is empty when `rptr == wptr` and full when `rptr == (wptr + 1) % (capacity + 1)`. If the RX buffer is full and more data arrives, producers should discard the new data rather than overwriting old data in the buffer.
 
-Note that the processor itself does not set the TX overflow flag or prevent code from overflowing the TX buffer. Users are expected to check the Line Status Register and avoid writing too much data at once.
+Note that the processor itself does not prevent code from overflowing the TX buffer. Users are expected to check the Status register and avoid writing too much data at once.
 
-If any UART interrupt is pending, `mip.MEIP` will become pending. To make UART interrupts visible to S-mode, M-mode software must either delegate `mip.MEIP` via `mideleg`, or manually update `mip.SEIP` in an M-mode interrupt handler.
+If any UART interrupt is pending, `mip.MEIP` will become pending. To make UART interrupts visible to S-mode, M-mode software must either delegate `mip.MEIP` via `mideleg`, or manually update `mip.SEIP` in an M-mode interrupt handler. The interrupt for a given port is cleared when any register for that port is accessed.
 
 Internally, UART interrupts are implemented using the `uart_flags` variable.
 
-| 31:24 | 23:16 | 15:8  | 7:0   |
-| ----- | ----- | ----- | ----- |
-| UART3 | UART2 | UART1 | UART0 |
+| 7:4  | 3:0  |
+| ---- | ---- |
+| `ie` | `ip` |
 
-| 7           | 6            | 5            | 4           | 3           | 2            | 1            | 0           |
-| ----------- | ------------ | ------------ | ----------- | ----------- | ------------ | ------------ | ----------- |
-| MSI pending | RLSI pending | THRI pending | RDI pending | MSI enabled | RLSI enabled | THRI enabled | RDI enabled |
-
-| Interrupt | Description                        |
-| --------- | ---------------------------------- |
-| MSI       | Modem Status                       |
-| RLSI      | Receiver Line Status               |
-| THRI      | Transmitter Holding Register Empty |
-| RDI       | Receiver Data Ready                |
+`ip` and `ie` are similar to the RISC-V `mie` and `mip` registers. UART _i_ corresponds with bit _i_ in both `ip` and `ie`.
 
 ### Syscon
 

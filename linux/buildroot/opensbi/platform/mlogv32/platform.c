@@ -4,14 +4,12 @@
  * Copyright (c) 2019 Western Digital Corporation or its affiliates.
  */
 
-#include "uart16550.h"
-
 #include <sbi/riscv_asm.h>
 #include <sbi/riscv_encoding.h>
 #include <sbi/sbi_const.h>
 #include <sbi/sbi_platform.h>
 
-#include <sbi_utils/serial/uart8250.h>
+#include <sbi_utils/serial/xlnx_uartlite.h>
 #include <sbi_utils/timer/aclint_mtimer.h>
 
 #define MLOGV32_MTIME_FREQ		1000
@@ -21,10 +19,6 @@
 #define MLOGV32_MTIMECMP_SIZE		0x8
 
 #define MLOGV32_UART0_ADDR		0xf0000010
-#define MLOGV32_UART_INPUT_FREQ		10000000
-#define MLOGV32_UART_BAUDRATE		38400
-#define MLOGV32_UART_REG_SHIFT		2 /* stride of 4 bytes */
-#define MLOGV32_UART_FIFO_CAPACITY	253
 
 static struct aclint_mtimer_data mtimer = {
 	.mtime_freq = MLOGV32_MTIME_FREQ,
@@ -44,16 +38,7 @@ static int mlogv32_early_init(bool cold_boot)
 	if (!cold_boot)
 		return 0;
 
-	return uart16550_init(
-		MLOGV32_UART0_ADDR,
-		MLOGV32_UART_INPUT_FREQ,
-		MLOGV32_UART_BAUDRATE,
-		MLOGV32_UART_REG_SHIFT,
-		1,
-		0,
-		0,
-		MLOGV32_UART_FIFO_CAPACITY
-	);
+	return xlnx_uartlite_init(MLOGV32_UART0_ADDR);
 }
 
 /*

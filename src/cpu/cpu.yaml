@@ -27,6 +27,16 @@ inputs:
   MMIO_START: '0xf0000000'
   SYSCON:     '0xfffffff0'
 
+  # offsets from MMIO_START
+  UART_RX_OFFSET: '0x10'
+  UART_TX_OFFSET: '0x14'
+  UART_STATUS_OFFSET:  '0x18'
+  UART_CONTROL_OFFSET: '0x1c'
+
+  # combined register size for one UART
+  UART_MMIO_SIZE: '0x10'
+
+  # bank addresses
   UART_RX_READ:  254
   UART_RX_WRITE: 255
   UART_TX_START: 256

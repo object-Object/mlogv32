@@ -38,6 +38,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary-int"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825297538d77367557b912770ca3083f778a196054b3ee63b22673c4a3cae0a5"
+
+[[package]]
 name = "as-slice"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,6 +92,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "bitbybit"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d317eeca82e7d88d606419a430590d83552bdceb899cb29904f63d694344b7fc"
+dependencies = [
+ "arbitrary-int",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bitfield"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -96,12 +114,6 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
-
-[[package]]
-name = "bitflags"
-version = "2.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "block-buffer"
@@ -786,7 +798,7 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 name = "mlogv32"
 version = "0.1.0"
 dependencies = [
- "bitflags 2.9.1",
+ "bitbybit",
  "derive-mmio",
  "embassy-futures",
  "embassy-hal-internal",
@@ -794,7 +806,6 @@ dependencies = [
  "embedded-io-async",
  "riscv",
  "riscv-rt",
- "uart",
 ]
 
 [[package]]
@@ -1236,7 +1247,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dad095989c1533c1c266d9b1e8d70a1329dd3723c3edac6d03bbd67e7bf6f4bb"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "byteorder",
  "cfg-if",
  "heapless 0.8.0",
@@ -1326,15 +1337,6 @@ name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
-
-[[package]]
-name = "uart"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e43cb66305134d1113ca51b4bb5ae6d1f316714bb93146f2339d3a1557df2c83"
-dependencies = [
- "bitflags 2.9.1",
-]
 
 [[package]]
 name = "unicode-ident"

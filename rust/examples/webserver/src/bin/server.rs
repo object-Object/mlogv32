@@ -9,7 +9,7 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_time::Duration;
 use embedded_io::ReadReady;
 use mlogv32::{
-    io::{BufferedUartPort, UartPort},
+    io::{BufferedUartPort, UartAddress, UartPort},
     register,
 };
 use picoserve::{AppBuilder, AppRouter, make_static, routing::get};
@@ -96,7 +96,7 @@ async fn web_task(
 async fn main(spawner: embassy_executor::Spawner) {
     unsafe { mlogv32_embassy::init_timer() };
 
-    let mut log_port = unsafe { UartPort::new_uart0(253) };
+    let mut log_port = unsafe { UartPort::new(UartAddress::Uart0) };
     log_port.init();
 
     let logger = make_static!(
@@ -117,7 +117,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     log::info!("Initializing PPP.");
 
     let mut ppp_port = BufferedUartPort::new(
-        unsafe { UartPort::new_uart1(253) },
+        unsafe { UartPort::new(UartAddress::Uart1) },
         make_static!([u8; 1024], [0; 1024]),
     );
 

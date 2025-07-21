@@ -7,10 +7,10 @@
     chassis-type = "embedded";
 
     chosen {
-        // SBI: console=hvc
-        // UART0: console=ttyS0
-        // for debugging: kgdboc_earlycon=sbi kgdboc=ttyS0 kgdbwait
-        bootargs = "earlycon=sbi console=ttyS0";
+        // SBI: earlycon=sbi console=hvc
+        // UART0: earlycon console=ttyUL0
+        // for debugging: kgdboc_earlycon=sbi kgdboc=ttyUL0 kgdbwait
+        bootargs = "earlycon console=ttyUL0";
         stdout-path = &uart0;
     };
 
@@ -84,44 +84,43 @@
         ranges;
 
         uart0: serial@f0000010 {
-            compatible = "ns16550a";
-            reg = <0xf0000010 0x20>;
-            reg-shift = <2>;
+            compatible = "xlnx,xps-uartlite-1.00.a";
+            reg = <0xf0000010 0x10>;
             interrupts-extended = <&intc 11>;
-            clock-frequency = <(38400*16)>;
+            current-speed = <38400>;
             fifo-size = <253>;
-            no-loopback-test;
-            // TODO: https://github.com/torvalds/linux/blob/8c2e52ebbe885c7eeaabd3b7ddcdc1246fc400d2/drivers/tty/serial/8250/8250_of.c#L233
+            xlnx,data-bits = <8>;
+            xlnx,use-parity = <0>;
         };
 
-        uart1: serial@f0000030 {
-            compatible = "ns16550a";
-            reg = <0xf0000030 0x20>;
-            reg-shift = <2>;
+        uart1: serial@f0000020 {
+            compatible = "xlnx,xps-uartlite-1.00.a";
+            reg = <0xf0000020 0x10>;
             interrupts-extended = <&intc 11>;
-            clock-frequency = <(38400*16)>;
+            current-speed = <38400>;
             fifo-size = <253>;
-            no-loopback-test;
+            xlnx,data-bits = <8>;
+            xlnx,use-parity = <0>;
         };
 
-        uart2: serial@f0000050 {
-            compatible = "ns16550a";
-            reg = <0xf0000050 0x20>;
-            reg-shift = <2>;
+        uart2: serial@f0000030 {
+            compatible = "xlnx,xps-uartlite-1.00.a";
+            reg = <0xf0000030 0x10>;
             interrupts-extended = <&intc 11>;
-            clock-frequency = <(38400*16)>;
+            current-speed = <38400>;
             fifo-size = <253>;
-            no-loopback-test;
+            xlnx,data-bits = <8>;
+            xlnx,use-parity = <0>;
         };
 
-        uart3: serial@f0000070 {
-            compatible = "ns16550a";
-            reg = <0xf0000070 0x20>;
-            reg-shift = <2>;
+        uart3: serial@f0000040 {
+            compatible = "xlnx,xps-uartlite-1.00.a";
+            reg = <0xf0000040 0x10>;
             interrupts-extended = <&intc 11>;
-            clock-frequency = <(38400*16)>;
+            current-speed = <38400>;
             fifo-size = <253>;
-            no-loopback-test;
+            xlnx,data-bits = <8>;
+            xlnx,use-parity = <0>;
         };
 
         syscon: syscon@fffffff0 {

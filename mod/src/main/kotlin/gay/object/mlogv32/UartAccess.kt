@@ -33,14 +33,11 @@ class UartAccess(private val build: MemoryBuild, private val capacity: Int) {
         return byte
     }
 
-    fun write(byte: UByte, signalOverflow: Boolean): Boolean {
+    fun write(byte: UByte): Boolean {
         val nextWptr = wrap(txWptr + 1)
 
-        // full, maybe signal overflow
+        // full :(
         if (nextWptr == txRptr) {
-            if (signalOverflow) {
-                txWptrRaw = txWptr or 0x100
-            }
             return false
         }
 

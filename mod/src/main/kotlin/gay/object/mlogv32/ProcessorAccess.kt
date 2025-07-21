@@ -454,7 +454,6 @@ enum class UartDirection {
 @SerialName("serial")
 data class SerialRequest(
     val device: UartDevice,
-    val overrun: Boolean,
     val direction: UartDirection = UartDirection.both,
     val stopOnHalt: Boolean = false,
     val disconnectOnHalt: Boolean = false,
@@ -488,15 +487,11 @@ data class SerialRequest(
 
                 if (direction.transmit) {
                     rx.readAvailable(1) { buffer ->
-                        val bytes = if (overrun) {
-                            buffer.size.toInt()
-                        } else {
-                            min(buffer.size.toInt(), uart.availableForWrite)
-                        }
+                        val bytes = min(buffer.size.toInt(), uart.availableForWrite)
 
                         for (i in 0..<bytes) {
                             val byte = buffer.readUByte()
-                            if (!uart.write(byte, signalOverflow = overrun)) overflowCount++
+                            if (!uart.write(byte)) overflowCount++
                         }
 
                         bytes

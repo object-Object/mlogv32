@@ -38,7 +38,7 @@ fi
 
 if [[ "$sendRequest" == "true" ]]; then
     {
-        echo "{\"type\": \"serial\", \"device\": \"$device\", \"overrun\": false, \"direction\": \"$direction\", \"disconnectOnHalt\": $disconnectOnHalt}"
+        echo "{\"type\": \"serial\", \"device\": \"$device\", \"direction\": \"$direction\", \"disconnectOnHalt\": $disconnectOnHalt}"
         cat
     } | netcat -v "$host" "$port"
 else

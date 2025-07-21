@@ -22,7 +22,7 @@ Runs a simple webserver using [Embassy](https://embassy.dev/) and [picoserve](ht
   noproxyarp
   noauth
   socket 127.0.0.1:5000
-  connect "echo '{\"type\":\"serial\",\"device\":\"uart1\",\"stopOnHalt\":false,\"overrun\":false}'"
+  connect "echo '{\"type\":\"serial\",\"device\":\"uart1\"}'"
   ```
 
 - Run each of these commands in separate terminals (tested on WSL2 with [mirrored mode networking](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking)):

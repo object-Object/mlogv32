@@ -84,14 +84,12 @@ class ProcessorAccess:
         self,
         device: UartDevice,
         *,
-        overrun: bool = False,
         stop_on_halt: bool = False,
         disconnect_on_halt: bool = False,
     ):
         self._send_request(
             SerialRequest(
                 device=device,
-                overrun=overrun,
                 direction="both",
                 stopOnHalt=stop_on_halt,
                 disconnectOnHalt=disconnect_on_halt,
@@ -178,7 +176,6 @@ type UartDirection = Literal["both", "rx", "tx"]
 class SerialRequest(BaseModel):
     type: Literal["serial"] = "serial"
     device: UartDevice
-    overrun: bool
     direction: UartDirection
     stopOnHalt: bool
     disconnectOnHalt: bool

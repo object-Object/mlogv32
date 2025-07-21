@@ -84,7 +84,7 @@ Internally, UART interrupts are implemented using the `uart_flags` variable.
 | ---- | ---- |
 | `ie` | `ip` |
 
-`ip` and `ie` are similar to the RISC-V `mie` and `mip` registers. UART _i_ corresponds with bit _i_ in both `ip` and `ie`.
+`ip` and `ie` are similar to the RISC-V `mip` and `mie` registers. UART _i_ corresponds with bit _i_ in both `ip` and `ie`.
 
 ### Syscon
 

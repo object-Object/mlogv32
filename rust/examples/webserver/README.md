@@ -12,8 +12,8 @@ Runs a simple webserver using [Embassy](https://embassy.dev/) and [picoserve](ht
 
   ```
   192.168.7.1:192.168.7.10
-  ms-dns 8.8.4.4
-  ms-dns 8.8.8.8
+  ms-dns 1.1.1.1
+  ms-dns 1.0.0.1
   nodetach
   debug
   local

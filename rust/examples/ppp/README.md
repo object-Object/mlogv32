@@ -15,7 +15,7 @@ Steps:
   socat -v -x TCP4:127.0.0.1:5000 PTY,link=pty,rawer
 
   # connect pppd to uart1
-  sudo pppd $PWD/pty 9600 192.168.7.1:192.168.7.10 ms-dns 8.8.4.4 ms-dns 8.8.8.8 connect "echo '{\"type\":\"serial\",\"device\":\"uart1\"}'" nodetach debug local persist silent noproxyarp noauth
+  sudo pppd $PWD/pty 9600 192.168.7.1:192.168.7.10 ms-dns 1.1.1.1 ms-dns 1.0.0.1 connect "echo '{\"type\":\"serial\",\"device\":\"uart1\"}'" nodetach debug local persist silent noproxyarp noauth
   ```
 
 - Build and flash this program to mlogv32, then start the processor.

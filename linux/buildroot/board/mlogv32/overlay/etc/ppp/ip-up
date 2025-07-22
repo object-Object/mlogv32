@@ -1,0 +1,18 @@
+#!/bin/sh
+
+if [ -n "$USEPEERDNS" ]; then
+    mkdir -p /run/ppp
+
+    rm -f /run/ppp/resolv.prev
+    if [ -f /run/resolv.conf ]; then
+        cp /run/resolv.conf /run/ppp/resolv.prev
+    fi
+
+    {
+        grep search /run/ppp/resolv.prev
+        grep nameserver /run/ppp/resolv.prev
+        echo "nameserver $DNS1"
+        echo "nameserver $DNS2"
+    } > /run/resolv.conf
+    chmod 644 /run/resolv.conf
+fi

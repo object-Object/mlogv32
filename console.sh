@@ -8,7 +8,20 @@ disconnectOnHalt=true
 sendRequest=true
 
 while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
-    -h | --host )
+    -h | --help )
+        cat <<EOF
+options:
+  -h, --help             display this help and exit
+  -H, --host HOST        socket server hostname
+  -p, --port PORT        socket server port
+  -d, --device DEVICE    serial device name: uart0, uart1, uart2, uart3
+  --direction DIRECTION  socket direction: both, rx, tx
+  --no-disconnect        don't disconnect when processor halts
+  --no-request           don't send initial JSON request
+EOF
+        exit 0
+        ;;
+    -H | --host )
         shift; host=$1
         ;;
     -p | --port )
@@ -16,6 +29,9 @@ while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
         ;;
     -d | --device )
         shift; device=$1
+        ;;
+    --direction )
+        shift; direction=$1
         ;;
     --no-disconnect )
         disconnectOnHalt=false

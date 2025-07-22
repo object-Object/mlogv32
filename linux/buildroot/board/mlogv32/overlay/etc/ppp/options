@@ -1,0 +1,7 @@
+38400
+ipcp-accept-local
+noauth
+local
+xonxoff
+defaultroute
+usepeerdns

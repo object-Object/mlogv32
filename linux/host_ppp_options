@@ -1,0 +1,16 @@
+38400
+192.168.7.1:192.168.7.2
+ms-dns 1.1.1.1
+ms-dns 1.0.0.1
+nodetach
+debug
+local
+persist
+proxyarp
+ktune
+noauth
+nocrtscts
+xonxoff
+passive
+socket 127.0.0.1:5000
+connect "echo '{\"type\":\"serial\",\"device\":\"uart1\"}'"

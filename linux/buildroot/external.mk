@@ -1,7 +1,7 @@
 include $(sort $(wildcard $(BR2_EXTERNAL_MLOGV32_PATH)/package/*/*.mk))
 
 .PHONY: save-configs
-save-configs: linux-update-defconfig
+save-configs: linux-update-defconfig busybox-update-config
 	$(MAKE) savedefconfig BR2_DEFCONFIG=$(BR2_EXTERNAL_MLOGV32_PATH)/configs/mlogv32_defconfig
 
 .PHONY: dtbs

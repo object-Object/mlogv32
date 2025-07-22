@@ -45,7 +45,7 @@ static int mlogv32_intc_domain_alloc(
 
 	irq_hw_number_t hwirq;
 	unsigned int type;
-	int rc = irq_domain_translate_onecell(domain, fwspec, &hwirq, &type);
+	int rc = irq_domain_translate_twocell(domain, fwspec, &hwirq, &type);
 	if (rc) {
 		return rc;
 	}
@@ -68,7 +68,7 @@ static int mlogv32_intc_domain_alloc(
 }
 
 static struct irq_domain_ops mlogv32_intc_domain_ops = {
-	.translate = irq_domain_translate_onecell,
+	.translate = irq_domain_translate_twocell,
 	.alloc     = mlogv32_intc_domain_alloc,
 	.free      = irq_domain_free_irqs_top,
 };

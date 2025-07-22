@@ -1,5 +1,22 @@
 # Linux
 
+## Internet access
+
+1. Enable the mlogv32-utils socket server on port 5000.
+2. Run on host:
+
+   ```sh
+   sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+   pppd file host_ppp_options
+   ```
+
+3. Run on mlogv32:
+
+   ```sh
+   pppd /dev/ttyUL1
+   ping google.com
+   ```
+
 ## Debugging
 
 ### objdump

@@ -7,10 +7,13 @@
     chassis-type = "embedded";
 
     chosen {
-        // SBI: earlycon=sbi console=hvc
         // UART0: earlycon console=ttyUL0
-        // for debugging: kgdboc_earlycon=sbi kgdboc=ttyUL0 kgdbwait
+        // SBI: earlycon=sbi console=hvc
+        // for debugging: earlycon=sbi console=ttyUL0 kgdboc_earlycon= kgdboc= kgdbwait
         bootargs = "earlycon console=ttyUL0";
+        mlogv32,alternate-bootargs =
+            "earlycon=sbi console=hvc",
+            "earlycon=sbi console=ttyUL0 kgdboc_earlycon= kgdboc= kgdbwait";
         stdout-path = &uart0;
     };
 
@@ -72,7 +75,7 @@
 
     intc: interrupt-controller {
         compatible = "mlogv32,cpu-intc";
-        #interrupt-cells = <1>;
+        #interrupt-cells = <2>;
         interrupt-controller;
         interrupts-extended = <&cpu0_intc 11>;
     };
@@ -86,7 +89,7 @@
         uart0: serial@f0000010 {
             compatible = "xlnx,xps-uartlite-1.00.a";
             reg = <0xf0000010 0x10>;
-            interrupts-extended = <&intc 11>;
+            interrupts-extended = <&intc 11 1>; // IRQ_TYPE_EDGE_RISING
             current-speed = <38400>;
             fifo-size = <253>;
             xlnx,data-bits = <8>;
@@ -96,7 +99,7 @@
         uart1: serial@f0000020 {
             compatible = "xlnx,xps-uartlite-1.00.a";
             reg = <0xf0000020 0x10>;
-            interrupts-extended = <&intc 11>;
+            interrupts-extended = <&intc 11 1>;
             current-speed = <38400>;
             fifo-size = <253>;
             xlnx,data-bits = <8>;
@@ -106,7 +109,7 @@
         uart2: serial@f0000030 {
             compatible = "xlnx,xps-uartlite-1.00.a";
             reg = <0xf0000030 0x10>;
-            interrupts-extended = <&intc 11>;
+            interrupts-extended = <&intc 11 1>;
             current-speed = <38400>;
             fifo-size = <253>;
             xlnx,data-bits = <8>;
@@ -116,7 +119,7 @@
         uart3: serial@f0000040 {
             compatible = "xlnx,xps-uartlite-1.00.a";
             reg = <0xf0000040 0x10>;
-            interrupts-extended = <&intc 11>;
+            interrupts-extended = <&intc 11 1>;
             current-speed = <38400>;
             fifo-size = <253>;
             xlnx,data-bits = <8>;

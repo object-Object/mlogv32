@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ -n "$USEPEERDNS" ]; then
+    if [ -f /run/ppp/resolv.prev ]; then
+        cp -f /run/ppp/resolv.prev /run/resolv.conf
+        chmod 644 /run/resolv.conf
+    else
+        rm -f /run/resolv.conf
+    fi
+fi

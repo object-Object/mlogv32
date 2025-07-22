@@ -60,7 +60,9 @@ static void mlogv32_do_fixup(struct fdt_general_fixup* f, void* fdt) {
 
 	int err = fdt_setprop_string(fdt, chosen_offset, "bootargs", mlogv32_bootargs);
 	if (err)
-		sbi_printf("Failed to set bootargs: %s", fdt_strerror(err));
+		sbi_printf("Failed to set bootargs: %s\n", fdt_strerror(err));
+
+	sbi_printf("New bootargs: %s\n", mlogv32_bootargs);
 }
 
 static struct fdt_general_fixup mlogv32_fixup = {
@@ -86,24 +88,68 @@ static bool mlogv32_prompt_interrupt_boot(void) {
 	return retval;
 }
 
-static const char* mlogv32_get_fdt_bootargs(void* fdt) {
-	int chosen_offset = fdt_path_offset(fdt, "/chosen");
-	if (chosen_offset < 0)
-		return NULL;
-
-	return fdt_getprop(fdt, chosen_offset, "bootargs", NULL);
-}
-
 static void mlogv32_prompt_get_bootargs(void* fdt) {
 	// drain input buffer
 	while (mlogv32_wait_for_input(NULL)) {}
 
-	const char* current_bootargs = mlogv32_get_fdt_bootargs(fdt);
-	if (current_bootargs)
-		sbi_printf("Bootargs: %s\n", current_bootargs);
+	int chosen_offset = fdt_path_offset(fdt, "/chosen");
+
+	const char* cur_bootargs = fdt_getprop(fdt, chosen_offset, "bootargs", NULL);
+
+	sbi_printf("Bootargs: %s\n", cur_bootargs);
 
 	if (!mlogv32_prompt_interrupt_boot())
 		return;
+
+	while (mlogv32_wait_for_input(NULL)) {}
+
+	int alt_bootargs_len = fdt_stringlist_count(fdt, chosen_offset, "mlogv32,alternate-bootargs");
+
+	sbi_printf("Bootargs choices:\n");
+	sbi_printf("  0: %s\n", cur_bootargs);
+	for (int i = 1; i <= alt_bootargs_len; i++) {
+		const char* s = fdt_stringlist_get(fdt, chosen_offset, "mlogv32,alternate-bootargs", i - 1, NULL);
+		sbi_printf("  %d: %s\n", i, s);
+	}
+	sbi_printf("  %d: <custom>\n", alt_bootargs_len + 1);
+	sbi_printf("Enter index: ");
+
+	while (1) {
+		int ch = sbi_getc();
+		if (ch < '0' || ch > '9')
+			continue;
+
+		int i = ch - '0';
+		if (i - 1 > alt_bootargs_len) {
+			continue;
+		}
+
+		sbi_printf("%c\n", ch);
+
+		const char* new_bootargs;
+		if (i == 0) {
+			new_bootargs = cur_bootargs;
+		} else if (i - 1 < alt_bootargs_len) {
+			new_bootargs = fdt_stringlist_get(fdt, chosen_offset, "mlogv32,alternate-bootargs", i - 1, NULL);
+		} else {
+			break;
+		}
+
+		char* retval = mlogv32_bootargs;
+		int maxwidth = sizeof(mlogv32_bootargs);
+		while (maxwidth > 1) {
+			char ch = *new_bootargs;
+			if (ch <= 0)
+				break;
+
+			*retval = ch;
+			new_bootargs++;
+			retval++;
+			maxwidth--;
+		}
+		*retval = '\0';
+		return;
+	}
 
 	while (mlogv32_wait_for_input(NULL)) {}
 
@@ -153,13 +199,14 @@ static int mlogv32_final_init(bool cold_boot)
 	void* fdt = fdt_get_address_rw();
 
 	mlogv32_prompt_get_bootargs(fdt);
-	sbi_printf("\n\n");
 
 	int rc = fdt_register_general_fixup(&mlogv32_fixup);
 	if (rc && rc != SBI_EALREADY)
 		return rc;
 
 	fdt_fixups(fdt);
+
+	sbi_printf("\n");
 
 	return 0;
 }

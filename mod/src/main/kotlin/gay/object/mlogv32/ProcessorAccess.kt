@@ -259,6 +259,8 @@ class ProcessorAccess(
                 } catch (e: IllegalArgumentException) {
                     Log.err("Bad request", e)
                     ErrorResponse.badRequest(e)
+                } catch (e: ClosedByteChannelException) {
+                    break
                 } catch (e: Exception) {
                     Log.err("Request failed", e)
                     ErrorResponse(e)

@@ -84,6 +84,7 @@ def processor_worker(
                 time.sleep(0)
     finally:
         server.shutdown()
+        shutdown.set()
 
 
 def input_worker(server: ThreadingTCPServer):
@@ -93,6 +94,7 @@ def input_worker(server: ThreadingTCPServer):
             from_input.append(msg.encode())
     finally:
         server.shutdown()
+        shutdown.set()
 
 
 app = Typer()

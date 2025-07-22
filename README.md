@@ -76,7 +76,7 @@ Read/write pointers are stored modulo `capacity + 1`. A buffer is empty when `rp
 
 Note that the processor itself does not prevent code from overflowing the TX buffer. Users are expected to check the Status register and avoid writing too much data at once.
 
-If any UART interrupt is pending, `mip.MEIP` will become pending. To make UART interrupts visible to S-mode, M-mode software must either delegate `mip.MEIP` via `mideleg`, or manually update `mip.SEIP` in an M-mode interrupt handler. The interrupt for a given port is cleared when any register for that port is accessed.
+If any UART interrupt is pending, `mip.MEIP` will become pending. To make UART interrupts visible to S-mode, M-mode software must either delegate `mip.MEIP` via `mideleg`, or manually update `mip.SEIP` in an M-mode interrupt handler. The interrupt for a given port is cleared when the Status register for that port is accessed.
 
 Internally, UART interrupts are implemented using the `uart_flags` variable.
 

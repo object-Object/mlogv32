@@ -809,21 +809,6 @@ access_uart:
 
     op add $$offset $$offset {{UART_RX_OFFSET}}
 
-#% do free_locals("$$uart")
-    # check if interrupt is pending for this port
-    op shl $mask 1 $$uart_shift
-    op and $mask uart_flags $mask
-    jump access_uart__no_clear_ip equal $mask 0
-
-    # clear pending interrupt
-    op not $mask $mask
-    op and uart_flags uart_flags $mask
-
-    # set interrupt_flags.poll
-    op or csr_mip csr_mip 0b10000000000000000000000000000000
-#% do declare_locals(access_uart_locals)
-access_uart__no_clear_ip:
-
     op add $$uart $$uart_shift {{UART_START_LINK}}
     getlink $$uart $$uart
 
@@ -1052,7 +1037,7 @@ load_mmio_word__not_zero:
 
 load_mmio_word__uart_status:
 #% do declare_locals(access_uart_locals)
-#% do free_locals("$$offset")
+#% do free_locals("$$offset", "$$uart")
     # interrupt enabled
     op shr result uart_flags $$uart_shift
     op and result result 0b10000
@@ -1078,6 +1063,19 @@ load_mmio_word__uart_status__rx_empty:
     jump load_mmio_word__uart_status__rx_not_full notEqual $$rx_read $next_rx_write
     op or result result 0b00010
 load_mmio_word__uart_status__rx_not_full:
+
+    # check if interrupt is pending for this port
+    op shl $mask 1 $$uart_shift
+    op and $mask uart_flags $mask
+    jump load_mmio_word__uart_status__no_clear_interrupt equal $mask 0
+
+    # clear pending interrupt
+    op not $mask $mask
+    op and uart_flags uart_flags $mask
+
+    # set interrupt_flags.poll
+    op or csr_mip csr_mip 0b10000000000000000000000000000000
+load_mmio_word__uart_status__no_clear_interrupt:
 
     set @counter ret
 

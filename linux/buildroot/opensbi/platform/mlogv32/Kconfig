@@ -9,6 +9,7 @@
 #
 config PLATFORM_MLOGV32
 	bool
+	select FDT
 	select SERIAL_XILINX_UARTLITE
 	select TIMER_MTIMER
 	default y

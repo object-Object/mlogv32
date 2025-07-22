@@ -1,3 +1,4 @@
 -I../../../../opensbi/include
+-I../../../../opensbi/lib/utils/libfdt
 -I./mlogv32
 --target=riscv32-linux-gnu

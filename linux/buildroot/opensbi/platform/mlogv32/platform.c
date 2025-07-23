@@ -174,7 +174,10 @@ static void mlogv32_prompt_get_bootargs(void* fdt) {
 
 		sbi_putc(ch);
 
-		if (ch == '\r' || ch == '\n') {
+		if (ch == '\r') {
+			sbi_putc('\n');
+			break;
+		} else if (ch == '\n') {
 			break;
 		}
 

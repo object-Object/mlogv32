@@ -10,7 +10,7 @@ proxyarp
 ktune
 noauth
 nocrtscts
-xonxoff
-passive
+asyncmap 0
+silent
 socket 127.0.0.1:5000
 connect "echo '{\"type\":\"serial\",\"device\":\"uart1\"}'"

@@ -2,6 +2,6 @@
 ipcp-accept-local
 noauth
 local
-xonxoff
+asyncmap 0
 defaultroute
 usepeerdns

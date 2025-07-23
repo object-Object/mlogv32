@@ -167,8 +167,8 @@ end_slow_init:
 
     # UARTs
     set uart_flags 0
-    set uart_rx_was_non_empty 0
-    set uart_tx_empty_ptrs 0xffffffff
+    set uart_rx_interrupt_ptrs 0xffffffff
+    set uart_tx_interrupt_ptrs 0xffffffff
 
     op add ret @counter 1
     jump update_uart_flags always
@@ -383,56 +383,60 @@ update_uart_flags__loop:
     read _tx_write _uart {{UART_TX_WRITE}}
 
     op shl _interrupt_mask 1 _uart_shift
-    op not _interrupt_mask_inv _interrupt_mask
+
+    op mul _ptr_shift _uart_shift 8
+
+    op shl _clear_ptr_mask 0xff _ptr_shift
+    op not _clear_ptr_mask _clear_ptr_mask
 
     # RX FIFO became non-empty
 
     # don't generate interrupt if rx is empty
-    op notEqual _rx_is_non_empty _rx_read _rx_write
-    jump update_uart_flags__no_rx_interrupt equal _rx_is_non_empty 0
+    # in that case, set ptr to an invalid value so we don't mask a later interrupt here
+    set _new_ptr 0xff
+    jump update_uart_flags__set_rx_ptr equal _rx_read _rx_write
 
-    # don't generate interrupt if rx wasn't empty last time we checked
-    op and _rx_was_non_empty uart_rx_was_non_empty _interrupt_mask
-    jump update_uart_flags__no_rx_interrupt notEqual _rx_was_non_empty 0
+    # don't generate interrupt if this is the last ptr we generated one at
+    set _new_ptr _rx_read
+
+    op shr _prev_ptr uart_rx_interrupt_ptrs _ptr_shift
+    op and _prev_ptr _prev_ptr 0xff
+
+    jump update_uart_flags__done_rx equal _prev_ptr _new_ptr
 
     # generate interrupt
     op or uart_flags uart_flags _interrupt_mask
 
-update_uart_flags__no_rx_interrupt:
-    op shl _rx_is_non_empty _rx_is_non_empty _uart_shift
-    op and uart_rx_was_non_empty uart_rx_was_non_empty _interrupt_mask_inv
-    op or uart_rx_was_non_empty uart_rx_was_non_empty _rx_is_non_empty
+update_uart_flags__set_rx_ptr:
+    op shl _new_ptr _new_ptr _ptr_shift
+
+    op and uart_rx_interrupt_ptrs uart_rx_interrupt_ptrs _clear_ptr_mask
+    op or  uart_rx_interrupt_ptrs uart_rx_interrupt_ptrs _new_ptr
+update_uart_flags__done_rx:
 
     # TX FIFO became empty
 
-    op mul _ptr_shift _uart_shift 8
-
     # don't generate interrupt if tx is not empty
-    jump update_uart_flags__no_tx_interrupt notEqual _tx_read _tx_write
+    # in that case, set ptr to an invalid value so we don't mask a later interrupt here
+    set _new_ptr 0xff
+    jump update_uart_flags__set_tx_ptr notEqual _tx_read _tx_write
 
-    # don't generate interrupt if this is the last wptr we generated one at
-    op shr _last_tx_write uart_tx_empty_ptrs _ptr_shift
-    op and _last_tx_write _last_tx_write 0xff
-    jump update_uart_flags__done_tx equal _last_tx_write _tx_write
+    # don't generate interrupt if this is the last ptr we generated one at
+    set _new_ptr _tx_write
+
+    op shr _prev_ptr uart_tx_interrupt_ptrs _ptr_shift
+    op and _prev_ptr _prev_ptr 0xff
+
+    jump update_uart_flags__done_tx equal _prev_ptr _new_ptr
 
     # generate interrupt
     op or uart_flags uart_flags _interrupt_mask
 
-    # save this wptr
-    set _last_tx_write _tx_write
-    jump update_uart_flags__set_tx_empty_ptr always
+update_uart_flags__set_tx_ptr:
+    op shl _new_ptr _new_ptr _ptr_shift
 
-update_uart_flags__no_tx_interrupt:
-    # if not empty, set to an invalid value so we don't mask the interrupt when it becomes empty
-    set _last_tx_write 0xff
-
-update_uart_flags__set_tx_empty_ptr:
-    op shl _mask 0xff _ptr_shift
-    op not _mask _mask
-    op and uart_tx_empty_ptrs uart_tx_empty_ptrs _mask
-
-    op shl _last_tx_write _last_tx_write _ptr_shift
-    op or uart_tx_empty_ptrs uart_tx_empty_ptrs _last_tx_write
+    op and uart_tx_interrupt_ptrs uart_tx_interrupt_ptrs _clear_ptr_mask
+    op or  uart_tx_interrupt_ptrs uart_tx_interrupt_ptrs _new_ptr
 update_uart_flags__done_tx:
 
     # next UART

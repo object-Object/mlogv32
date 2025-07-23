@@ -25,7 +25,7 @@ fn main() -> ! {
 
         let mut timer = TIMER.borrow_ref_mut(cs);
         timer.write_mtime(0);
-        timer.write_mtimecmp(1000);
+        timer.write_mtimecmp(1_000_000);
     });
 
     unsafe {
@@ -43,7 +43,7 @@ fn machine_timer() {
     critical_section::with(|cs| {
         let mut timer = TIMER.borrow_ref_mut(cs);
         let mtime = timer.read_mtime();
-        timer.write_mtimecmp(mtime + 1000);
+        timer.write_mtimecmp(mtime + 1_000_000);
 
         let mut uart0 = UART0.borrow_ref_mut(cs);
         let uart0 = uart0.as_mut().unwrap();

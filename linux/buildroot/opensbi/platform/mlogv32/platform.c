@@ -19,7 +19,7 @@
 #include <sbi_utils/serial/xlnx_uartlite.h>
 #include <sbi_utils/timer/aclint_mtimer.h>
 
-#define MLOGV32_MTIME_FREQ		1000
+#define MLOGV32_MTIME_FREQ		1000000
 #define MLOGV32_MTIME_ADDR		0xf0000000
 #define MLOGV32_MTIME_SIZE		0x8
 #define MLOGV32_MTIMECMP_ADDR		0xf0000008

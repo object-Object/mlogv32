@@ -297,6 +297,7 @@ end_breakpoint:
     # TODO: handle mtimeh overflow
 
     op sub delta_ms @time last_mtime_update
+    op mul delta_ms delta_ms 1000 # ms -> μs
 
     op add csr_mtime csr_mtime delta_ms
     op floor csr_mtime csr_mtime

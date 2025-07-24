@@ -25,11 +25,12 @@ from .extensions import (
 from .filters import FILTERS, ram_var
 from .models import BuildConfig
 from .parser import (
-    DirectiveError,
-    Statement,
+    MlogError,
     check_unsaved_variables,
+    count_statements,
     iter_labels,
     parse_mlog,
+    replace_symbolic_labels,
 )
 from .types import ConfigArgs, ConfigsYaml, Labels
 
@@ -101,11 +102,11 @@ def build(
     size: Annotated[int | None, Option("-s", "--size")] = None,
     output: Annotated[Path | None, Option("-o", "--output")] = None,
     bin_path: Annotated[Path | None, Option("--bin")] = None,
-    include_all: Annotated[bool, Option("--all")] = False,
-    include_cpu: Annotated[bool, Option("--cpu")] = False,
-    include_peripherals: Annotated[bool, Option("--peripherals")] = False,
-    include_memory: Annotated[bool, Option("--memory")] = False,
-    include_debugger: Annotated[bool, Option("--debugger")] = False,
+    include_all: Annotated[bool, Option("-A", "--all")] = False,
+    include_cpu: Annotated[bool, Option("-C", "--cpu")] = False,
+    include_peripherals: Annotated[bool, Option("-P", "--peripherals")] = False,
+    include_memory: Annotated[bool, Option("-M", "--memory")] = False,
+    include_debugger: Annotated[bool, Option("-D", "--debugger")] = False,
     include_keyboard: Annotated[bool, Option("--keyboard/--no-keyboard")] = True,
 ):
     """Generate a CPU schematic.
@@ -260,19 +261,23 @@ def build(
 
     worker_ast = parse_mlog(worker_code)
 
-    check_unsaved_variables(worker_ast)
+    try:
+        check_unsaved_variables(worker_ast)
+        worker_labels = dict(iter_labels(worker_ast))
+        worker_code = replace_symbolic_labels(worker_code, worker_ast, worker_labels)
+    except MlogError as e:
+        e.add_note(f"{worker_output}:{e.token.line}")
+        raise
+
+    # hack
+    worker_output.write_text(worker_code, "utf-8")
+
     print(
         f"""\
 Worker:
-  Instructions: {len(list(n for n in worker_ast if isinstance(n, Statement)))} / 1000
+  Instructions: {count_statements(worker_ast)} / 1000
   Bytes: {len(worker_code.encode())} / {1024 * 100}"""
     )
-
-    try:
-        worker_labels = dict(iter_labels(worker_ast))
-    except DirectiveError as e:
-        e.add_note(f"{worker_output}:{e.token.line}")
-        raise
 
     # preprocess controller
 
@@ -291,7 +296,7 @@ Worker:
     print(
         f"""\
 Controller:
-  Instructions: {len(list(n for n in controller_ast if isinstance(n, Statement)))} / 1000
+  Instructions: {count_statements(controller_ast)} / 1000
   Bytes: {len(controller_code.encode())} / {1024 * 100}"""
     )
 

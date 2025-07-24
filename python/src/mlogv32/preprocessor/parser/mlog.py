@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from importlib import resources
-from typing import TYPE_CHECKING, Callable, Iterable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from lark import Lark, Token, Transformer
 
@@ -34,6 +34,8 @@ class Directive:
 
 type ASTNode = Label | Statement | Directive
 
+type AST = list[ASTNode]
+
 
 @dataclass
 @v_args(inline=True)
@@ -65,10 +67,14 @@ def parse_mlog(text: str):
     return MlogTransformer().transform(tree)
 
 
-class DirectiveError(AssertionError):
+class MlogError(AssertionError):
     def __init__(self, message: str, token: Token, *args: object) -> None:
         super().__init__(message, *args)
         self.token = token
+
+
+class DirectiveError(MlogError):
+    pass
 
 
 def expect_int(
@@ -85,7 +91,7 @@ def expect_int(
     raise DirectiveError(f"Invalid {description}: {result}", n)
 
 
-def iter_labels(ast: Iterable[ASTNode]) -> Iterator[tuple[str, int]]:
+def iter_labels(ast: AST) -> Iterator[tuple[str, int]]:
     counter = 0
     length_assertion = None
     for node in ast:
@@ -139,7 +145,7 @@ def iter_labels(ast: Iterable[ASTNode]) -> Iterator[tuple[str, int]]:
         )
 
 
-def check_unsaved_variables(ast: Iterable[ASTNode]):
+def check_unsaved_variables(ast: AST):
     saved_variables = {"@counter"}
     warned_variables = set[str]()
     state = "init"
@@ -194,3 +200,64 @@ def check_unsaved_variables(ast: Iterable[ASTNode]):
             warned_variables.add(var)
 
     print(f"Saved variable count: {len(saved_variables - {'@counter'})}")
+
+
+def count_statements(ast: AST):
+    n = 0
+    for node in ast:
+        if isinstance(node, Statement):
+            n += 1
+    return n
+
+
+def replace_symbolic_labels(
+    text: str,
+    ast: AST,
+    labels: dict[str, int],
+    *,
+    check: bool = True,
+) -> str:
+    parts = list[str]()
+
+    start_pos = 0
+
+    for token in _iter_label_refs(ast):
+        label = token[1:-1]
+        if label not in labels:
+            raise MlogError(f"Unknown symbolic label: {label}", token)
+
+        if token.start_pos is None or token.end_pos is None:
+            raise MlogError(f"Internal error: invalid token: {token}", token)
+
+        parts += [
+            text[start_pos : token.start_pos],
+            str(labels[label]),
+        ]
+
+        start_pos = token.end_pos
+
+    parts += text[start_pos:]
+
+    new_text = "".join(parts)
+
+    # sanity checks
+    if check:
+        new_ast = parse_mlog(new_text)
+        if count_statements(ast) != count_statements(new_ast):
+            raise AssertionError(
+                "Source transformation failed: mismatched statement count"
+            )
+        if labels != dict(iter_labels(new_ast)):
+            raise AssertionError("Source transformation failed: mismatched labels")
+
+    return new_text
+
+
+def _iter_label_refs(ast: AST) -> Iterator[Token]:
+    for node in ast:
+        if not isinstance(node, Statement):
+            continue
+        for token in node.args:
+            if token.type != "LABEL_REF":
+                continue
+            yield token

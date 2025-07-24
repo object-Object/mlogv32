@@ -22,17 +22,6 @@
 #% set LEVELS = 2
 #% set PTESIZE = 4
 
-#% set labels = namespace()
-#% set _labels_vals = (labels|namespace_dict).values()
-
-#% set labels.next_tick = 13
-
-#% set labels.end_instruction_with_rd_and_poll_interrupts = 155
-#% set labels.end_instruction_with_rd_and_fire_interrupts = _labels_vals|last + 1
-#% set labels.end_instruction_with_rd                     = _labels_vals|last + 1
-#% set labels.end_instruction                             = _labels_vals|last + 2
-#% set labels.end_instruction_trap                        = _labels_vals|last + 6
-
 #%# macros
 
 #% macro start_assert_length(n)
@@ -60,8 +49,7 @@ reset:
     wait 1e-5
 
     # @counter is moved here when the next worker starts executing
-#directive assert_counter {{ labels.next_tick }}
-
+next_tick:
     # fetch saved variables from the previous worker
     read prev_proc {{CONTROLLER}} "prev_proc"
 
@@ -157,50 +145,41 @@ reset__no_overflow:
 #directive push_saved __counter
     # otherwise, jump to whatever instruction the previous worker would have executed next
     read __counter prev_proc "@counter"
-    write {{labels.next_tick}} prev_proc "@counter"
+    write %next_tick% prev_proc "@counter"
     set @counter __counter
 #directive pop_saved __counter
 
 # check if software-manipulable interrupts should become pending
 # this runs at the start of the first worker each tick, and at the start of the next worker if certain CSRs/MMRs are modified
 poll_interrupts:
-#% set poll_interrupt_locals = ["$$mip.meip", "$$mip.mtip", "$$mip.stip"]
-#% do declare_locals(poll_interrupt_locals)
-    # machine external interrupt (UARTs)
-    op shr $uart_interrupts uart_flags 4
-    op and $uart_interrupts $uart_interrupts uart_flags
-
-    op notEqual $$mip.meip $uart_interrupts 0
-    op shl $$mip.meip $$mip.meip 11
-
-#% do declare_locals(poll_interrupt_locals)
-    # machine timer interrupt
-    op greaterThan $high_gt csr_mtimeh csr_mtimecmph
-    op equal $high_eq csr_mtimeh csr_mtimecmph
-    op greaterThanEq $low_ge csr_mtime csr_mtimecmp
-
-    op and $$mip.mtip $high_eq $low_ge
-    op or $$mip.mtip $$mip.mtip $high_gt
-    op shl $$mip.mtip $$mip.mtip 7
-
-#% do declare_locals(poll_interrupt_locals)
-    # supervisor timer interrupt
-    op greaterThan $high_gt csr_mtimeh csr_stimecmph
-    op equal $high_eq csr_mtimeh csr_stimecmph
-    op greaterThanEq $low_ge csr_mtime csr_stimecmp
-
-    op and $$mip.stip $high_eq $low_ge
-    op or $$mip.stip $$mip.stip $high_gt
-    op shl $$mip.stip $$mip.stip 5
-
+#% do reset_locals()
     # poll                   -
     # MEIP                                       -
     # MTIP                                           -
     # STIP                                             -
     op and csr_mip csr_mip 0b01111111111111111111011101011111
-    op or csr_mip csr_mip $$mip.meip
-    op or csr_mip csr_mip $$mip.mtip
-    op or csr_mip csr_mip $$mip.stip
+
+    # machine external interrupt (UARTs)
+    op shr $uart_interrupts uart_flags 4
+    op and $uart_interrupts $uart_interrupts uart_flags
+    select $mip.meip notEqual $uart_interrupts 0 0b100000000000 0
+    op or csr_mip csr_mip $mip.meip
+
+    # machine timer interrupt
+    # fire if mtimeh > mtimecmph || (mtimeh == mtimecmph && mtime >= mtimecmp)
+    jump poll_interrupts__no_mti lessThan csr_mtimeh csr_mtimecmph
+    select $mip.mtip greaterThan csr_mtimeh csr_mtimecmph 0b10000000 0
+    select $mip.mtip greaterThanEq csr_mtime csr_mtimecmp 0b10000000 $mip.mtip
+    op or csr_mip csr_mip $mip.mtip
+poll_interrupts__no_mti:
+
+    # supervisor timer interrupt
+    # fire if mtimeh > stimecmph || (mtimeh == stimecmph && mtime >= stimecmp)
+    jump poll_interrupts__no_sti lessThan csr_mtimeh csr_stimecmph
+    select $mip.stip greaterThan csr_mtimeh csr_stimecmph 0b100000 0
+    select $mip.stip greaterThanEq csr_mtime csr_stimecmp 0b100000 $mip.stip
+    op or csr_mip csr_mip $mip.stip
+poll_interrupts__no_sti:
 
 # check if interrupts should fire
 # this runs at the start of the first worker each tick, if certain CSRs are modified, and after an xRET instruction
@@ -278,10 +257,9 @@ main:
     jump main__access_ram_icache      lessThan address ICACHE_END
 
 main__slow_instruction_fetch:
-    jump trap greaterThanEq address RAM_END # prevent executing from MMIO
-
+    # prevent executing from MMIO
     op add ret @counter 1
-    jump load_word always
+    select @counter greaterThanEq address RAM_END %trap% %load_word%
 
     set address null
 
@@ -343,27 +321,23 @@ main__no_breakpoint:
     read @counter {{LABELS}} $index
 
 # this is a normal length for a label
-#directive assert_counter {{ labels.end_instruction_with_rd_and_poll_interrupts }}
 end_instruction_with_rd_and_poll_interrupts:
     op or csr_mip csr_mip 0b10000000000000000000000000000000 # set interrupt_flags.poll
     # continue into end_instruction_with_rd_and_fire_interrupts
 
 # this is too
-#directive assert_counter {{ labels.end_instruction_with_rd_and_fire_interrupts }}
 end_instruction_with_rd_and_fire_interrupts:
     op or csr_mip csr_mip 0b01000000000000000000000000000000 # set interrupt_flags.fire
     # continue into end_instruction_with_rd
 
 # most instructions with an output register jump here after completing successfully
 # writes value rd to register rd_id if rd_id is not x0
-#directive assert_counter {{ labels.end_instruction_with_rd }}
 end_instruction_with_rd:
     jump end_instruction equal rd_id 0
     write rd {{REGISTERS}} rd_id
     # continue into end_instruction
 
 # all instructions jump here after completing successfully
-#directive assert_counter {{ labels.end_instruction }}
 end_instruction:
 #% do reset_locals()
     # increment instret
@@ -376,7 +350,6 @@ end_instruction:
     op add $minstreth $minstreth 1
     write $minstreth {{CSRS}} "{{ 'minstreth'|csr }}"
 
-#directive assert_counter {{ labels.end_instruction_trap }}
 end_instruction_trap:
     # next_pc is set to pc + 4 at the start of main
     # if we're in the icache, icache_var was already incremented
@@ -394,14 +367,6 @@ default_xtvec_handler:
     set state "halt"
     print "Trap taken to {{SYSCON}} (default trap vector), halting."
     printflush {{ERROR_OUTPUT}}
-    # continue into state->halt
-
-state->halt:
-    set state "halt"
-    jump reset always
-
-state->reset:
-    set state "reset"
     jump reset always
 
 interrupt:
@@ -498,12 +463,9 @@ trap__breakpoint:
     stop
 trap__no_breakpoint:
 
-    # check for unhandled traps
-    jump default_xtvec_handler equal next_pc {{SYSCON}}
-
-    # update effective_privilege_mode
+    # update effective_privilege_mode and check for unhandled traps
     # tail call into end_instruction_trap so we don't update instret
-    set ret {{# labels.end_instruction_trap }}
+    select ret equal next_pc {{SYSCON}} %default_xtvec_handler% %end_instruction_trap%
     # continue into get_effective_privilege_mode_and_invalidate_icache
 
 # update effective_privilege_mode
@@ -512,19 +474,15 @@ trap__no_breakpoint:
 get_effective_privilege_mode_and_invalidate_icache:
     set icache_var null
 get_effective_privilege_mode:
-    # NOTE: avoid using locals in this function
-    # mstatus.MPRV
-    op and effective_privilege_mode csr_mstatus 0b100000000000000000
-    jump get_effective_privilege_mode__normal equal effective_privilege_mode 0
+#% do reset_locals()
+    op shr $mstatus.mpp csr_mstatus 11
+    op and $mstatus.mpp $mstatus.mpp 0b11
 
-    # MPRV=1, return mstatus.MPP
-    op shr effective_privilege_mode csr_mstatus 11
-    op and effective_privilege_mode effective_privilege_mode 0b11
-    set @counter ret
+    op and $mstatus.mprv csr_mstatus 0b100000000000000000
 
-get_effective_privilege_mode__normal:
-    # MPRV=0, return privilege_mode
-    set effective_privilege_mode privilege_mode
+    # if MPRV=0, return privilege_mode
+    # if MPRV=1, return mstatus.MPP
+    select effective_privilege_mode equal $mstatus.mprv 0 privilege_mode $mstatus.mpp
     set @counter ret
 
 # helper functions
@@ -1091,7 +1049,7 @@ decode_value_in_result:
 # value (instruction), address -> op_id, imm, result (icache_payload)
 # ret: ret3
 decode:
-#% set decode_locals = ["$$imm_4_0", "$$funct12", "$$funct7", "$$funct3"]
+#% set decode_locals = ["$$imm_4_0", "$$funct12", "$$funct7", "$$funct3", "$$opcode_6_2"]
 #% do declare_locals(decode_locals)
     # decode and pack registers into the payload
     op and result value 0b1111111111000000000000000 # rs1/rs2
@@ -1128,18 +1086,17 @@ decode:
 
     # jump table based on opcode[6:2] since the low 2 bits have already been checked
     # the jump table is stored in LABELS by the controller, starting at index 0 at multiples of 4
-    op and $tmp value 0b1111100
-    read @counter {{LABELS}} $tmp
-
-decode_LUI:
-    set op_id -53 # LUI
-    jump decode_U-type always
-
-decode_AUIPC:
-    set op_id -8 # AUIPC
+    op and $$opcode_6_2 value 0b1111100
+    read @counter {{LABELS}} $$opcode_6_2
 
 # U-type: imm, rd_id
-decode_U-type:
+decode_LUI:
+decode_AUIPC:
+#% do declare_locals(decode_locals)
+    # -53: LUI
+    # -8: AUIPC
+    select op_id equal $$opcode_6_2 0b0110100 -53 -8
+
     # imm
     op and imm value 0b11111111111111111111000000000000
     jump end_decode always
@@ -1147,6 +1104,7 @@ decode_U-type:
 # J-type: imm, rd_id
 decode_JAL:
 #% do declare_locals(decode_locals)
+#% do free_locals("$$opcode_6_2")
     # imm
     op shr $imm_20 value 11 # instruction[31] -> imm[20]
     # instruction: instruction[19:12] -> imm[19:12]
@@ -1176,6 +1134,7 @@ decode_JALR:
 # B-type: rs1, rs2, imm
 decode_BRANCH:
 #% do declare_locals(decode_locals)
+#% do free_locals("$$opcode_6_2")
     jump decode_illegal_instruction equal $$funct3 2
     jump decode_illegal_instruction equal $$funct3 3
 
@@ -1212,7 +1171,6 @@ decode_BRANCH:
 decode_LOAD:
 #% do declare_locals(decode_locals)
     jump decode_illegal_instruction equal $$funct3 3
-    jump decode_illegal_instruction greaterThanEq $$funct3 6
 
     # -56: LB
     # -55: LH
@@ -1221,13 +1179,11 @@ decode_LOAD:
     # -52: LBU
     # -51: LHU
     op add op_id -56 $$funct3
-    jump decode_I-type always
+    select @counter lessThan $$funct3 6 %decode_I-type% %decode_illegal_instruction%
 
 # S-type: rs1, rs2, imm
 decode_STORE:
 #% do declare_locals(decode_locals)
-    jump decode_illegal_instruction greaterThanEq $$funct3 3
-
     # imm
     op shl $imm_11_5 $$funct7 5 # instruction[31:25] -> imm[11:5]
     # imm_4_0: instruction[11:7] -> imm[4:0]
@@ -1242,7 +1198,7 @@ decode_STORE:
     # -49: SH
     # -48: SW
     op add op_id -50 $$funct3
-    jump end_decode always
+    select @counter lessThan $$funct3 3 %end_decode% %decode_illegal_instruction%
 
 # R-type: rs1, rs2, rd_id
 decode_AMO:
@@ -1253,23 +1209,21 @@ decode_AMO:
     # mlogv32 is single-hart, so just ignore aq and rl
     op shr $funct5 $$funct7 2
 
-    # funct5 either has bits in [4:2] or [1:0] set, never both
-    # (ab)use that so we don't need 32 lookup table entries
-    jump decode_AMO__high greaterThan $funct5 0b11
-
     # low bits
     # -47: AMOADD.W
     # -46: AMOSWAP.W
     # -45: LR.W
     # -44: SC.W
     op add op_id -47 $funct5
-    jump end_decode always
 
-decode_AMO__high:
-    # high bits
+    # funct5 either has bits in [4:2] or [1:0] set, never both
+    # (ab)use that so we don't need 32 lookup table entries
+    jump end_decode lessThanEq $funct5 0b11
+
+    # if funct5 > 0b11, the low two bits must be clear
     op and $low $funct5 0b11
-    jump decode_illegal_instruction notEqual $low 0b00
 
+    # high bits
     # -43: AMOXOR.W
     # -42: AMOOR.W
     # -41: AMOAND.W
@@ -1279,7 +1233,8 @@ decode_AMO__high:
     # -37: AMOMAXU.W
     op shr $funct5 $funct5 2
     op add op_id -44 $funct5 # funct5 >> 2 starts at 1, not 0
-    jump end_decode always
+
+    select @counter equal $low 0b00 %end_decode% %decode_illegal_instruction%
 
 decode_OP-IMM:
 #% do declare_locals(decode_locals)
@@ -1319,9 +1274,8 @@ decode_I-type_no_extend_sign:
 decode_SLLI:
 #% do declare_locals(decode_locals)
     # shamt is encoded in the low 5 bits of imm, so sign extension is redundant
-    jump decode_illegal_instruction notEqual $$funct7 0b0000000
     set op_id -3 # SLLI
-    jump decode_I-type_no_extend_sign always
+    select @counter equal $$funct7 0b0000000 %decode_I-type_no_extend_sign% %decode_illegal_instruction%
 
 decode_SRLI_SRAI:
 #% do declare_locals(decode_locals)
@@ -1332,9 +1286,7 @@ decode_SRLI_SRAI:
     # SRAI
     op and $$funct12 $$funct12 0b11111 # HACK: zero out the high bits of funct12 so funct7 isn't included in imm
     set op_id -1 # SRAI
-    jump decode_I-type_no_extend_sign equal $$funct7 0b0100000
-
-    jump decode_illegal_instruction always
+    select @counter equal $$funct7 0b0100000 %decode_I-type_no_extend_sign% %decode_illegal_instruction%
 
 # R-type: rs1, rs2, rd_id
 decode_OP:
@@ -1367,23 +1319,19 @@ decode_OP:
     jump end_decode equal $$funct3 0b000
 
     set op_id -31 # SRA
-    jump end_decode equal $$funct3 0b101
-
-    jump decode_illegal_instruction always
+    select @counter equal $$funct3 0b101 %end_decode% %decode_illegal_instruction%
 
 decode_MISC-MEM:
 #% do declare_locals(decode_locals)
-    jump decode_illegal_instruction greaterThan $$funct3 1 # FENCE=0, FENCE.I=1
-
     # NOTE: we put FENCE at -4 because -3 to -1 are placed manually, not by a funct3 addition
     # so we can move them to different op_ids if we want to add a separate handler for FENCE.I
     set op_id -4 # FENCE/FENCE.I
-    jump decode_I-type_no_extend_sign always
+
+    # FENCE=0, FENCE.I=1
+    select @counter lessThan $$funct3 2 %decode_I-type_no_extend_sign% %decode_illegal_instruction%
 
 decode_SYSTEM:
 #% do declare_locals(decode_locals)
-    jump decode_illegal_instruction equal $$funct3 4
-
     # -12: PRIV
     # -11: CSRRW
     # -10: CSRRS
@@ -1393,14 +1341,14 @@ decode_SYSTEM:
     # -6: CSRRSI
     # -5: CSRRCI
     op add op_id -12 $$funct3
-    jump decode_I-type_no_extend_sign always
+    select @counter notEqual $$funct3 4 %decode_I-type_no_extend_sign% %decode_illegal_instruction%
 
 # Xmlogsys
 decode_custom-0:
 #% do declare_locals(decode_locals)
     # 1: MLOGSYS
     op add op_id 1 $$funct3
-    jump decode_I-type_no_extend_sign lessThanEq $$funct3 0
+    jump decode_I-type_no_extend_sign lessThan $$funct3 1
     # continue into decode_illegal_instruction if funct3 >= 1
 
 # must stay directly before end_decode
@@ -1417,15 +1365,15 @@ end_decode:
     op and imm imm 0xffffffff
 
     # this branch is taken if decoding during instruction fetch
-    jump end_decode__no_write_icache strictEqual address null
+    # using select here doesn't save on code size, but it speeds up the slow fetch a bit
+    select @counter strictEqual address null ret3 @counter
 
     # get the current instruction cache processor and variable
     jump end_decode__decode_var_valid notEqual variable null
 
-    op add _address RAM_SIZE address
-    jump end_decode__rom lessThan address {{RAM_START}}
-    op add _address RAM_ICACHE_OFFSET address
-end_decode__rom:
+    select $offset lessThan address {{RAM_START}} RAM_SIZE RAM_ICACHE_OFFSET
+    op add _address $offset address
+
     op add ret2 @counter 1
     jump access_ram_raw always
 
@@ -1440,7 +1388,6 @@ end_decode__decode_var_valid:
     # write to the icache
     write result ram variable
 
-end_decode__no_write_icache:
     set @counter ret3
 
 # instruction handlers
@@ -1455,10 +1402,6 @@ AUIPC:
     op add rd imm pc
     jump end_instruction_with_truncated_rd always
 
-JAL:
-    # J-type: imm, rd_id
-    jump unconditional_pc_relative_jump always
-
 JALR:
     # I-type: rs1, imm, rd_id
     op add next_pc rs1 imm
@@ -1467,13 +1410,11 @@ JALR:
 
 BEQ:
     # B-type: rs1, rs2, imm
-    jump conditional_branch equal rs1 rs2
-    jump end_instruction always
+    select @counter equal rs1 rs2 %conditional_branch% %end_instruction%
 
 BNE:
     # B-type: rs1, rs2, imm
-    jump conditional_branch notEqual rs1 rs2
-    jump end_instruction always
+    select @counter notEqual rs1 rs2 %conditional_branch% %end_instruction%
 
 BLT:
     # B-type: rs1, rs2, imm
@@ -1501,8 +1442,7 @@ unsigned_to_signed__done_2:
 
 BLTU:
     # B-type: rs1, rs2, imm
-    jump conditional_branch lessThan rs1 rs2
-    jump end_instruction always
+    select @counter lessThan rs1 rs2 %conditional_branch% %end_instruction%
 
 BGE:
     # B-type: rs1, rs2, imm
@@ -1512,14 +1452,14 @@ BGE:
 
 BGEU:
     # B-type: rs1, rs2, imm
-    jump end_instruction lessThan rs1 rs2
-    # continue into conditional_branch if rs1 >= rs2
+    select @counter greaterThanEq rs1 rs2 %conditional_branch% %end_instruction%
 
 conditional_branch:
     set rd_id 0 # prevent end_instruction_with_rd from writing to a register
-    # continue into unconditional_pc_relative_jump
+    # continue into JAL
 
-unconditional_pc_relative_jump:
+JAL:
+    # J-type: imm, rd_id
     op add next_pc pc imm
     # continue into unconditional_jump
 
@@ -1544,7 +1484,7 @@ unconditional_jump:
 
     op and $pc_page pc 0xfffff000
     op and $next_pc_page next_pc 0xfffff000
-    jump end_instruction_with_rd_and_invalidate_icache notEqual $pc_page $next_pc_page
+    jump unconditional_jump__no_icache_lookup notEqual $pc_page $next_pc_page
 
     # now we know we're in the same page, but we need to figure out which of the four pages within the RAM proc it is
 
@@ -1562,11 +1502,8 @@ unconditional_jump:
     op add ret2 @counter 1
     jump lookup_variable always
 
-    set icache_var variable
-    jump end_instruction_with_rd always
-
-end_instruction_with_rd_and_invalidate_icache:
-    set icache_var null
+unconditional_jump__no_icache_lookup:
+    select icache_var notEqual $pc_page $next_pc_page null variable
     jump end_instruction_with_rd always
 
 LB:
@@ -1606,7 +1543,7 @@ load_value_unsigned:
 load_value:
 #% do reset_locals()
     set mcause 4 # load address misaligned
-    op add ret3 @counter {{# start_assert_length(9) }}
+    op add ret3 @counter {{# start_assert_length(8) }}
 
 setup_load_and_store_value:
     op add address rs1 imm
@@ -1620,8 +1557,7 @@ setup_load_and_store_value:
 
     # translate to physical address (tail call)
     op add mcause mcause 1 # access fault
-    jump translate_virtual_address lessThan effective_privilege_mode 0b11
-    set @counter ret3
+    select @counter lessThan effective_privilege_mode 0b11 %translate_virtual_address% ret3
 
 #directive end_assert_length
     # load the word containing the address
@@ -1640,10 +1576,7 @@ setup_load_and_store_value:
     op mod rd rd $divisor
 
     # extend the sign of the value if it's signed
-    jump extend_sign_rd equal nonlocal1 true
-
-    # write result to rd
-    jump end_instruction_with_rd always
+    select @counter equal nonlocal1 true %extend_sign_rd% %end_instruction_with_rd%
 
 SB:
     # S-type: rs1, rs2, imm
@@ -1720,15 +1653,12 @@ store_ram_word_unchecked:
 
     write result ram variable
 
-    # if out of icache range, we're done
-    jump end_instruction_with_rd greaterThanEq address ICACHE_END
-
     # if in icache range, decode the new value and update the icache to allow executing from RAM and self-modifying code
     # TODO: add a way for the CPU to temporarily disable this for performance?
     # or make use of FENCE.I
     set variable null
-    set ret3 {{# labels.end_instruction_with_rd }}
-    jump decode always
+    set ret3 %end_instruction_with_rd%
+    select @counter lessThan address ICACHE_END %decode% ret3
 
     # atomics are not supported for MMIO, so we don't need to write to rd here
     # however, rd_id is set regardless, so we can safely jump to end_instruction_with_rd_and_time_update
@@ -1803,15 +1733,17 @@ store_mmio_word_unchecked__uart_control__no_reset_tx:
 
 store_value__syscon:
     jump end_instruction greaterThan rs2 2
-    jump state->reset equal rs2 1
-    jump state->halt always # 0 or 2 (for linux syscon)
+    # halt: 0 or 2 (for linux syscon)
+    # reset: 1
+    select state equal rs2 1 "reset" "halt"
+    jump reset always
 
 LR.W:
     # R-type: rs1, rs2=0, rd_id
 
     # check address and alignment
     set mcause 4 # load address misaligned
-    op add ret4 @counter {{# start_assert_length(10) }}
+    op add ret4 @counter {{# start_assert_length(9) }}
     # implicit jump to atomic_validate_address
 
     # ret: ret4
@@ -1829,9 +1761,7 @@ atomic_validate_address:
     jump translate_virtual_address lessThan effective_privilege_mode 0b11
 
     jump trap lessThan address {{RAM_START}}
-    jump trap greaterThanEq address RAM_END
-
-    set @counter ret4
+    select @counter greaterThanEq address RAM_END %trap% ret4
 #directive end_assert_length
 
     # load value
@@ -1865,13 +1795,11 @@ SC.W:
     op notEqual rd $success true
 
     # conditionally write value
-    jump end_instruction_with_rd notEqual $success true
-
-    op add ret2 @counter 1
-    jump access_ram always
-
+    # if success is true, we jump to access_ram and then tail call into store_ram_word_unchecked
+    # otherwise, we jump directly to end_instruction_with_rd
     set value rs2
-    jump store_ram_word_unchecked always
+    set ret2 %store_ram_word_unchecked%
+    select @counter equal $success true %access_ram% %end_instruction_with_rd%
 
 AMOADD.W:
 AMOSWAP.W:
@@ -2166,13 +2094,12 @@ DIV:
 DIVU:
     # R-type: rs1, rs2, rd_id
 
-    # division by zero returns all bits set
-    set rd 0xffffffff
-    jump end_instruction_with_rd equal rs2 0
-
     # use div instead of idiv and then cast to long so that it rounds towards zero
     # https://stackoverflow.com/a/8387377
     op div rd rs1 rs2
+
+    # division by zero returns all bits set
+    select rd equal rs2 0 0xffffffff rd
 
     jump end_instruction_with_truncated_rd always
 
@@ -2186,11 +2113,12 @@ REM:
 REMU:
     # R-type: rs1, rs2, rd_id
 
-    # modulo by zero returns dividend
-    set rd rs1
-    jump end_instruction_with_rd equal rs2 0
-
+    # for REM, the sign of a nonzero result equals the sign of the dividend
+    # this matches java's % operator, so use mod
     op mod rd rs1 rs2
+
+    # modulo by zero returns dividend
+    select rd equal rs2 0 rs1 rd
 
     # truncation is only necessary for signed
     jump end_instruction_with_truncated_rd always
@@ -2205,8 +2133,7 @@ FENCE:
     # we can differentiate FENCE.I from PAUSE because FENCE.I is supposed to have imm=0
     # NOTE: result always contains the icache payload at this point
     op and $rs1id_rdid_imm result 0x3ffffffffff
-    jump end_instruction notEqual $rs1id_rdid_imm 0b000000010000
-    # continue into WFI
+    select @counter notEqual $rs1id_rdid_imm 0b000000010000 %end_instruction% %pause_one_tick%
 
 WFI:
 #% do reset_locals()
@@ -2216,6 +2143,7 @@ WFI:
     # we check interrupt_flags first to avoid unnecessarily stalling if there may be an interrupt ready
     jump end_instruction greaterThanEq csr_mip 0b01000000000000000000000000000000
 
+pause_one_tick:
     set state "pause"
     wait 1e-5
     set state "running"
@@ -2259,10 +2187,8 @@ EBREAK:
     set mtval pc
     jump trap always
 
-#% set xret_locals = ["$$xpie_mask"]
-
 SRET:
-#% do declare_locals(xret_locals)
+#% do reset_locals()
     # if executing in S-mode, raise an illegal instruction exception if TSR=1
     jump SRET__no_tsr notEqual privilege_mode 0b01
     op and $mstatus.tsr csr_mstatus 0b10000000000000000000000
@@ -2279,12 +2205,10 @@ SRET__no_tsr:
     # set next_pc to SEPC
     read next_pc {{CSRS}} "{{ 'sepc'|csr }}"
 
-    set $$xpie_mask 0b100000
-
     jump xRET always
 
 MRET:
-#% do declare_locals(xret_locals)
+#% do reset_locals()
     # set privilege_mode to mstatus.MPP
     op and privilege_mode csr_mstatus 0b1100000000000
     op shr privilege_mode privilege_mode 11
@@ -2295,16 +2219,17 @@ MRET:
     # set next_pc to MEPC
     read next_pc {{CSRS}} "{{ 'mepc'|csr }}"
 
-    set $$xpie_mask 0b10000000
-
 xRET:
+    # 0b000100000010 = SRET
+    select $xpie_mask equal imm 0b000100000010 0b100000 0b10000000
+
     # set mstatus.xIE to mstatus.xPIE
-    op and $mstatus.xie csr_mstatus $$xpie_mask
+    op and $mstatus.xie csr_mstatus $xpie_mask
     op shr $mstatus.xie $mstatus.xie 4
     op or csr_mstatus csr_mstatus $mstatus.xie
 
     # set mstatus.xPIE to 1
-    op or csr_mstatus csr_mstatus $$xpie_mask
+    op or csr_mstatus csr_mstatus $xpie_mask
 
     # if changing the privilege mode to a mode less privileged than M, set mstatus.MPRV to 0
     jump xRET__mprv_m_mode equal privilege_mode 0b11
@@ -2314,7 +2239,7 @@ xRET__mprv_m_mode:
     op or csr_mip csr_mip 0b01000000000000000000000000000000 # set interrupt_flags.fire
 
     # update effective_privilege_mode, and tail call
-    set ret {{# labels.end_instruction }}
+    set ret %end_instruction%
     jump get_effective_privilege_mode_and_invalidate_icache always
 
 SFENCE.VMA:
@@ -2332,7 +2257,6 @@ SFENCE.VMA__no_tvm:
 
 #%# the first local is clobbered by lookup_variable
 #% set modify_csr_locals = ['$$_', '$$modify_csr_op', '$$csr_labels', '$$tmp']
-#% set modify_csr_op_offset = 1
 
 #% do declare_locals(modify_csr_locals)
 
@@ -2343,7 +2267,7 @@ CSRRWI:
 
 CSRRW:
     # CSR-type: rs1, imm=csr, rd_id
-    set $$modify_csr_op {{# 0 + modify_csr_op_offset }} # read/write
+    set $$modify_csr_op %modify_csr__rw%
     jump modify_csr always
 
 CSRRSI:
@@ -2353,7 +2277,7 @@ CSRRSI:
 
 CSRRS:
     # CSR-type: rs1, imm=csr, rd_id
-    set $$modify_csr_op {{# 2 + modify_csr_op_offset }} # read and set bits
+    set $$modify_csr_op %modify_csr__rs%
     jump modify_csr always
 
 CSRRCI:
@@ -2363,7 +2287,7 @@ CSRRCI:
 
 CSRRC:
     # CSR-type: rs1, imm=csr, rd_id
-    set $$modify_csr_op {{# 4 + modify_csr_op_offset }} # read and clear bits
+    set $$modify_csr_op %modify_csr__rc%
     # continue into modify_csr
 
 modify_csr:
@@ -2386,24 +2310,21 @@ modify_csr:
     # a few handlers assume that we set rd to 0
     set rd 0
 
-    # convert modify_csr_op from relative to absolute
-    # we could just use an absolute address in modify_csr_op, but it'd be annoying this far into the code
-    op add $$modify_csr_op @counter $$modify_csr_op
-#directive start_assert_length {{ modify_csr_op_offset }}
-
     # jump to read handler
     op mod @counter $$csr_labels 1000
 
     # modify
     # the old value is stored in the variable rd by this point
 
+modify_csr__rw:
     # read/write (always write)
-#directive end_assert_length
     set result rs1
     jump modify_csr__always_write always
+modify_csr__rs:
     # read and set bits (conditional write)
     op or result rs1 rd
     jump modify_csr__conditional_write always
+modify_csr__rc:
     # read and clear bits (conditional write)
     op not result rs1
     op and result result rd
@@ -2454,20 +2375,17 @@ csr_write_csrs:
 csr_write_readonly:
     jump end_instruction_with_rd always
 
+csr_read_mstatus:
 csr_read_sstatus:
 #% do declare_locals(modify_csr_locals)
-    # subset of mstatus
-    # MXR                               -
-    # SUM                                -
-    # SPP                                          -
-    # SPIE                                            -
-    # SIE                                                 -
-    op and rd csr_mstatus 0b00000000000011000000000100100010
-    set @counter $$modify_csr_op
-
-csr_read_mstatus:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mstatus
+    # sstatus is a subset of mstatus
+    # MXR                                                           -
+    # SUM                                                            -
+    # SPP                                                                      -
+    # SPIE                                                                        -
+    # SIE                                                                             -
+    select $mask equal variable "{{ 'sstatus'|csr }}" 0b00000000000011000000000100100010 0xffffffff
+    op and rd csr_mstatus $mask
     set @counter $$modify_csr_op
 
 csr_write_mstatus:
@@ -2492,7 +2410,7 @@ csr_write_sstatus:
     op or csr_mstatus csr_mstatus result
 
     # update effective_privilege_mode
-    set ret {{# labels.end_instruction_with_rd_and_fire_interrupts }}
+    set ret %end_instruction_with_rd_and_fire_interrupts%
     jump get_effective_privilege_mode always
 
 csr_read_sip:
@@ -2565,28 +2483,21 @@ csr_read_satp:
     # if executing in S-mode, raise an illegal instruction exception if TVM=1
     jump csr_read_csrs notEqual privilege_mode 0b01
     op and $mstatus.tvm csr_mstatus 0b100000000000000000000
-    jump csr_read_csrs equal $mstatus.tvm 0
-    jump ILLEGAL_OP always
+    select @counter equal $mstatus.tvm 0 %csr_read_csrs% %ILLEGAL_OP%
 
 csr_read_stimecmp:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_stimecmp
-    jump check_stimecmp always
-
-csr_write_stimecmp:
-    set csr_stimecmp result
-    jump end_instruction_with_rd_and_poll_interrupts always
-
 csr_read_stimecmph:
 #% do declare_locals(modify_csr_locals)
-    set rd csr_stimecmph
-    # continue into check_stimecmp
+    select rd equal variable "{{ 'stimecmp'|csr }}" csr_stimecmp csr_stimecmph
 
-check_stimecmp:
     # stimecmp is controlled by the TM bit in mcounteren
     # so we set _address to 1 and use check_xcounteren to check the TM bit
     set _address 1
     jump check_xcounteren always
+
+csr_write_stimecmp:
+    set csr_stimecmp result
+    jump end_instruction_with_rd_and_poll_interrupts always
 
 csr_write_stimecmph:
     set csr_stimecmph result
@@ -2628,13 +2539,9 @@ csr_write_minstreth:
     jump csr_write_csrs always
 
 csr_read_time:
-#% do declare_locals(modify_csr_locals)
-    set rd csr_mtime
-    jump check_xcounteren always
-
 csr_read_timeh:
 #% do declare_locals(modify_csr_locals)
-    set rd csr_mtimeh
+    select rd equal variable "{{ 'time'|csr }}" csr_mtime csr_mtimeh
     # continue into check_xcounteren via csr_read_hpmcounter
 
 csr_read_hpmcounter:
@@ -2644,7 +2551,7 @@ csr_read_hpmcounter:
 
 check_xcounteren:
     # if in M-mode, always allow counter accesses
-    jump check_xcounteren__m_mode equal privilege_mode 0b11
+    select @counter equal privilege_mode 0b11 $$modify_csr_op @counter
 
     # if in S-mode, only require the bit to be set in mcounteren
     read $xcounteren {{CSRS}} "{{ 'mcounteren'|csr }}"
@@ -2660,10 +2567,8 @@ check_xcounteren__s_mode:
     op and $bit _address 31
     op shr $bit $xcounteren $bit
     op and $bit $bit 0b1
-    jump ILLEGAL_OP equal $bit 0
 
-check_xcounteren__m_mode:
-    set @counter $$modify_csr_op
+    select @counter equal $bit 0 %ILLEGAL_OP% $$modify_csr_op
 
 MLOGSYS:
     # I-type: rs1, imm=funct12, rd_id
@@ -2686,22 +2591,16 @@ MLOGSYS:
     set address -4
     set variable null
 
-#% set mlogsys_decode_loop = 5
-#directive start_assert_length {{ mlogsys_decode_loop }}
+    set ret3 @counter
+    # loop begins
+
     op add address address 4
     read variable {{INCR}} variable
 
     # load_rom_word_unchecked does not clobber ram or variable
-    op add ret @counter 1
-    jump load_rom_word_unchecked lessThan address __etext
-
-    # if address is in range, decode returns to the top of this loop
-    # otherwise, we continue to end_instruction
-    op sub ret3 @counter {{# mlogsys_decode_loop }}
-#directive end_assert_length
-    jump decode_value_in_result lessThan address __etext
-
-    jump end_instruction always
+    # decode returns to the top of this loop
+    set ret %decode_value_in_result%
+    select @counter lessThan address __etext %load_rom_word_unchecked% %end_instruction%
 
 #% if false
 # disable mlogls warnings
@@ -2737,10 +2636,41 @@ set {{CONTROLLER}} null
 set {{ERROR_OUTPUT}} null
 set {{LN_2}} null
 set {{PAGESIZE}} null
-set {{labels.next_tick}} null
 # unused variables
 set _ {{local_variable()}}
+# symbolic labels
+set %ILLEGAL_OP% null
+set %next_tick% null
+set %end_instruction_trap% null
+set %end_instruction_with_rd% null
+set %end_instruction% null
+set %end_instruction_with_rd_and_fire_interrupts% null
+set %default_xtvec_handler% null
+set %trap% null
+set %translate_virtual_address% null
+set %access_ram% null
+set %load_word% null
+set %load_rom_word_unchecked% null
+set %decode_value_in_result% null
+set %decode% null
+set %decode_I-type% null
+set %decode_I-type_no_extend_sign% null
+set %decode_illegal_instruction% null
+set %end_decode% null
+set %conditional_branch% null
+set %store_ram_word_unchecked% null
+set %extend_sign_rd% null
+set %modify_csr__rw% null
+set %modify_csr__rs% null
+set %modify_csr__rc% null
+set %csr_read_csrs% null
+set %pause_one_tick% null
 # unused labels
+jump next_tick always
+jump default_xtvec_handler always
+jump decode always
+jump conditional_branch always
+jump extend_sign_rd always
 jump BEQ always
 jump BNE always
 jump JAL always
@@ -2820,6 +2750,9 @@ jump decode_BRANCH always
 jump decode_JALR always
 jump decode_JAL always
 jump decode_SYSTEM always
+jump modify_csr__rw always
+jump modify_csr__rs always
+jump modify_csr__rc always
 jump csr_read_csrs always
 jump csr_read_mcycle always
 jump csr_read_cycleh always
@@ -2852,5 +2785,6 @@ jump csr_write_sip always
 jump csr_write_sstatus always
 jump csr_write_stimecmp always
 jump csr_write_stimecmph always
+jump pause_one_tick always
 # {% endraw %}
 #% endif

@@ -4,13 +4,15 @@ start: (line? _NEWLINE)*
      | statement
      | directive
 
-statement: TOKEN (TOKEN | LABEL | STRING)*
+statement: TOKEN (TOKEN | LABEL_REF | LABEL | STRING)*
 
 directive: _DIRECTIVE /assert_counter|(start|end)_(fetch|assert_length)|(push|pop)_saved/ TOKEN*
 
 STRING.2: /"[^\n]*"/
 
-LABEL.1: /[^\n #\t;]+:/
+LABEL.1: TOKEN ":"
+
+LABEL_REF.1: "%" TOKEN "%"
 
 TOKEN: /[^\n #\t;]+/
 

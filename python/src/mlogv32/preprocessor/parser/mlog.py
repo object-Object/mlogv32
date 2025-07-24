@@ -170,6 +170,8 @@ def check_unsaved_variables(ast: Iterable[ASTNode]):
                 pass
             case Statement(name="set", args=[var, *_]):
                 pass
+            case Statement(name="select", args=[var, *_]):
+                pass
             case Directive(name="start_fetch"):
                 state = "fetch"
                 continue

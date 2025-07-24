@@ -335,7 +335,7 @@ private inline fun <reified T : Building> buildVar(build: LogicBuild, name: Stri
 // why
 private fun linkedBuild(build: LogicBuild, name: String) =
     build.links
-        .firstOrNull { it.active && it.valid && it.name == name }
+        .firstOrNull { it.valid && it.name == name }
         ?.let { Vars.world.build(it.x, it.y) }
 
 private fun LVar.numu() = num().toUInt()

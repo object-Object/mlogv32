@@ -68,7 +68,7 @@ loop__newline:
 loop__no_overflow_y:
 
 loop__print_now:
-    draw print cur_x cur_y topLeft
+    draw print cur_x cur_y @topLeft
     set cur_x next_x
     set cur_y next_y
 
@@ -100,7 +100,7 @@ loop__no_print:
     read wptr UART 511
     jump loop notEqual rptr wptr
 
-    draw print cur_x cur_y topLeft
+    draw print cur_x cur_y @topLeft
     set cur_x next_x
     set cur_y next_y
 

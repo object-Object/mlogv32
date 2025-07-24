@@ -3,7 +3,7 @@ displayName: mlogv32-utils
 author: object-Object
 description: Companion mod for mlogv32.
 version: 0.1.0
-minGameVersion: "149"
+minGameVersion: "150"
 dependencies: [
     override-lib
     // kotlin-runtime

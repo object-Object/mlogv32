@@ -23,10 +23,15 @@ toxopid {
 repositories {
     mavenCentral()
     anukeXpdustry()
+    // FIXME: remove when toxopid updates
+    flatDir {
+        dir("libs/Mindustry")
+    }
 }
 
 dependencies {
-    compileOnly(toxopid.dependencies.arcCore)
+    // FIXME: uncomment when toxopid updates
+//    compileOnly(toxopid.dependencies.arcCore)
     compileOnly(toxopid.dependencies.mindustryCore)
 
     implementation(libs.kotlin.stdlib)

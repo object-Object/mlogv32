@@ -1,6 +1,6 @@
 # mlogv32
 
-RISC-V processor in Mindustry logic that runs Linux. Requires Mindustry build 149+.
+RISC-V processor in Mindustry logic that runs Linux. Requires Mindustry build 150+.
 
 <img width="1823" height="1008" alt="linux" src="https://github.com/user-attachments/assets/9b1fd6fa-ba4c-4498-9892-ae87a81d4588" />
 

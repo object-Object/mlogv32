@@ -45,6 +45,7 @@ reset:
     read RAM_END {{CONFIG}} "RAM_END"
     read ICACHE_END {{CONFIG}} "ICACHE_END"
     read UART_FIFO_MODULO {{CONFIG}} "UART_FIFO_MODULO"
+    read MTIME_SCALE {{CONFIG}} "MTIME_SCALE"
 
     op idiv RAM_START_PROC ROM_SIZE {{ROM_PROC_BYTES}}
 
@@ -296,14 +297,14 @@ end_breakpoint:
     # update mtime
     # TODO: handle mtimeh overflow
 
-    op sub delta_ms @time last_mtime_update
-    op mul delta_ms delta_ms 1000 # ms -> μs
+    op sub _delta @time last_mtime_update
+    op mul _delta _delta MTIME_SCALE
 
-    op add csr_mtime csr_mtime delta_ms
+    op add csr_mtime csr_mtime _delta
     op floor csr_mtime csr_mtime
 
-    op shr overflow csr_mtime 32
-    op add csr_mtimeh csr_mtimeh overflow
+    op shr _overflow csr_mtime 32
+    op add csr_mtimeh csr_mtimeh _overflow
 
     op mod csr_mtime csr_mtime 0x100000000
 

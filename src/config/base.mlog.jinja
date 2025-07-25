@@ -24,6 +24,8 @@
 
     set UART_FIFO_CAPACITY {{# UART_FIFO_CAPACITY }}  # UART TX/RX FIFO capacity in bytes (max 253)
 
+    set MTIME_FREQUENCY {{# MTIME_FREQUENCY }} # mtime frequency in Hz (eg. 1000 -> ms, 1000000 -> μs)
+
     # computed values
 #%+ set RAM_START = '0x80000000'
 
@@ -49,6 +51,8 @@ done_icache:
 
     op add UART_FIFO_MODULO UART_FIFO_CAPACITY 1  # actual number of indices used for each FIFO, keeping one empty to check if the buffer is full (max 254)
 
+    op div MTIME_SCALE MTIME_FREQUENCY 1000 # mtime multiplier from @time (eg. 1 -> ms, 1000 -> μs)
+
     stop
 
 #%- if false
@@ -60,6 +64,7 @@ set _ MEMORY_WIDTH
 set _ ROM_SIZE
 set _ PROGRAM_ROM_ICACHE_SIZE
 set _ UART_FIFO_MODULO
+set _ MTIME_SCALE
 set _ MEMORY_X
 set _ MEMORY_Y
 # {% endraw %}

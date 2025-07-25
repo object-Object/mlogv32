@@ -220,6 +220,9 @@ loop:
 
     read UART_FIFO_MODULO {{CPU}} "UART_FIFO_MODULO"
 
+    read MTIME_SCALE {{CPU}} "MTIME_SCALE"
+    op mul MTIME_FREQUENCY MTIME_SCALE 1000
+
     read uart_flags {{CPU}} "uart_flags"
 
     set addr1 ""
@@ -614,11 +617,17 @@ loop__no_mark_icache:
 
     print "{{ '{0}\\n' * 5 }}"
 
-    format mtimecmp
+    set n mtimecmp
+    op add ret @counter 1
+    jump format_time always
 
-    format stimecmp
+    set n stimecmp
+    op add ret @counter 1
+    jump format_time always
 
-    format mtime
+    set n mtime
+    op add ret @counter 1
+    jump format_time always
 
     format mcycle
 
@@ -980,6 +989,18 @@ format_privilege_mode:
     format "supervisor"; set @counter ret
     format "reserved"; set @counter ret
     format "machine"; set @counter ret
+
+format_time:
+    jump format_unknown equal n -1
+
+    op mod _rem n MTIME_FREQUENCY
+    op idiv n n MTIME_FREQUENCY
+    jump format_unknown equal _rem 0
+
+    format "{0}.{0}"
+    format n
+    format _rem
+    set @counter ret
 
 # creates a marker on the ram proc containing a given address
 # the caller should print a format string with a placeholder for the address

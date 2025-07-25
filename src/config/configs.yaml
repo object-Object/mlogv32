@@ -7,6 +7,7 @@ template: base.mlog.jinja
 defaults:
   UART_FIFO_CAPACITY: 253
   DATA_ROM_ROWS: 0
+  MTIME_FREQUENCY: 1_000_000
 
 configs:
   riscv-arch-test:
@@ -42,3 +43,4 @@ configs:
     DATA_ROM_ROWS: 14
     RAM_ROWS: 14
     ICACHE_ROWS: 14
+    MTIME_FREQUENCY: 1000

@@ -43,7 +43,7 @@ Addresses `0xf0000000` - `0xffffffff` are reserved for system purposes such as M
 
 ### Machine Timers
 
-The `mtime` and `mtimecmp` registers are mapped to `0xf0000000` and `0xf0000008` respectively, and have a period of 1 μs. The timer registers are not accessible to privilege modes lower than M-mode.
+The `mtime` and `mtimecmp` registers are mapped to `0xf0000000` and `0xf0000008` respectively. The frequency is configurable, defaulting to a period of 1 μs. The timer registers are not accessible to privilege modes lower than M-mode.
 
 ### UART
 
@@ -148,10 +148,6 @@ CSR values are stored either in a RAM processor (CSRS), in a variable in the CPU
 ### `cycle`
 
 The `[m]cycle[h]` counter is incremented at the start of each worker's tick, just before it jumps back into code execution. The period should be something like `number of workers * 1/60 seconds`, but it will vary based on FPS.
-
-### `time`
-
-The `[m]time[h]` counter is based on the `@time` value in Mindustry. It has a period of 1 μs, and is incremented once per tick by the controller based on the time delta since the previous tick.
 
 ## riscv-arch-test
 

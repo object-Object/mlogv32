@@ -1,9 +1,8 @@
 /* included with feature default-memory */
 
 MEMORY {
-    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 0x480000
-    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 0x480000
-    MMIO (rw)  : ORIGIN = 0xf0000000, LENGTH = 0x10000000
+    ROM  (rx)  : ORIGIN = 0x00000000, LENGTH = 512K
+    RAM  (rwx) : ORIGIN = 0x80000000, LENGTH = 3M
 }
 
 REGION_ALIAS("REGION_TEXT",   ROM);

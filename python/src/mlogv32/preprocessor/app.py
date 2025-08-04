@@ -23,7 +23,7 @@ from .extensions import (
     LocalVariablesEnv,
 )
 from .filters import FILTERS, ram_var
-from .models import BuildConfig
+from .models import BuildConfig, Metadata
 from .parser import (
     MlogError,
     check_unsaved_variables,
@@ -157,6 +157,8 @@ def build(
         include_memory = True
         include_debugger = True
 
+    meta = Metadata()
+
     config = BuildConfig.load(yaml_path)
 
     if cpu_config_name:
@@ -183,6 +185,8 @@ def build(
                 yaml_path.parent / "generated_config.mlog",
                 **config_args,
             )
+
+        meta.uart_fifo_capacity = int(config_args["UART_FIFO_CAPACITY"])
     else:
         if include_memory:
             raise ValueError(
@@ -386,6 +390,7 @@ Controller:
     uart_links = list[ProcessorLink]()
     for x in lenrange(5, 4, 2):
         for y in lenrange(18, -4, -2):
+            meta.uarts.append((x, y))
             add_peripheral(simple_block(Content.MEMORY_BANK, x, y))
             uart_links.append(ProcessorLink(x, y, ""))
 
@@ -406,6 +411,10 @@ Controller:
     csrs_link = ProcessorLink(9, 18, "")
     incr_link = ProcessorLink(9, 17, "")
     config_link = ProcessorLink(9, 16, "")
+
+    meta.registers = (registers_link.x, registers_link.y)
+    meta.csrs = (csrs_link.x, csrs_link.y)
+    meta.config = (config_link.x, config_link.y)
 
     add_with_label(
         simple_block(Content.MESSAGE, 11, 19),
@@ -432,6 +441,11 @@ Controller:
     power_switch_link = ProcessorLink(11, 18, "")
     pause_switch_link = ProcessorLink(11, 17, "")
     single_step_switch_link = ProcessorLink(11, 16, "")
+
+    meta.error_output = (error_output_link.x, error_output_link.y)
+    meta.power_switch = (power_switch_link.x, power_switch_link.y)
+    meta.pause_switch = (pause_switch_link.x, pause_switch_link.y)
+    meta.single_step_switch = (single_step_switch_link.x, single_step_switch_link.y)
 
     add_peripheral(ram_schem, 13, 16)
     add_peripheral(ram_schem, 12, 17)
@@ -474,6 +488,10 @@ Controller:
     controller_link = ProcessorLink(16, 0, "")
 
     if include_cpu:
+        meta.cpu = (controller_link.x, controller_link.y)
+        meta.cpu_width = width
+        meta.cpu_height = height
+
         schem.add_block(
             Block(
                 block=Content.WORLD_PROCESSOR,
@@ -545,19 +563,26 @@ Controller:
         else:
             data = bytes()
 
+        base_x = config_link.x + config_args["MEMORY_X_OFFSET"]
         base_y = config_link.y + config_args["MEMORY_Y_OFFSET"]
-        for y in lenrange(
-            0,
-            config_args["PROGRAM_ROM_ROWS"]
-            + config_args["DATA_ROM_ROWS"]
-            + config_args["RAM_ROWS"]
-            + config_args["ICACHE_ROWS"],
-        ):
-            for x in lenrange(
-                config_link.x + config_args["MEMORY_X_OFFSET"],
-                config_args["MEMORY_WIDTH"],
-            ):
-                if y < config_args["PROGRAM_ROM_ROWS"] + config_args["DATA_ROM_ROWS"]:
+
+        memory_width = config_args["MEMORY_WIDTH"]
+        rom_height = config_args["PROGRAM_ROM_ROWS"] + config_args["DATA_ROM_ROWS"]
+        memory_height = (
+            rom_height + config_args["RAM_ROWS"] + config_args["ICACHE_ROWS"]
+        )
+
+        meta.memory = (base_x, base_y)
+        meta.memory_width = memory_width
+        meta.memory_height = memory_height
+
+        meta.rom_processors = memory_width * rom_height
+        meta.ram_processors = memory_width * config_args["RAM_ROWS"]
+        meta.icache_processors = memory_width * config_args["ICACHE_ROWS"]
+
+        for y in lenrange(0, memory_height):
+            for x in lenrange(base_x, memory_width):
+                if y < rom_height:
                     if i < len(data):
                         payload = "".join(chr(174 + c) for c in data[i : i + 16384])
                         i += 16384
@@ -617,8 +642,15 @@ Controller:
         )
 
     if schem.tiles:
+        _, _, x_offset, y_offset = schem.get_dimensions(offsets=True)
+        schem.tags["mlogv32_metadata"] = meta.model_dump_json(
+            exclude_defaults=True,
+            context={"offsets": (x_offset, y_offset)},
+        )
+
         w, h = schem.get_dimensions()
         print(f"Schematic size: {w}x{h}")
+
         if output:
             print(f"Writing schematic to file: {output}")
             schem.write_file(str(output))

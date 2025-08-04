@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Annotated, Any, Iterable, Iterator, Literal
 
 import yaml
-from pydantic import AfterValidator, BaseModel, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    SerializationInfo,
+    WrapSerializer,
+    field_validator,
+)
 
 from mlogv32.preprocessor.constants import CSRS
 
@@ -149,3 +156,43 @@ class BuildConfig(BaseModel):
 
         with relative_path_root(path.parent):
             return cls.model_validate(data)
+
+
+def _serialize_point(point: tuple[int, int], handler: Any, info: SerializationInfo):
+    if info.context:
+        x, y = point
+        x_offset, y_offset = info.context["offsets"]
+        return handler((x + x_offset, y + y_offset))
+    return handler()
+
+
+type MetaPoint2 = Annotated[
+    tuple[int, int],
+    WrapSerializer(_serialize_point),
+]
+
+
+class Metadata(BaseModel):
+    uarts: list[MetaPoint2] = Field(default_factory=list)
+
+    registers: MetaPoint2 | None = None
+    csrs: MetaPoint2 | None = None
+    config: MetaPoint2 | None = None
+    uart_fifo_capacity: int | None = None
+
+    error_output: MetaPoint2 | None = None
+    power_switch: MetaPoint2 | None = None
+    pause_switch: MetaPoint2 | None = None
+    single_step_switch: MetaPoint2 | None = None
+
+    cpu: MetaPoint2 | None = None
+    cpu_width: int | None = None
+    cpu_height: int | None = None
+
+    memory: MetaPoint2 | None = None
+    memory_width: int | None = None
+    memory_height: int | None = None
+
+    rom_processors: int | None = None
+    ram_processors: int | None = None
+    icache_processors: int | None = None

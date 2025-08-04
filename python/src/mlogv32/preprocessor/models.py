@@ -196,3 +196,5 @@ class Metadata(BaseModel):
     rom_processors: int | None = None
     ram_processors: int | None = None
     icache_processors: int | None = None
+
+    mtime_frequency: int | None = None

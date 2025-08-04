@@ -187,6 +187,7 @@ def build(
             )
 
         meta.uart_fifo_capacity = int(config_args["UART_FIFO_CAPACITY"])
+        meta.mtime_frequency = int(config_args["MTIME_FREQUENCY"])
     else:
         if include_memory:
             raise ValueError(
@@ -699,6 +700,7 @@ def parse_config_str(config: str) -> ConfigArgs | None:
 
     return ConfigArgs(
         UART_FIFO_CAPACITY=253,
+        MTIME_FREQUENCY=1_000_000,
         MEMORY_X_OFFSET=inputs["x_offset"],
         MEMORY_Y_OFFSET=-16 - rows,
         MEMORY_WIDTH=inputs["width"],

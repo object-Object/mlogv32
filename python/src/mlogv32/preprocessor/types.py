@@ -17,6 +17,7 @@ class ConfigsYaml(TypedDict):
 class ConfigArgs(TypedDict):
     UART_FIFO_CAPACITY: int
     DATA_ROM_ROWS: int
+    MTIME_FREQUENCY: int
 
     MEMORY_X_OFFSET: int
     MEMORY_Y_OFFSET: int

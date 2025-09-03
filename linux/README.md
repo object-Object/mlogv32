@@ -1,5 +1,14 @@
 # Linux
 
+## Setup
+
+### Devcontainers
+
+```
+sudo chown -R vscode /home/vscode/buildroot
+make setup-buildroot load-configs
+```
+
 ## Internet access
 
 1. Enable the mlogv32-utils socket server on port 5000.

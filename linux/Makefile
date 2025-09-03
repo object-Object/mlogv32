@@ -13,7 +13,7 @@ MAKE_BUILDROOT = $(MAKE) -C $(BUILDROOT) BR2_EXTERNAL=$(BR2_EXTERNAL)
 
 .PHONY: setup-buildroot
 setup-buildroot:
-	curl --location "$(BUILDROOT_RELEASE)" | tar xzv --directory $(BUILDROOT)
+	curl --location "$(BUILDROOT_RELEASE)" | tar xzv --strip-components=1 --directory $(BUILDROOT)
 
 .PHONY: everything
 everything: load-configs dtbs all opensbi-rebuild zsbl get-images
